@@ -1,3 +1,13 @@
+"""Drive a `SourceAdapter` to ingest raw posts into listings, properties, and dedupe state.
+
+Transaction contract: neither `run_source` nor `ingest_payload` commits. The caller owns
+the session and MUST commit after `run_source` returns, AND after it raises — on
+failure, the except-clause below writes circuit-breaker and run bookkeeping
+(`source.status`, `source.consecutive_failures`, `source.paused_until`, `run.error`,
+...) before re-raising, and rolling back instead of committing at that point discards
+that bookkeeping, so the circuit breaker can never trip.
+"""
+
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -268,7 +278,10 @@ async def run_source(
         run.finished_at = now
         source.last_run_at = now
         source.next_run_at = now + timedelta(seconds=source.interval_seconds)
-        await session.flush()
+        try:
+            await session.flush()
+        except Exception:  # noqa: BLE001 — never let bookkeeping mask the real failure
+            log.warning("run_bookkeeping_failed", source=source.name, error=str(exc))
         raise
     run.finished_at = now
     source.last_run_at = now

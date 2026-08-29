@@ -374,3 +374,24 @@ async def test_failed_photo_is_retried_on_next_run(db: AsyncSession, tmp_path: P
     await run_source(db, adapter, s, cfg=CFG, photo_dir=tmp_path, now=later)
     await db.refresh(photo)
     assert photo.download_error is None and photo.phash is not None
+
+
+async def test_three_discover_failures_pause_the_source(db: AsyncSession, tmp_path: Path) -> None:
+    class Broken(FakeAdapter):
+        async def discover(self, source: Source) -> AsyncIterator[RawRef]:
+            raise RuntimeError("flood")
+            yield  # pragma: no cover
+
+    s = await _source(db)
+    for _ in range(3):
+        with pytest.raises(RuntimeError, match="flood"):
+            await run_source(db, Broken([], None), s, cfg=CFG, photo_dir=tmp_path, now=NOW)
+    await db.refresh(s)
+    assert s.consecutive_failures == 3
+    assert s.status == "failing"
+    assert s.paused_until == NOW + timedelta(hours=1)
+
+    await run_source(db, FakeAdapter([], None), s, cfg=CFG, photo_dir=tmp_path, now=NOW)
+    await db.refresh(s)
+    assert s.consecutive_failures == 0
+    assert s.status == "ok"
