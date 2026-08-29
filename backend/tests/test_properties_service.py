@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.ingestion.parse import parse_text
 from app.modules.listings.models import Listing, Source
 from app.modules.listings.service import persist_parsed, upsert_raw
+from app.modules.properties.models import Property
 from app.modules.properties.service import (
     attach,
     create_from_listing,
@@ -62,7 +63,7 @@ async def test_attach_recomputes_min_price_and_best_attributes(db: AsyncSession)
     await attach(db, prop, second, NOW)
     assert prop.price_usd_min_minor == 45000
     assert prop.area_sqm == 54.0  # from the higher-confidence listing
-    assert prop.first_seen_at == NOW - timedelta(days=2) or prop.first_seen_at == NOW
+    assert prop.first_seen_at == NOW
     assert prop.last_seen_at == NOW
 
 
@@ -116,3 +117,16 @@ async def test_set_status_writes_event_and_rejects_unknown(db: AsyncSession) -> 
     with pytest.raises(ValueError):
         await set_status(db, prop, "inactive", actor_type="visitor")
     assert [e.to_status for e in await status_history(db, prop.id)] == ["active", "new"]
+
+
+async def test_set_status_on_property_without_history_writes_initial_event(
+    db: AsyncSession,
+) -> None:
+    prop = Property(status="new", first_seen_at=NOW, last_seen_at=NOW)
+    db.add(prop)
+    await db.flush()
+    ev = await set_status(db, prop, "new", actor_type="crawler")
+    assert (ev.from_status, ev.to_status, ev.actor_type) == (None, "new", "crawler")
+    assert [e.id for e in await status_history(db, prop.id)] == [ev.id]
+    again = await set_status(db, prop, "new", actor_type="crawler")
+    assert again.id == ev.id

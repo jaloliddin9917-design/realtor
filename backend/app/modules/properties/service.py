@@ -87,10 +87,12 @@ async def set_status(
     if actor_type not in ACTOR_TYPES:
         raise ValueError(f"unknown actor_type {actor_type!r}")
     if status == prop.status:
-        return (await status_history(session, prop.id))[0]
+        history = await status_history(session, prop.id)
+        if history:
+            return history[0]
     event = PropertyStatusEvent(
         property_id=prop.id,
-        from_status=prop.status,
+        from_status=None if status == prop.status else prop.status,
         to_status=status,
         actor_type=actor_type,
         actor_id=actor_id,
