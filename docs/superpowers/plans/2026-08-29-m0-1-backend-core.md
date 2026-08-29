@@ -3149,8 +3149,10 @@ async def _listings_of_contact(session: AsyncSession, contact: Contact, since: d
 
 async def _earliest_and_cheapest_flags(session: AsyncSession, listing: Listing) -> tuple[bool, bool]:
     if listing.property_id is None:
-        return True, True
+        return False, False
     siblings = list((await session.execute(select(Listing).where(Listing.property_id == listing.property_id))).scalars().all())
+    if len(siblings) < 2:
+        return False, False  # alone on its property: nothing to have posted earlier or cheaper than
     posted = [s.posted_at for s in siblings if s.posted_at is not None]
     earliest = listing.posted_at is not None and listing.posted_at == min(posted) if posted else False
     prices = [s.price_usd_minor for s in siblings if s.price_usd_minor is not None]
