@@ -77,6 +77,11 @@ def test_extract_phones_ignores_prices_and_years() -> None:
     assert extract_phones("994000000 so'm") == []
     assert extract_phones("Narxi 999500000 сум") == []
     assert extract_phones("tel 994000000") == ["+998994000000"]
+    assert extract_phones("994000000 tys") == []
+    assert extract_phones("994000000 million") == []
+    assert extract_phones("994000000 mlrd") == []
+    assert extract_phones("994000000 минг") == []
+    assert extract_phones("994000000 млрд") == []
 
 
 def test_extract_username() -> None:
