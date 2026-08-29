@@ -1911,13 +1911,13 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from decimal import Decimal
-from typing import Any
+from typing import Any, cast
 
-from sqlalchemy import select, update
+from sqlalchemy import CursorResult, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ingestion.parse import ParsedListing
-from app.modules.contacts import service as contacts
+from app.modules.contacts import service as contacts_service
 from app.modules.listings.fx import to_usd_minor
 from app.modules.listings.models import Listing, RawListing
 
@@ -1992,8 +1992,8 @@ async def persist_parsed(
         identities.append(("telegram", parsed.telegram_username))
     identities.extend(extra)
     for kind, identifier in identities:
-        contact = await contacts.get_or_create(session, kind, identifier)
-        await contacts.link(session, listing.id, contact.id)
+        contact = await contacts_service.get_or_create(session, kind, identifier)
+        await contacts_service.link(session, listing.id, contact.id)
     await session.flush()
     return listing
 
@@ -2005,7 +2005,7 @@ async def mark_seen(session: AsyncSession, source_id: uuid.UUID, window: SeenWin
                RawListing.external_id.in_(window.ids))
         .values(last_seen_at=now, miss_count=0)
     )
-    result = await session.execute(stmt)
+    result = cast(CursorResult[Any], await session.execute(stmt))  # mypy --strict: rowcount lives on CursorResult
     return int(result.rowcount or 0)
 
 
@@ -2037,10 +2037,10 @@ async def age_out(session: AsyncSession, now: datetime, days: int = 30) -> int:
         .where(Listing.source_removed.is_(False), Listing.last_seen_at < cutoff)
         .values(source_removed=True, removed_at=now)
     )
-    result = await session.execute(stmt)
+    result = cast(CursorResult[Any], await session.execute(stmt))
     return int(result.rowcount or 0)
 ```
-`from app.modules.contacts import service as contacts` needs `backend/app/modules/contacts/__init__.py`, created in Task 1.
+The module alias is `contacts_service` on purpose: the `contacts=` keyword parameter would shadow a plain `contacts` alias inside `persist_parsed`. Also add to `backend/tests/conftest.py` (after the existing imports) the same six model-module imports that `alembic/env.py` carries — `import app.modules.identity.models`, `listings.models`, `contacts.models`, `properties.models`, `dedupe.models`, `app.worker.models` (each with `# noqa: F401`) — so a test run that touches only one module still has every table registered in `Base.metadata` (FKs to `properties` otherwise raise `NoReferencedTableError`).
 
 - [ ] **Step 6: Run the tests to verify they pass**
 
