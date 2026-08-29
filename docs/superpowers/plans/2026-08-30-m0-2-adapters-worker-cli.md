@@ -1443,6 +1443,16 @@ async def test_unauthorized_client_raises_login_required() -> None:
         _ = [r async for r in adapter.discover(_source())]
 
 
+def test_marked_chat_id_follows_telethon_conventions() -> None:
+    from telethon.tl import types
+
+    from app.ingestion.adapters.telegram.client import marked_chat_id
+
+    assert marked_chat_id(types.PeerUser(user_id=5)) == 5
+    assert marked_chat_id(types.PeerChat(chat_id=77)) == -77
+    assert marked_chat_id(types.PeerChannel(channel_id=1234)) == -1000000001234
+
+
 async def test_rebuild_payload_and_fetch_by_url() -> None:
     client = FakeClient(_messages())
     adapter = TelegramAdapter(client, now=lambda: NOW)  # type: ignore[arg-type]
@@ -1511,6 +1521,13 @@ class TelegramClientLike(Protocol):
     async def download_photo(self, chat_id: int, message_id: int) -> bytes: ...
 
 
+def marked_chat_id(entity: Any) -> int:
+    """Telethon's marked id: users unchanged, basic groups -id, channels/megagroups -(10**12 + id)."""
+    from telethon import utils
+
+    return int(utils.get_peer_id(entity, add_mark=True))
+
+
 def _to_msg(message: Any) -> TgMessage:
     sender = getattr(message, "sender", None)
     date = message.date if message.date.tzinfo else message.date.replace(tzinfo=UTC)
@@ -1540,13 +1557,15 @@ class TelethonClient:
         await self._client.connect()
 
     async def is_user_authorized(self) -> bool:
-        return bool(await self._client.is_user_authorized())
+        """Probe with `get_me()`: Telethon's own `is_user_authorized()` swallows every RPCError
+        (a FloodWait would read as "not authorized"); `get_me()` returns None only when
+        unauthorized and lets a FloodWait propagate through `_guard` as AdapterBackoff."""
+        me = await self._guard(self._client.get_me())
+        return me is not None
 
     async def resolve_peer(self, peer: str | int) -> tuple[int, str | None]:
         entity = await self._guard(self._client.get_entity(peer))
-        chat_id = int(getattr(entity, "id", 0))
-        if getattr(entity, "megagroup", False) or getattr(entity, "broadcast", False):
-            chat_id = int(f"-100{chat_id}")
+        chat_id = marked_chat_id(entity)
         self._entities[chat_id] = entity
         return chat_id, getattr(entity, "username", None)
 
