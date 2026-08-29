@@ -1157,6 +1157,9 @@ from app.ingestion.parse.fields import (
         ("450 ming so'm", (45000000, "UZS")),
         ("Цена 450", None),
         ("2-xonali, 3/9", None),
+        ("2-xonali, 3/9 460$", (46000, "USD")),
+        ("2/5/9 450$", (45000, "USD")),
+        ("Narxi 1 000$ 5/9 qavat", (100000, "USD")),
     ],
 )
 def test_extract_price(text: str, expected: tuple[int, str] | None) -> None:
@@ -1304,7 +1307,7 @@ _NUM = r"(?P<amt>\d{1,3}(?:[  .,]\d{3})+|\d+)(?:[.,](?P<dec>\d{1,2})(?!\d))?"
 _MULT = r"(?:\s*(?P<mult>ming|tis|tys|mln|million|mlrd))?"
 _USD = r"(?:\$|usd|u\.?\s?e\.?|ye\b|doll\w*)"
 _UZS = r"(?:so'?m\b|sum\b|uzs\b|sўm\b)"
-_PRICE_AFTER = re.compile(rf"{_NUM}{_MULT}\.?\s*(?P<cur>{_USD}|{_UZS})", re.IGNORECASE)
+_PRICE_AFTER = re.compile(rf"(?<![\d/]){_NUM}{_MULT}\.?\s*(?P<cur>{_USD}|{_UZS})", re.IGNORECASE)  # never right after 3/9
 _PRICE_BEFORE = re.compile(rf"(?P<cur>{_USD})\s*{_NUM}{_MULT}", re.IGNORECASE)
 _MULTIPLIERS = {"ming": 1_000, "tis": 1_000, "tys": 1_000, "mln": 1_000_000, "million": 1_000_000, "mlrd": 1_000_000_000}
 
@@ -2761,15 +2764,30 @@ AGENT_TEXT = "Chilonzor Qatortol 2 xonali 3/9 qavat 55 m² evro remont mebel tex
 OTHER_TEXT = "Yunusobod 11-kvartal 3-xonali 5/9 78 m² 650$ tel 94 128 44 60"
 
 
-async def test_same_phone_blocks_and_merges(db: AsyncSession) -> None:
+async def test_same_phone_and_shared_photo_merge(db: AsyncSession, tmp_path: Path) -> None:
+    s = await _source(db)
+    a = await _listing(db, s, "1", OWNER_TEXT, photo_seed=3, tmp=tmp_path)
+    prop = await create_from_listing(db, a, NOW)
+    b = await _listing(db, s, "2", "Chilonzor 2-xonali 3/9 460$ tel 90 811 24 37", photo_seed=3, tmp=tmp_path)
+    assert [p.id for p in await find_candidates(db, b)] == [prop.id]
+    inp = await gather_inputs(db, b, prop)
+    assert inp.shared_contact is True and inp.rooms_floors_equal is True
+    result = await assign(db, b, CFG, NOW)
+    assert result.decision == "attached" and result.property.id == prop.id
+    assert result.score >= CFG.merge_threshold
+    assert b.property_id == prop.id and prop.price_usd_min_minor == 45000
+
+
+async def test_same_phone_alone_goes_to_review(db: AsyncSession) -> None:
+    # spec §5.2: contact 0.50 + rooms/floors 0.10 + price 0.05 = 0.65 — a phone alone never auto-merges
     s = await _source(db)
     a = await _listing(db, s, "1", OWNER_TEXT)
     prop = await create_from_listing(db, a, NOW)
     b = await _listing(db, s, "2", "Chilonzor 2-xonali 3/9 460$ tel 90 811 24 37")
     assert [p.id for p in await find_candidates(db, b)] == [prop.id]
     result = await assign(db, b, CFG, NOW)
-    assert result.decision == "attached" and result.property.id == prop.id
-    assert b.property_id == prop.id and prop.price_usd_min_minor == 45000
+    assert result.decision == "review" and result.candidate is not None and result.candidate.id == prop.id
+    assert CFG.review_threshold <= result.score < CFG.merge_threshold
 
 
 async def test_review_range_creates_separate_property_and_review_row(db: AsyncSession, tmp_path: Path) -> None:
@@ -2822,7 +2840,7 @@ Expected: FAIL with `ModuleNotFoundError: app.modules.dedupe.blocking`
 
 `backend/app/modules/dedupe/blocking.py`:
 ```python
-from sqlalchemy import and_, or_, select
+from sqlalchemy import Integer, and_, literal, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ingestion.photos import phash_bucket
@@ -2843,7 +2861,7 @@ async def find_candidates(session: AsyncSession, listing: Listing) -> list[Prope
     ).scalars().all()
     buckets = {phash_bucket(h) for h in hashes}
     if buckets:
-        bucket_expr = (ListingPhoto.phash.op(">>")(48)).op("&")(65535)
+        bucket_expr = (ListingPhoto.phash.op(">>")(literal(48, Integer))).op("&")(65535)  # bigint >> integer
         conditions.append(
             Listing.id.in_(select(ListingPhoto.listing_id).where(ListingPhoto.phash.is_not(None), bucket_expr.in_(buckets)))
         )
