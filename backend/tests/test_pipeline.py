@@ -1,89 +1,23 @@
 import uuid
 from collections.abc import AsyncIterator
-from datetime import UTC, datetime, timedelta
+from datetime import timedelta
 from pathlib import Path
-from typing import Any
 
 import pytest
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ingestion import pipeline
-from app.ingestion.adapters.base import RawPayload, RawRef
+from app.ingestion.adapters.base import RawRef
 from app.ingestion.pipeline import ingest_payload, run_source
 from app.modules.dedupe.config import load_config
 from app.modules.listings.models import CrawlRun, Listing, ListingPhoto, RawListing, Source
 from app.modules.listings.service import SeenWindow
 from app.modules.properties.models import Property
-from tests.helpers import make_jpeg
+from tests.fakes import NOW, FakeAdapter
+from tests.fakes import payload as _payload
 
-NOW = datetime(2026, 8, 29, 12, 0, tzinfo=UTC)
 CFG = load_config(Path(__file__).resolve().parents[1] / "config" / "dedupe.yaml")
-
-
-def _jpeg(seed: int = 1) -> bytes:
-    return make_jpeg(300, 200, seed)
-
-
-class FakeAdapter:
-    kind = "telegram"
-
-    def __init__(
-        self,
-        payloads: list[RawPayload],
-        window: SeenWindow | None,
-        fail_ids: set[str] | None = None,
-        fail_photo_refs: set[Any] | None = None,
-    ) -> None:
-        self.payloads = payloads
-        self.window = window
-        self.fail_ids = fail_ids or set()
-        # mutable so a test can flip a ref from failing to succeeding between runs
-        self.fail_photo_refs: set[Any] = {"bad"} if fail_photo_refs is None else fail_photo_refs
-        self.downloads = 0
-
-    async def discover(self, source: Source) -> AsyncIterator[RawRef]:
-        for p in self.payloads:
-            yield RawRef(external_id=p.external_id, url=p.url, posted_at=p.posted_at, meta={})
-
-    async def fetch(self, ref: RawRef) -> RawPayload:
-        if ref.external_id in self.fail_ids:
-            raise RuntimeError("boom")
-        return next(p for p in self.payloads if p.external_id == ref.external_id)
-
-    async def seen_window(self, source: Source) -> SeenWindow | None:
-        return self.window
-
-    async def download_photo(self, ref: Any) -> bytes:
-        self.downloads += 1
-        if ref in self.fail_photo_refs:
-            raise RuntimeError("404")
-        try:
-            seed = int(ref)
-        except (TypeError, ValueError):
-            seed = abs(hash(ref)) % 997
-        return _jpeg(seed)
-
-
-def _payload(
-    ext: str,
-    text: str,
-    posted: datetime = NOW,
-    photos: list[Any] | None = None,
-    username: str | None = None,
-    structured: dict[str, Any] | None = None,
-) -> RawPayload:
-    return RawPayload(
-        external_id=ext,
-        url=f"https://t.me/t/{ext}",
-        posted_at=posted,
-        text=text,
-        structured=structured,
-        sender_username=username,
-        contact_hints=[],
-        photo_refs=photos or [],
-        payload={"text": text, "id": ext},
-    )
 
 
 async def _source(db: AsyncSession) -> Source:
@@ -369,7 +303,7 @@ async def test_failed_photo_is_retried_on_next_run(db: AsyncSession, tmp_path: P
     photo = (await db.execute(select(ListingPhoto))).scalar_one()
     assert photo.download_error is not None and photo.phash is None
 
-    adapter.fail_photo_refs = set()
+    adapter.bad_photo_refs = set()
     later = NOW + timedelta(hours=1)
     await run_source(db, adapter, s, cfg=CFG, photo_dir=tmp_path, now=later)
     await db.refresh(photo)

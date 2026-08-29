@@ -1,9 +1,9 @@
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Protocol
 
-from app.modules.listings.models import Source
+from app.modules.listings.models import RawListing, Source
 from app.modules.listings.service import SeenWindow
 
 
@@ -44,6 +44,26 @@ class RawPayload:
     payload: dict[str, Any]
 
 
+class AdapterBackoff(Exception):  # noqa: N818 — name is a fixed public contract, not "*Error"
+    """The source asked us to slow down (HTTP 429/403, Telegram FloodWait).
+
+    Pause, do not count a failure.
+    """
+
+    def __init__(self, retry_after: timedelta, reason: str) -> None:
+        super().__init__(reason)
+        self.retry_after = retry_after
+        self.reason = reason
+
+
+class LoginRequired(Exception):  # noqa: N818 — name is a fixed public contract, not "*Error"
+    """The adapter's credentials/session are no longer valid; a human must log in again."""
+
+
+class ListingGone(Exception):  # noqa: N818 — name is a fixed public contract, not "*Error"
+    """`fetch` found that the listing no longer exists at the source (404, deactivated)."""
+
+
 class SourceAdapter(Protocol):
     """A source-specific integration (Telegram, OLX, ...) the ingestion pipeline drives.
 
@@ -82,5 +102,20 @@ class SourceAdapter(Protocol):
         """Resolve one `photo_refs` entry (handed back verbatim) to raw image bytes."""
         ...
 
+    async def rebuild_payload(self, raw: RawListing) -> RawPayload:
+        """Rebuild the `RawPayload` from `raw.payload` (stored verbatim).
 
-__all__ = ["RawPayload", "RawRef", "SeenWindow", "SourceAdapter"]
+        Used by `reparse`; never touches the network.
+        """
+        ...
+
+
+__all__ = [
+    "AdapterBackoff",
+    "ListingGone",
+    "LoginRequired",
+    "RawPayload",
+    "RawRef",
+    "SeenWindow",
+    "SourceAdapter",
+]

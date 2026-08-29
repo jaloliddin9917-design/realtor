@@ -16,6 +16,7 @@ from app.modules.listings.service import (
     persist_parsed,
     upsert_raw,
 )
+from app.modules.properties.service import create_from_listing
 
 NOW = datetime(2026, 8, 29, 12, 0, tzinfo=UTC)
 TEXT = "Chilonzor, 2-xonali, 3/9, 54 m², 450$. Egasidan. Tel 90 811 24 37"
@@ -164,8 +165,12 @@ async def test_seen_resets_miss_count(db: AsyncSession) -> None:
 
 async def test_age_out_after_30_days(db: AsyncSession) -> None:
     s = await _source(db)
-    await _three_listings(db, s)
-    assert await age_out(db, NOW + timedelta(days=31)) == 3
+    listings = await _three_listings(db, s)
+    # age_out now returns affected *property* ids (for properties.service.recompute_many),
+    # so each listing needs one to be affected — attach each to its own property.
+    for listing in listings:
+        await create_from_listing(db, listing, NOW)
+    assert len(await age_out(db, NOW + timedelta(days=31))) == 3
     rows = (
         (await db.execute(select(Listing).where(Listing.source_removed.is_(True)))).scalars().all()
     )

@@ -1,4 +1,5 @@
 import uuid
+from collections.abc import Sequence
 from datetime import datetime
 
 from sqlalchemy import select, text
@@ -40,6 +41,16 @@ async def recompute(session: AsyncSession, prop: Property) -> None:
         ),
         {"corpus": corpus, "id": prop.id},
     )
+
+
+async def recompute_many(session: AsyncSession, property_ids: Sequence[uuid.UUID]) -> int:
+    count = 0
+    for pid in property_ids:
+        prop = await session.get(Property, pid)
+        if prop is not None:
+            await recompute(session, prop)
+            count += 1
+    return count
 
 
 async def attach(session: AsyncSession, prop: Property, listing: Listing, now: datetime) -> None:

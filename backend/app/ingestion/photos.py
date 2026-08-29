@@ -96,3 +96,21 @@ async def save_listing_photo(
             photo.download_error = None
     await session.flush()
     return photo
+
+
+async def prune_photos(session: AsyncSession, photo_dir: Path, listing: Listing, keep: int) -> int:
+    """Delete `ListingPhoto` rows (and their files) at or past `keep`.
+
+    Called after a changed payload re-ingest with fewer photos than before, so stale
+    rows/files from the previous version of the post don't linger.
+    """
+    stmt = select(ListingPhoto).where(
+        ListingPhoto.listing_id == listing.id, ListingPhoto.position >= keep
+    )
+    extra = list((await session.execute(stmt)).scalars().all())
+    for photo in extra:
+        if photo.storage_key:
+            (photo_dir / photo.storage_key).unlink(missing_ok=True)
+        await session.delete(photo)
+    await session.flush()
+    return len(extra)

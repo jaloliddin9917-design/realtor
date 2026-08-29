@@ -107,6 +107,41 @@ async def rescore_for_listing(session: AsyncSession, listing: Listing, now: date
         await rescore_contact(session, contact, now)
 
 
+async def rescore_property_contacts(session: AsyncSession, prop: Property, now: datetime) -> None:
+    """Rescore every contact linked to any listing of `prop`.
+
+    A listing joining or leaving a property changes its siblings' earliest/cheapest
+    flags, so a contact's score can go stale even when its own listing didn't change —
+    every contact of the property needs recomputing, not just the newly linked one.
+    """
+    stmt = (
+        select(Contact)
+        .join(ListingContact, ListingContact.contact_id == Contact.id)
+        .join(Listing, Listing.id == ListingContact.listing_id)
+        .where(Listing.property_id == prop.id)
+        .distinct()
+    )
+    for contact in (await session.execute(stmt)).scalars().all():
+        await rescore_contact(session, contact, now)
+    await update_probable_owner(session, prop)
+
+
+async def rescore_all(session: AsyncSession, now: datetime) -> int:
+    """Rescore every contact with a listing seen in the last 90 days. Returns the count."""
+    since = now - timedelta(days=90)
+    stmt = (
+        select(Contact)
+        .join(ListingContact, ListingContact.contact_id == Contact.id)
+        .join(Listing, Listing.id == ListingContact.listing_id)
+        .where(Listing.last_seen_at >= since)
+        .distinct()
+    )
+    contacts = list((await session.execute(stmt)).scalars().all())
+    for contact in contacts:
+        await rescore_contact(session, contact, now)
+    return len(contacts)
+
+
 async def update_probable_owner(session: AsyncSession, prop: Property) -> None:
     stmt = (
         select(Contact)

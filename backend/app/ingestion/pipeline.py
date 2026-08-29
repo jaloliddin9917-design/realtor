@@ -16,15 +16,31 @@ import structlog
 from sqlalchemy import exists, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.ingestion.adapters.base import RawPayload, SourceAdapter
+from app.ingestion.adapters.base import (
+    AdapterBackoff,
+    ListingGone,
+    LoginRequired,
+    RawPayload,
+    SourceAdapter,
+)
 from app.ingestion.parse import parse_text
-from app.ingestion.photos import save_listing_photo
-from app.modules.contacts.scoring import rescore_for_listing, update_probable_owner
+from app.ingestion.photos import prune_photos, save_listing_photo
+from app.modules.contacts.scoring import (
+    rescore_for_listing,
+    rescore_property_contacts,
+    update_probable_owner,
+)
 from app.modules.dedupe.config import DedupeConfig
 from app.modules.dedupe.service import assign
 from app.modules.listings.fx import rate_for
 from app.modules.listings.models import CrawlRun, Listing, ListingPhoto, RawListing, Source
-from app.modules.listings.service import apply_misses, mark_seen, persist_parsed, upsert_raw
+from app.modules.listings.service import (
+    SeenWindow,
+    apply_misses,
+    mark_seen,
+    persist_parsed,
+    upsert_raw,
+)
 from app.modules.properties.models import Property
 from app.modules.properties.service import recompute
 
@@ -114,8 +130,17 @@ async def process_raw(
                     )
                     continue
                 await save_listing_photo(session, photo_dir, listing, position, data)
+        if changed:
+            await prune_photos(
+                session, photo_dir, listing, keep=len(payload.photo_refs[:max_photos])
+            )
 
     result = await assign(session, listing, cfg, now)
+    if result.decision == "attached":
+        # The listing joined an existing property — every contact on the property (not
+        # just this listing's own) may now have a different earliest/cheapest flag, so
+        # all of them need rescoring, not only the contacts newly linked here.
+        await rescore_property_contacts(session, result.property, now)
     if not created:
         # Any re-ingest of an already-known listing refreshes its property's aggregates
         # (last_seen_at, price, source_removed, ...) — not just when this call happened
@@ -171,6 +196,7 @@ async def run_source(
     run = CrawlRun(source_id=source.id, started_at=now)
     session.add(run)
     await session.flush()
+    gone_this_run: set[str] = set()
     try:
         async for ref in adapter.discover(source):
             run.found += 1
@@ -190,6 +216,12 @@ async def run_source(
                 payload = await adapter.fetch(ref)
                 async with session.begin_nested():
                     raw, created, changed = await store_raw(session, source, payload, now)
+            except ListingGone:
+                run.removed += await _mark_gone(session, source, ref.external_id, now)
+                gone_this_run.add(ref.external_id)
+                continue
+            except (AdapterBackoff, LoginRequired):
+                raise
             except Exception as exc:  # noqa: BLE001 — one bad post never stops the batch (§10)
                 run.failed += 1
                 log.warning(
@@ -230,7 +262,16 @@ async def run_source(
 
         window = await adapter.seen_window(source)
         if window is not None:
-            await mark_seen(session, source.id, window, now)
+            # A listing whose `fetch` raised ListingGone this run was already marked
+            # source_removed above; mark_seen's bulk UPDATE unconditionally un-removes
+            # anything in the window, so it must not see those ids, or it would silently
+            # undo the removal just recorded.
+            seen_window = (
+                SeenWindow(ids=window.ids - gone_this_run, oldest_posted_at=window.oldest_posted_at)
+                if gone_this_run
+                else window
+            )
+            await mark_seen(session, source.id, seen_window, now)
             # mark_seen only touches listings.last_seen_at; a listing seen again this run
             # but not re-fetched (e.g. it's within the source's window without having
             # changed) never goes through process_raw/recompute, so the owning
@@ -250,7 +291,9 @@ async def run_source(
                 ),
                 {"source_id": source.id},
             )
-            run.removed = await apply_misses(session, source.id, window, now)
+            # += : a ListingGone this run may already have counted removals above; this
+            # tallies misses on top of those instead of clobbering them.
+            run.removed += await apply_misses(session, source.id, window, now)
             if run.removed:
                 affected = (
                     (
@@ -273,6 +316,10 @@ async def run_source(
                     await recompute(session, prop)
         source.consecutive_failures = 0
         source.status = "ok"
+    except AdapterBackoff as exc:
+        _pause(source, run, now, exc.retry_after, "paused", exc.reason)
+    except LoginRequired as exc:
+        _pause(source, run, now, timedelta(hours=1), "login_required", str(exc) or "login required")
     except Exception as exc:  # noqa: BLE001
         run.error = str(exc)[:1000]
         source.consecutive_failures += 1
@@ -292,3 +339,33 @@ async def run_source(
     source.next_run_at = now + timedelta(seconds=source.interval_seconds)
     await session.flush()
     return run
+
+
+async def _mark_gone(session: AsyncSession, source: Source, external_id: str, now: datetime) -> int:
+    stmt = (
+        select(Listing)
+        .join(RawListing, RawListing.id == Listing.raw_listing_id)
+        .where(
+            RawListing.source_id == source.id,
+            RawListing.external_id == external_id,
+            Listing.source_removed.is_(False),
+        )
+    )
+    listing = (await session.execute(stmt)).scalar_one_or_none()
+    if listing is None:
+        return 0
+    listing.source_removed, listing.removed_at = True, now
+    await session.flush()
+    if listing.property_id is not None:
+        prop = await session.get(Property, listing.property_id)
+        if prop is not None:
+            await recompute(session, prop)
+    return 1
+
+
+def _pause(
+    source: Source, run: CrawlRun, now: datetime, retry_after: timedelta, status: str, reason: str
+) -> None:
+    run.error = reason[:1000]
+    source.status = status
+    source.paused_until = now + retry_after

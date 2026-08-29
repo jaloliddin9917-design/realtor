@@ -156,12 +156,17 @@ async def apply_misses(
     return removed
 
 
-async def age_out(session: AsyncSession, now: datetime, days: int = 30) -> int:
+async def age_out(session: AsyncSession, now: datetime, days: int = 30) -> list[uuid.UUID]:
+    """Mark listings unseen for `days` as source_removed; return the ids of properties affected.
+
+    Unlike `mark_seen`/`apply_misses` (bulk UPDATEs), this loads the rows because the
+    caller needs each aged-out listing's `property_id` to know which properties to
+    recompute afterwards (`properties.service.recompute_many`).
+    """
     cutoff = now - timedelta(days=days)
-    stmt = (
-        update(Listing)
-        .where(Listing.source_removed.is_(False), Listing.last_seen_at < cutoff)
-        .values(source_removed=True, removed_at=now)
-    )
-    result = cast(CursorResult[Any], await session.execute(stmt))
-    return int(result.rowcount or 0)
+    stmt = select(Listing).where(Listing.source_removed.is_(False), Listing.last_seen_at < cutoff)
+    aged = list((await session.execute(stmt)).scalars().all())
+    for listing in aged:
+        listing.source_removed, listing.removed_at = True, now
+    await session.flush()
+    return sorted({l_.property_id for l_ in aged if l_.property_id is not None})
