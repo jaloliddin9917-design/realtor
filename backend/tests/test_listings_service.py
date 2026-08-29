@@ -170,3 +170,21 @@ async def test_age_out_after_30_days(db: AsyncSession) -> None:
         (await db.execute(select(Listing).where(Listing.source_removed.is_(True)))).scalars().all()
     )
     assert len(rows) == 3
+
+
+async def test_mark_seen_unremoves_listing(db: AsyncSession) -> None:
+    s = await _source(db)
+    listings = await _three_listings(db, s)
+    window = SeenWindow(ids={"0", "1"}, oldest_posted_at=NOW - timedelta(days=2))
+    for run in range(1, 4):
+        t = NOW + timedelta(minutes=15 * run)
+        await mark_seen(db, s.id, window, t)
+        await apply_misses(db, s.id, window, t)
+    await db.refresh(listings[2])
+    assert listings[2].source_removed is True and listings[2].removed_at is not None
+    later = NOW + timedelta(minutes=60)
+    await mark_seen(db, s.id, SeenWindow(ids={"2"}, oldest_posted_at=None), later)
+    await db.refresh(listings[2])
+    assert listings[2].source_removed is False
+    assert listings[2].removed_at is None
+    assert listings[2].miss_count == 0

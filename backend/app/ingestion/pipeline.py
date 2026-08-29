@@ -237,12 +237,16 @@ async def run_source(
             # property's last_seen_at would otherwise go stale. Propagate directly.
             await session.execute(
                 text(
-                    "UPDATE properties p SET last_seen_at = sub.max_seen "
-                    "FROM (SELECT l.property_id, max(l.last_seen_at) AS max_seen "
+                    "UPDATE properties p "
+                    "SET last_seen_at = GREATEST(p.last_seen_at, sub.max_seen), "
+                    "    source_removed = sub.all_removed "
+                    "FROM (SELECT l.property_id, max(l.last_seen_at) AS max_seen, "
+                    "      bool_and(l.source_removed) AS all_removed "
                     "FROM listings l JOIN raw_listings r ON r.id = l.raw_listing_id "
                     "WHERE r.source_id = :source_id AND l.property_id IS NOT NULL "
                     "GROUP BY l.property_id) sub "
-                    "WHERE p.id = sub.property_id AND p.last_seen_at < sub.max_seen"
+                    "WHERE p.id = sub.property_id "
+                    "AND (p.last_seen_at < sub.max_seen OR p.source_removed <> sub.all_removed)"
                 ),
                 {"source_id": source.id},
             )

@@ -395,3 +395,36 @@ async def test_three_discover_failures_pause_the_source(db: AsyncSession, tmp_pa
     await db.refresh(s)
     assert s.consecutive_failures == 0
     assert s.status == "ok"
+
+
+async def test_seen_only_listing_unflags_property(db: AsyncSession, tmp_path: Path) -> None:
+    s = await _source(db)
+    seen = SeenWindow(ids={"1"}, oldest_posted_at=NOW - timedelta(days=1))
+    await run_source(
+        db, FakeAdapter([_payload("1", OWNER)], seen), s, cfg=CFG, photo_dir=tmp_path, now=NOW
+    )
+    gone = SeenWindow(ids=set(), oldest_posted_at=NOW - timedelta(days=1))
+    for i in range(1, 4):
+        run = await run_source(
+            db,
+            FakeAdapter([], gone),
+            s,
+            cfg=CFG,
+            photo_dir=tmp_path,
+            now=NOW + timedelta(minutes=15 * i),
+        )
+    assert run.removed == 1
+    prop = (await db.execute(select(Property))).scalar_one()
+    assert prop.source_removed is True
+    later = NOW + timedelta(minutes=90)
+    await run_source(
+        db,
+        FakeAdapter([], SeenWindow(ids={"1"}, oldest_posted_at=later - timedelta(days=1))),
+        s,
+        cfg=CFG,
+        photo_dir=tmp_path,
+        now=later,
+    )
+    await db.refresh(prop)
+    assert prop.source_removed is False
+    assert prop.last_seen_at == later

@@ -117,7 +117,7 @@ def extract_phones(text: str) -> list[str]:
     return out
 
 
-_USERNAME = re.compile(r"(?<![\w.])@([A-Za-z][A-Za-z0-9_]{4,31})\b(?!\.[a-z]{2,})")
+_USERNAME = re.compile(r"(?<!\w)@([A-Za-z][A-Za-z0-9_]{4,31})\b(?!\.[a-z]{2,})")
 
 
 def extract_username(text: str) -> str | None:

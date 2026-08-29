@@ -121,7 +121,7 @@ async def mark_seen(
             RawListing.source_id == source_id,
             RawListing.external_id.in_(window.ids),
         )
-        .values(last_seen_at=now, miss_count=0)
+        .values(last_seen_at=now, miss_count=0, source_removed=False, removed_at=None)
     )
     result = cast(CursorResult[Any], await session.execute(stmt))
     return int(result.rowcount or 0)

@@ -93,6 +93,7 @@ def test_extract_username() -> None:
     assert extract_username("no handle here") is None
     assert extract_username("email: sardor@gmail.com") is None
     assert extract_username("aloqa @ijara_uy_bot yoki sardor@gmail.com") == "ijara_uy_bot"
+    assert extract_username("тел.@dilshod_uy") == "dilshod_uy"
 
 
 @pytest.mark.parametrize(
