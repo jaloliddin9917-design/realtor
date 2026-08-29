@@ -3359,7 +3359,7 @@ async def test_run_source_end_to_end_with_dedupe(db: AsyncSession, tmp_path: Pat
         [
             _payload("1", OWNER, NOW - timedelta(days=1), photos=["1"]),
             _payload("2", AGENT, NOW, photos=["1"]),                         # same photo, other phone → review
-            _payload("2b", "Chilonzor 2-xonali 3/9 455$ tel 90 811 24 37", NOW),  # same phone as 1 → attached
+            _payload("2b", "Chilonzor 2-xonali 3/9 455$ tel 90 811 24 37", NOW, photos=["1"]),  # same phone + photo as 1 → attached (0.95)
             _payload("3", OTHER, NOW),
         ],
         SeenWindow(ids={"1", "2", "2b", "3"}, oldest_posted_at=NOW - timedelta(days=1)),
