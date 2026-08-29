@@ -2060,38 +2060,58 @@ git commit -m "feat(listings): raw upsert with change detection, idempotent list
 ### Task 7: Photos — resize, hash, bucket
 
 **Files:**
-- Create: `backend/app/ingestion/photos.py`
+- Create: `backend/app/ingestion/photos.py`, `backend/tests/helpers.py`
 - Test: `backend/tests/test_photos.py`
 
 **Interfaces:**
 - Consumes: `ListingPhoto`, `Listing` (Task 2), `Settings.photo_dir` (Task 1).
 - Produces: `@dataclass StoredPhoto(storage_key: str, sha256: str, phash: int, width: int, height: int)`; `store_photo(photo_dir: Path, listing_id: UUID, position: int, data: bytes, max_side: int = 1280) -> StoredPhoto`; `phash_to_signed(hex_hash: str) -> int`; `phash_bucket(phash: int) -> int` (top 16 bits, same expression as the SQL index `(phash >> 48) & 65535`); `hamming(a: int, b: int) -> int`; `async save_listing_photo(session, photo_dir, listing: Listing, position: int, data: bytes | None, error: str | None = None) -> ListingPhoto` (idempotent on `(listing_id, position)`; with `data=None` records `download_error`).
 
-- [ ] **Step 1: Write the failing tests**
+- [ ] **Step 1: Write the helper and the failing tests**
+
+`backend/tests/helpers.py` (shared by the photo, dedupe and pipeline tests — synthetic *photo-like* images; pixel noise is not scale-stable under a perceptual hash):
+```python
+"""Test-only helpers shared by photo, dedupe and pipeline tests."""
+
+import io
+import random
+
+from PIL import Image, ImageDraw
+
+
+def make_jpeg(width: int, height: int, seed: int = 0) -> bytes:
+    """A photo-like JPEG: a smooth gradient plus four large blocks placed by `seed`.
+
+    The composition scales with the canvas, so one seed rendered at two sizes hashes
+    alike, while different seeds give clearly different pictures.
+    """
+    img = Image.new("RGB", (width, height))
+    draw = ImageDraw.Draw(img)
+    for x in range(width):
+        v = int(255 * x / max(1, width - 1))
+        draw.line([(x, 0), (x, height)], fill=((v + seed * 37) % 256, 255 - v, (v // 2 + seed * 91) % 256))
+    rng = random.Random(seed)
+    for _ in range(4):
+        x0, y0 = rng.uniform(0.0, 0.6), rng.uniform(0.0, 0.6)
+        color = (rng.randrange(256), rng.randrange(256), rng.randrange(256))
+        box = [int(x0 * width), int(y0 * height), int((x0 + 0.35) * width), int((y0 + 0.35) * height)]
+        draw.rectangle(box, fill=color)
+    buf = io.BytesIO()
+    img.save(buf, format="JPEG", quality=90)
+    return buf.getvalue()
+```
 
 `backend/tests/test_photos.py`:
 ```python
-import io
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 
-from PIL import Image
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ingestion.photos import hamming, phash_bucket, phash_to_signed, save_listing_photo, store_photo
 from app.modules.listings.models import Listing, RawListing, Source
-
-
-def _jpeg(width: int, height: int, seed: int = 0) -> bytes:
-    img = Image.new("RGB", (width, height))
-    px = img.load()
-    for x in range(width):
-        for y in range(height):
-            px[x, y] = ((x * 7 + seed) % 256, (y * 3 + seed) % 256, (x * y + seed) % 256)
-    buf = io.BytesIO()
-    img.save(buf, format="JPEG", quality=90)
-    return buf.getvalue()
+from tests.helpers import make_jpeg as _jpeg
 
 
 def test_store_photo_resizes_and_hashes(tmp_path: Path) -> None:
@@ -2230,7 +2250,7 @@ async def save_listing_photo(
 - [ ] **Step 4: Run the tests to verify they pass**
 
 Run: `cd backend && .venv/bin/pytest tests/test_photos.py -q`
-Expected: 5 PASSED. If `hamming(a, b) > 10` fails for the two generated images, raise `seed=97` to a value that produces a visibly different image (the test's purpose is "different pictures are far apart"); do not lower the threshold, it mirrors `photo_max_distance` in §5.2.
+Expected: 5 PASSED. If `hamming(a, b) > 10` fails for the two generated images, change `seed=97` to another seed that produces a visibly different composition (the test's purpose is "different pictures are far apart"); do not lower the threshold, it mirrors `photo_max_distance` in §5.2. The scaled-pair test must pass as written — `make_jpeg` renders the same composition at both sizes.
 
 - [ ] **Step 5: Lint, typecheck, commit**
 
@@ -2647,11 +2667,9 @@ Expected: 8 PASSED
 
 `backend/tests/test_dedupe_service.py`:
 ```python
-import io
 from datetime import UTC, datetime
 from pathlib import Path
 
-from PIL import Image
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -2664,20 +2682,14 @@ from app.modules.dedupe.service import assign, gather_inputs
 from app.modules.listings.models import Listing, Source
 from app.modules.listings.service import persist_parsed, upsert_raw
 from app.modules.properties.service import create_from_listing
+from tests.helpers import make_jpeg
 
 NOW = datetime(2026, 8, 29, 12, 0, tzinfo=UTC)
 CFG = load_config(Path(__file__).resolve().parents[1] / "config" / "dedupe.yaml")
 
 
 def _jpeg(seed: int) -> bytes:
-    img = Image.new("RGB", (400, 300))
-    px = img.load()
-    for x in range(400):
-        for y in range(300):
-            px[x, y] = ((x * 7 + seed) % 256, (y * 3 + seed) % 256, (x * y + seed) % 256)
-    buf = io.BytesIO()
-    img.save(buf, format="JPEG")
-    return buf.getvalue()
+    return make_jpeg(400, 300, seed)
 
 
 async def _source(db: AsyncSession) -> Source:
@@ -3173,13 +3185,11 @@ git commit -m "feat(contacts): agency scoring, classification, human decision ov
 
 `backend/tests/test_pipeline.py`:
 ```python
-import io
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-from PIL import Image
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -3189,16 +3199,14 @@ from app.modules.dedupe.config import load_config
 from app.modules.listings.models import CrawlRun, Listing, ListingPhoto, RawListing, Source
 from app.modules.listings.service import SeenWindow
 from app.modules.properties.models import Property
+from tests.helpers import make_jpeg
 
 NOW = datetime(2026, 8, 29, 12, 0, tzinfo=UTC)
 CFG = load_config(Path(__file__).resolve().parents[1] / "config" / "dedupe.yaml")
 
 
 def _jpeg(seed: int = 1) -> bytes:
-    img = Image.new("RGB", (300, 200), (seed * 40 % 255, 90, 120))
-    buf = io.BytesIO()
-    img.save(buf, format="JPEG")
-    return buf.getvalue()
+    return make_jpeg(300, 200, seed)
 
 
 class FakeAdapter:
