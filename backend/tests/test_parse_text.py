@@ -51,6 +51,20 @@ def test_structured_values_override_text() -> None:
     assert (p.rooms, p.price_amount_minor, p.district) == (3, 50000, "yunusobod")
 
 
+def test_structured_none_and_partial_price_fall_back_to_text() -> None:
+    text = "2-xonali, 3/9, Chilonzor, 400$"
+    p = parse_text(text, structured={"price_amount_minor": 50000})
+    assert (p.price_amount_minor, p.price_currency) == (40000, "USD")
+    p = parse_text("2-xonali, 3/9, Chilonzor", structured={"price_amount_minor": 50000})
+    assert (p.price_amount_minor, p.price_currency) == (None, None)
+    p = parse_text(text, structured={"price_currency": "UZS"})
+    assert (p.price_amount_minor, p.price_currency) == (40000, "USD")
+    p = parse_text(text, structured={"price_amount_minor": 50000, "price_currency": "USD"})
+    assert (p.price_amount_minor, p.price_currency) == (50000, "USD")
+    p = parse_text(text, structured={"title": None, "district": None})
+    assert p.title == "2-xonali, 3/9, Chilonzor, 400$" and p.district == "chilonzor"
+
+
 def test_confidence_is_low_when_little_is_found() -> None:
     p = parse_text("Ijaraga beriladi, qo'ng'iroq qiling")
     assert p.parse_confidence == 0.0

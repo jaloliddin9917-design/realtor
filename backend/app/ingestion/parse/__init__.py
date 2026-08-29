@@ -48,6 +48,12 @@ def _confidence(p: "ParsedListing") -> float:
     return round(score, 2)
 
 
+def _override[T](s: dict[str, Any], key: str, extracted: T) -> T:
+    """A structured value wins only when the key is present and not None."""
+    value = s.get(key)
+    return extracted if value is None else value
+
+
 def parse_text(
     text: str, *, sender_username: str | None = None, structured: dict[str, Any] | None = None
 ) -> ParsedListing:
@@ -56,16 +62,23 @@ def parse_text(
     first_line = text.strip().splitlines()[0].strip() if text.strip() else ""
     price = extract_price(clean)
     rooms, floor, total = extract_rooms_floors(clean)
+
+    # Price overrides atomically: only use the structured pair when both fields are
+    # present and not None, so an amount is never paired with the wrong currency.
+    amount, currency = (price[0], price[1]) if price is not None else (None, None)
+    if s.get("price_amount_minor") is not None and s.get("price_currency") is not None:
+        amount, currency = s["price_amount_minor"], s["price_currency"]
+
     p = ParsedListing(
-        title=str(s.get("title") or normalize(first_line))[:200],
+        title=str(_override(s, "title", normalize(first_line)))[:200],
         description=clean,
-        price_amount_minor=s.get("price_amount_minor", price[0] if price else None),
-        price_currency=s.get("price_currency", price[1] if price else None),
-        rooms=s.get("rooms", rooms),
-        floor=s.get("floor", floor),
-        total_floors=s.get("total_floors", total),
-        area_sqm=s.get("area_sqm", extract_area(clean)),
-        district=s.get("district", match_district(clean)),
+        price_amount_minor=amount,
+        price_currency=currency,
+        rooms=_override(s, "rooms", rooms),
+        floor=_override(s, "floor", floor),
+        total_floors=_override(s, "total_floors", total),
+        area_sqm=_override(s, "area_sqm", extract_area(clean)),
+        district=_override(s, "district", match_district(clean)),
         phones=extract_phones(clean),
         telegram_username=extract_username(clean) or sender_username,
     )

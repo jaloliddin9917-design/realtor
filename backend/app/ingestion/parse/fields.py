@@ -75,7 +75,7 @@ def extract_rooms_floors(text: str) -> tuple[int | None, int | None, int | None]
 
 
 _AREA = re.compile(
-    r"\b(\d{2,3}(?:[.,]\d)?)\s*(?:m²|m2|kv\.?\s*m\b|kv\.?(?!artal)|m\.?\s*kv\b|kvadrat)",
+    r"\b(\d{2,3}(?:[.,]\d)?)\s*(?:m²|m2|kv\.?\s*m\b|kv\.?(?![a-z])|m\.?\s*kv\b|kvadrat)",
     re.IGNORECASE,
 )
 
@@ -89,11 +89,21 @@ def extract_area(text: str) -> float | None:
 _PHONE = re.compile(
     r"(?<!\d)(?:\+?998|8)?[\s(-]*(\d{2})[\s)-]*(\d{3})[\s-]*(\d{2})[\s-]*(\d{2})(?!\d)"
 )
+# a digit run immediately followed by a currency marker is a price, not a phone
+# (checked on the original script — extract_phones runs on normalize(), not translit())
+_PRICED = re.compile(
+    r"^\s*(?:so'?m\b|sum\b|uzs\b|\$|usd\b|u\.?\s?e\b|у\.?\s?е\b|сум\b|сўм\b|"
+    r"ming\b|mln\b|тыс\b|млн\b)",
+    re.IGNORECASE,
+)
 
 
 def extract_phones(text: str) -> list[str]:
     out: list[str] = []
-    for m in _PHONE.finditer(normalize(text)):
+    clean = normalize(text)
+    for m in _PHONE.finditer(clean):
+        if _PRICED.match(clean[m.end() :]):
+            continue
         candidate = "+998" + "".join(m.groups())
         try:
             parsed = phonenumbers.parse(candidate, "UZ")

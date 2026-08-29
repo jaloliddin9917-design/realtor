@@ -54,6 +54,8 @@ def test_extract_rooms_floors(
         ("60 kv", 60.0),
         ("55.5 м2", 55.5),
         ("2-xonali", None),
+        ("54 kvartirali uyda", None),
+        ("12 kvartira sotiladi", None),
     ],
 )
 def test_extract_area(text: str, expected: float | None) -> None:
@@ -72,6 +74,9 @@ def test_extract_phones_all_local_formats() -> None:
 
 def test_extract_phones_ignores_prices_and_years() -> None:
     assert extract_phones("Narxi 5 940 700 sum, 2026 yil") == []
+    assert extract_phones("994000000 so'm") == []
+    assert extract_phones("Narxi 999500000 сум") == []
+    assert extract_phones("tel 994000000") == ["+998994000000"]
 
 
 def test_extract_username() -> None:
