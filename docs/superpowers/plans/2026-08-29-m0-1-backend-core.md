@@ -2065,7 +2065,7 @@ git commit -m "feat(listings): raw upsert with change detection, idempotent list
 
 **Interfaces:**
 - Consumes: `ListingPhoto`, `Listing` (Task 2), `Settings.photo_dir` (Task 1).
-- Produces: `@dataclass StoredPhoto(storage_key: str, sha256: str, phash: int, width: int, height: int)`; `store_photo(photo_dir: Path, listing_id: UUID, position: int, data: bytes, max_side: int = 1280) -> StoredPhoto`; `phash_to_signed(hex_hash: str) -> int`; `phash_bucket(phash: int) -> int` (top 16 bits, same expression as the SQL index `(phash >> 48) & 65535`); `hamming(a: int, b: int) -> int`; `async save_listing_photo(session, photo_dir, listing: Listing, position: int, data: bytes | None, error: str | None = None) -> ListingPhoto` (idempotent on `(listing_id, position)`; with `data=None` records `download_error`).
+- Produces: `@dataclass StoredPhoto(storage_key: str, sha256: str, phash: int, width: int, height: int)`; `store_photo(photo_dir: Path, listing_id: UUID, position: int, data: bytes, max_side: int = 1280) -> StoredPhoto`; `phash_to_signed(hex_hash: str) -> int`; `phash_bucket(phash: int) -> int` (top 16 bits, same expression as the SQL index `(phash >> 48) & 65535`); `hamming(a: int, b: int) -> int`; `async save_listing_photo(session, photo_dir, listing: Listing, position: int, data: bytes | None, error: str | None = None) -> ListingPhoto` (idempotent on `(listing_id, position)`; with `data=None` or undecodable bytes it records `download_error`, clears `storage_key/sha256/phash/width/height`, and never raises).
 
 - [ ] **Step 1: Write the helper and the failing tests**
 
@@ -2144,7 +2144,7 @@ def test_phash_signed_conversion_round_trips_bucket() -> None:
     assert phash_bucket(phash_to_signed("0001000000000000")) == 1
 
 
-async def test_save_listing_photo_is_idempotent_and_records_errors(db: AsyncSession, tmp_path: Path) -> None:
+async def _listing(db: AsyncSession) -> Listing:
     source = Source(kind="telegram", name="@t", config={})
     db.add(source)
     await db.flush()
@@ -2154,11 +2154,32 @@ async def test_save_listing_photo_is_idempotent_and_records_errors(db: AsyncSess
     listing = Listing(raw_listing_id=raw.id, first_seen_at=datetime.now(UTC), last_seen_at=datetime.now(UTC))
     db.add(listing)
     await db.flush()
+    return listing
+
+
+async def test_save_listing_photo_is_idempotent_and_records_errors(db: AsyncSession, tmp_path: Path) -> None:
+    listing = await _listing(db)
     first = await save_listing_photo(db, tmp_path, listing, 0, _jpeg(400, 300))
     again = await save_listing_photo(db, tmp_path, listing, 0, _jpeg(400, 300))
     failed = await save_listing_photo(db, tmp_path, listing, 1, None, error="timeout")
     assert first.id == again.id and first.phash is not None
     assert failed.download_error == "timeout" and failed.phash is None
+
+
+async def test_failed_retry_clears_previous_success_fields(db: AsyncSession, tmp_path: Path) -> None:
+    listing = await _listing(db)
+    first = await save_listing_photo(db, tmp_path, listing, 0, _jpeg(400, 300))
+    assert first.phash is not None and first.storage_key is not None
+    failed = await save_listing_photo(db, tmp_path, listing, 0, None, error="timeout")
+    assert failed.id == first.id and failed.download_error == "timeout"
+    assert (failed.phash, failed.storage_key, failed.sha256, failed.width, failed.height) == (None, None, None, None, None)
+
+
+async def test_undecodable_bytes_are_recorded_not_raised(db: AsyncSession, tmp_path: Path) -> None:
+    listing = await _listing(db)
+    photo = await save_listing_photo(db, tmp_path, listing, 0, b"definitely not an image")
+    assert photo.phash is None and photo.storage_key is None
+    assert photo.download_error is not None and photo.download_error.startswith("undecodable image:")
 ```
 
 - [ ] **Step 2: Run them to verify they fail**
@@ -2224,6 +2245,11 @@ def store_photo(photo_dir: Path, listing_id: uuid.UUID, position: int, data: byt
     )
 
 
+def _mark_failed(photo: ListingPhoto, error: str) -> None:
+    photo.download_error = error[:500]
+    photo.storage_key = photo.sha256 = photo.phash = photo.width = photo.height = None
+
+
 async def save_listing_photo(
     session: AsyncSession,
     photo_dir: Path,
@@ -2232,17 +2258,22 @@ async def save_listing_photo(
     data: bytes | None,
     error: str | None = None,
 ) -> ListingPhoto:
+    """Idempotent on (listing_id, position). A photo failure never raises out of here (§10)."""
     stmt = select(ListingPhoto).where(ListingPhoto.listing_id == listing.id, ListingPhoto.position == position)
     photo = (await session.execute(stmt)).scalar_one_or_none()
     if photo is None:
         photo = ListingPhoto(listing_id=listing.id, position=position)
         session.add(photo)
     if data is None:
-        photo.download_error = error or "download failed"
+        _mark_failed(photo, error or "download failed")
     else:
-        stored = store_photo(photo_dir, listing.id, position, data)
-        photo.storage_key, photo.sha256, photo.phash = stored.storage_key, stored.sha256, stored.phash
-        photo.width, photo.height, photo.download_error = stored.width, stored.height, None
+        try:
+            stored = store_photo(photo_dir, listing.id, position, data)
+        except (OSError, ValueError) as exc:  # undecodable/truncated bytes, or the photo dir not writable
+            _mark_failed(photo, f"undecodable image: {exc}")
+        else:
+            photo.storage_key, photo.sha256, photo.phash = stored.storage_key, stored.sha256, stored.phash
+            photo.width, photo.height, photo.download_error = stored.width, stored.height, None
     await session.flush()
     return photo
 ```
@@ -2250,7 +2281,7 @@ async def save_listing_photo(
 - [ ] **Step 4: Run the tests to verify they pass**
 
 Run: `cd backend && .venv/bin/pytest tests/test_photos.py -q`
-Expected: 5 PASSED. If `hamming(a, b) > 10` fails for the two generated images, change `seed=97` to another seed that produces a visibly different composition (the test's purpose is "different pictures are far apart"); do not lower the threshold, it mirrors `photo_max_distance` in §5.2. The scaled-pair test must pass as written — `make_jpeg` renders the same composition at both sizes.
+Expected: 7 PASSED. If `hamming(a, b) > 10` fails for the two generated images, change `seed=97` to another seed that produces a visibly different composition (the test's purpose is "different pictures are far apart"); do not lower the threshold, it mirrors `photo_max_distance` in §5.2. The scaled-pair test must pass as written — `make_jpeg` renders the same composition at both sizes.
 
 - [ ] **Step 5: Lint, typecheck, commit**
 
