@@ -175,3 +175,13 @@ async def test_rebuild_payload_and_fetch_by_url() -> None:
     assert await adapter.rebuild_payload(raw) == p
     by_url = await adapter.fetch_by_url("https://t.me/toshkent_ijara/103")
     assert by_url.external_id == "-1001234:103" and "Yunusobod" in by_url.text
+
+
+def test_marked_chat_id_follows_telethon_conventions() -> None:
+    from telethon.tl import types
+
+    from app.ingestion.adapters.telegram.client import marked_chat_id
+
+    assert marked_chat_id(types.PeerUser(user_id=5)) == 5
+    assert marked_chat_id(types.PeerChat(chat_id=77)) == -77
+    assert marked_chat_id(types.PeerChannel(channel_id=1234)) == -1000000001234

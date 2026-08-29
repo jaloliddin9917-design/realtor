@@ -43,6 +43,13 @@ class TelegramClientLike(Protocol):
     async def download_photo(self, chat_id: int, message_id: int) -> bytes: ...
 
 
+def marked_chat_id(entity: Any) -> int:
+    """Telethon's marked id: users unchanged, basic groups -id, channels/megagroups -(10**12+id)."""
+    from telethon import utils
+
+    return int(utils.get_peer_id(entity, add_mark=True))
+
+
 def _to_msg(message: Any) -> TgMessage:
     sender = getattr(message, "sender", None)
     date = message.date if message.date.tzinfo else message.date.replace(tzinfo=UTC)
@@ -72,13 +79,21 @@ class TelethonClient:
         await self._client.connect()
 
     async def is_user_authorized(self) -> bool:
-        return bool(await self._client.is_user_authorized())
+        """Probe authorization via `get_me()` rather than `is_user_authorized()`.
+
+        Telethon's `is_user_authorized()` catches every `RPCError` (including
+        `FloodWaitError`) internally and returns False, so a flood wait during
+        the probe would masquerade as `LoginRequired`. `get_me()` only catches
+        `UnauthorizedError` and returns None in that case; any other RPC error
+        (notably `FloodWaitError`) propagates to `_guard`/`_translate`, which
+        turns it into `AdapterBackoff` instead of a false login failure.
+        """
+        me = await self._guard(self._client.get_me())
+        return me is not None
 
     async def resolve_peer(self, peer: str | int) -> tuple[int, str | None]:
         entity = await self._guard(self._client.get_entity(peer))
-        chat_id = int(getattr(entity, "id", 0))
-        if getattr(entity, "megagroup", False) or getattr(entity, "broadcast", False):
-            chat_id = int(f"-100{chat_id}")
+        chat_id = marked_chat_id(entity)
         self._entities[chat_id] = entity
         return chat_id, getattr(entity, "username", None)
 
