@@ -32,6 +32,11 @@ def phash_bucket(phash: int) -> int:
     return ((phash & _MASK) >> 48) & 0xFFFF
 
 
+def _mark_failed(photo: ListingPhoto, error: str) -> None:
+    photo.download_error = error[:500]
+    photo.storage_key = photo.sha256 = photo.phash = photo.width = photo.height = None
+
+
 def hamming(a: int, b: int) -> int:
     return bin((a ^ b) & _MASK).count("1")
 
@@ -70,14 +75,19 @@ async def save_listing_photo(
         photo = ListingPhoto(listing_id=listing.id, position=position)
         session.add(photo)
     if data is None:
-        photo.download_error = error or "download failed"
+        _mark_failed(photo, error or "download failed")
     else:
-        stored = store_photo(photo_dir, listing.id, position, data)
-        photo.storage_key, photo.sha256, photo.phash = (
-            stored.storage_key,
-            stored.sha256,
-            stored.phash,
-        )
-        photo.width, photo.height, photo.download_error = stored.width, stored.height, None
+        try:
+            stored = store_photo(photo_dir, listing.id, position, data)
+        except (OSError, ValueError) as exc:
+            # undecodable/truncated bytes, or the photo dir not writable
+            _mark_failed(photo, f"undecodable image: {exc}")
+        else:
+            photo.storage_key = stored.storage_key
+            photo.sha256 = stored.sha256
+            photo.phash = stored.phash
+            photo.width = stored.width
+            photo.height = stored.height
+            photo.download_error = None
     await session.flush()
     return photo
