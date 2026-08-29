@@ -1,0 +1,14 @@
+# Dedupe weights and thresholds — spec §5.2. Change here, never in code.
+weights:
+  contact: 0.50
+  photo: 0.30
+  description: 0.15
+  rooms_floors: 0.10
+  area: 0.05
+  price: 0.05
+photo_max_distance: 10
+description_min_similarity: 0.6
+area_tolerance: 0.05
+price_tolerance: 0.10
+merge_threshold: 0.75
+review_threshold: 0.50
