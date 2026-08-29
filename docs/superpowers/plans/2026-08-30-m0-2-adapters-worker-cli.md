@@ -451,8 +451,11 @@ async def test_changed_payload_with_fewer_photos_prunes_extra_rows(db: AsyncSess
 
 async def test_attach_rescores_every_contact_of_the_property(db: AsyncSession, tmp_path: Path) -> None:
     s = await _source(db)
-    first = payload("1", OWNER, NOW - timedelta(days=1), photos=["1"])
-    second = payload("2", "Chilonzor 2-xonali 3/9 54 m² 430$ tel 93 402 18 55", NOW, photos=["1"])  # cheaper, later, other phone
+    # Both posted by the same channel (a shared telegram contact identity): contact 0.5 + photo 0.3 +
+    # rooms/floors 0.1 + area 0.05 + price 0.05 = 1.0 ≥ merge_threshold. Without a shared identity the
+    # spec's weights cap a match at 0.65 (review) — a photo-only match never auto-merges.
+    first = payload("1", OWNER, NOW - timedelta(days=1), photos=["1"], username="chilonzor_arenda")
+    second = payload("2", "Chilonzor 2-xonali 3/9 54 m² 430$ tel 93 402 18 55", NOW, photos=["1"], username="chilonzor_arenda")  # cheaper, later, other phone
     await run_source(db, FakeAdapter([first, second], None), s, cfg=CFG, photo_dir=tmp_path, now=NOW)
     owner = (await db.execute(select(Contact).where(Contact.identifier == "+998908112437"))).scalar_one()
     agent = (await db.execute(select(Contact).where(Contact.identifier == "+998934021855"))).scalar_one()
