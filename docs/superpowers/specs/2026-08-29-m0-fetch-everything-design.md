@@ -95,6 +95,7 @@ class SourceAdapter(Protocol):
 - `sources.interval_seconds` (default 900), `next_run_at`, `consecutive_failures`, `paused_until`.
 - A listing whose external id was absent from `seen_ids` on **3 consecutive runs** of its source gets `source_removed = true`, `removed_at = now()`. `miss_count` resets to 0 whenever it is seen. Listings older than the source's visible window (Telegram: outside the newest 200; OLX: beyond `max_pages`) are not counted as missed — they age out only via the daily sweep rule: `last_seen_at < now() − 30 days` → `source_removed`.
 - A property whose listings are all `source_removed` gets `properties.source_removed = true` (status untouched); the list shows *"manbadan o'chirilgan"*. M1 uses it as a re-check trigger.
+- **Resurrection** (decided 2026-08-30 after the M0-1 review): a listing that is seen again — with the same or changed content — clears `source_removed`/`removed_at` and resets `miss_count`; its property is recomputed, so the flag disappears as soon as the ad is back. OLX ads are routinely deactivated and renewed.
 
 ---
 
@@ -136,7 +137,7 @@ Candidates for a new or changed listing are the union of listings that share: (a
 | Area within 5 % | +0.05 |
 | USD price within 10 % | +0.05 |
 
-The best-scoring candidate property decides: **≥ 0.75** attach to it; **0.50–0.75** create a new property *and* a `dedupe_reviews` row with the score breakdown (kept separate until a human decides — the review screen is M2; the property page shows *"ehtimoliy dublikat"* with the candidate); **< 0.50** new property. Weights and thresholds live in `backend/config/dedupe.yaml`.
+Assignment happens **once per listing, at creation** (M0). A changed listing is re-parsed in place but not re-scored: moving a listing between properties would have to cope with the emptied property and its append-only history, which needs its own design — tracked as a follow-up for the review-queue work in M2; the phone/photo signals of the *original* ingest still decide. The best-scoring candidate property decides: **≥ 0.75** attach to it; **0.50–0.75** create a new property *and* a `dedupe_reviews` row with the score breakdown (kept separate until a human decides — the review screen is M2; the property page shows *"ehtimoliy dublikat"* with the candidate); **< 0.50** new property. Weights and thresholds live in `backend/config/dedupe.yaml`.
 
 On attach the property recomputes: lowest `price_usd_minor`, union of photos, earliest `first_seen_at`, latest `last_seen_at`, all contacts, and attributes from the highest-confidence listing (ties → newest).
 
