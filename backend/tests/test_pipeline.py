@@ -1,11 +1,14 @@
+import uuid
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+import pytest
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.ingestion import pipeline
 from app.ingestion.adapters.base import RawPayload, RawRef
 from app.ingestion.pipeline import ingest_payload, run_source
 from app.modules.dedupe.config import load_config
@@ -212,6 +215,67 @@ async def test_removed_after_three_runs_and_property_flagged(
     assert prop.source_removed is True and prop.status == "new"
 
 
+async def test_removal_recompute_touches_only_this_runs_removals(
+    db: AsyncSession, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    s = await _source(db)
+    seen_both = SeenWindow(ids={"1", "3"}, oldest_posted_at=NOW - timedelta(days=1))
+    await run_source(
+        db,
+        FakeAdapter([_payload("1", OWNER), _payload("3", OTHER)], seen_both),
+        s,
+        cfg=CFG,
+        photo_dir=tmp_path,
+        now=NOW,
+    )
+    # listing 1 disappears and is removed after three misses
+    gone_1 = SeenWindow(ids={"3"}, oldest_posted_at=NOW - timedelta(days=1))
+    for i in range(1, 4):
+        t1 = NOW + timedelta(minutes=15 * i)
+        run = await run_source(
+            db,
+            FakeAdapter([_payload("3", OTHER)], gone_1),
+            s,
+            cfg=CFG,
+            photo_dir=tmp_path,
+            now=t1,
+        )
+    assert run.removed == 1
+    prop_1 = (
+        await db.execute(
+            select(Property).join(Listing).join(RawListing).where(RawListing.external_id == "1")
+        )
+    ).scalar_one()
+    # Set up call counter for recompute
+    calls: list[uuid.UUID] = []
+    real_recompute = pipeline.recompute
+
+    async def counting_recompute(session: AsyncSession, prop: Property) -> None:
+        calls.append(prop.id)
+        await real_recompute(session, prop)
+
+    monkeypatch.setattr(pipeline, "recompute", counting_recompute)
+    # later, listing 3 disappears too; property 1 must not be recomputed again
+    gone_all = SeenWindow(ids=set(), oldest_posted_at=NOW - timedelta(days=1))
+    for i in range(4, 7):
+        t2 = NOW + timedelta(minutes=15 * i)
+        run = await run_source(
+            db,
+            FakeAdapter([], gone_all),
+            s,
+            cfg=CFG,
+            photo_dir=tmp_path,
+            now=t2,
+        )
+    assert run.removed == 1
+    prop_3 = (
+        await db.execute(
+            select(Property).join(Listing).join(RawListing).where(RawListing.external_id == "3")
+        )
+    ).scalar_one()
+    assert prop_1.id not in calls and prop_3.id in calls
+
+
 async def test_discover_failure_is_recorded(db: AsyncSession, tmp_path: Path) -> None:
     class Broken(FakeAdapter):
         async def discover(self, source: Source) -> AsyncIterator[RawRef]:
@@ -219,10 +283,8 @@ async def test_discover_failure_is_recorded(db: AsyncSession, tmp_path: Path) ->
             yield  # pragma: no cover
 
     s = await _source(db)
-    try:
+    with pytest.raises(RuntimeError, match="flood"):
         await run_source(db, Broken([], None), s, cfg=CFG, photo_dir=tmp_path, now=NOW)
-    except RuntimeError:
-        pass
     run = (await db.execute(select(CrawlRun))).scalar_one()
     await db.refresh(s)
     assert run.error == "flood" and run.finished_at is not None

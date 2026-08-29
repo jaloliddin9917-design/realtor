@@ -146,7 +146,9 @@ async def run_source(
                             .join(Listing, Listing.property_id == Property.id)
                             .join(RawListing, RawListing.id == Listing.raw_listing_id)
                             .where(
-                                RawListing.source_id == source.id, Listing.source_removed.is_(True)
+                                RawListing.source_id == source.id,
+                                Listing.source_removed.is_(True),
+                                Listing.removed_at == now,
                             )
                             .distinct()
                         )
