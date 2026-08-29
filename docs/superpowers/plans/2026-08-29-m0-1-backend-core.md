@@ -1196,6 +1196,11 @@ def test_extract_phones_ignores_prices_and_years() -> None:
     assert extract_phones("Narxi 5 940 700 sum, 2026 yil") == []
     assert extract_phones("994000000 so'm") == []
     assert extract_phones("Narxi 999500000 сум") == []
+    assert extract_phones("994000000 tys") == []
+    assert extract_phones("994000000 million") == []
+    assert extract_phones("994000000 mlrd") == []
+    assert extract_phones("994000000 минг") == []
+    assert extract_phones("994000000 млрд") == []
     assert extract_phones("tel 994000000") == ["+998994000000"]
 
 
@@ -1368,9 +1373,11 @@ def extract_area(text: str) -> float | None:
 
 
 _PHONE = re.compile(r"(?<!\d)(?:\+?998|8)?[\s(-]*(\d{2})[\s)-]*(\d{3})[\s-]*(\d{2})[\s-]*(\d{2})(?!\d)")
+_MULT_WORDS = "|".join(sorted(_MULTIPLIERS, key=len, reverse=True))
 # a digit run followed by a currency marker is a price, not a phone (checked on the original script)
 _PRICED = re.compile(
-    r"^\s*(?:so'?m\b|sum\b|uzs\b|\$|usd\b|u\.?\s?e\b|у\.?\s?е\b|сум\b|сўм\b|ming\b|mln\b|тыс\b|млн\b)",
+    rf"^\s*(?:so'?m\b|sum\b|uzs\b|\$|usd\b|u\.?\s?e\b|у\.?\s?е\b|сум\b|сўм\b"
+    rf"|минг\b|тыс\b|млн\b|млрд\b|(?:{_MULT_WORDS})\b)",
     re.IGNORECASE,
 )
 
