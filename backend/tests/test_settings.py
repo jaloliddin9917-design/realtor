@@ -16,3 +16,10 @@ def test_env_overrides(monkeypatch) -> None:  # type: ignore[no-untyped-def]
     get_settings.cache_clear()
     assert get_settings().database_url == "postgresql+asyncpg://u:p@h:5432/x"
     get_settings.cache_clear()
+
+
+def test_empty_env_values_do_not_override_defaults(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    monkeypatch.setenv("HTTP_USER_AGENT", "")
+    monkeypatch.setenv("OLX_PROXY_URL", "")
+    s = Settings(_env_file=None)
+    assert s.http_user_agent.startswith("Mozilla/5.0") and s.olx_proxy_url is None
