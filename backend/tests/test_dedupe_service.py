@@ -58,15 +58,35 @@ AGENT_TEXT = (
 OTHER_TEXT = "Yunusobod 11-kvartal 3-xonali 5/9 78 m² 650$ tel 94 128 44 60"
 
 
-async def test_same_phone_blocks_and_merges(db: AsyncSession) -> None:
+async def test_same_phone_and_shared_photo_merge(db: AsyncSession, tmp_path: Path) -> None:
+    s = await _source(db)
+    a = await _listing(db, s, "1", OWNER_TEXT, photo_seed=3, tmp=tmp_path)
+    prop = await create_from_listing(db, a, NOW)
+    b = await _listing(
+        db, s, "2", "Chilonzor 2-xonali 3/9 460$ tel 90 811 24 37", photo_seed=3, tmp=tmp_path
+    )
+    assert [p.id for p in await find_candidates(db, b)] == [prop.id]
+    inp = await gather_inputs(db, b, prop)
+    assert inp.shared_contact is True and inp.rooms_floors_equal is True
+    result = await assign(db, b, CFG, NOW)
+    assert result.decision == "attached" and result.property.id == prop.id
+    assert result.score >= CFG.merge_threshold
+    assert b.property_id == prop.id and prop.price_usd_min_minor == 45000
+
+
+async def test_same_phone_alone_goes_to_review(db: AsyncSession) -> None:
     s = await _source(db)
     a = await _listing(db, s, "1", OWNER_TEXT)
     prop = await create_from_listing(db, a, NOW)
     b = await _listing(db, s, "2", "Chilonzor 2-xonali 3/9 460$ tel 90 811 24 37")
     assert [p.id for p in await find_candidates(db, b)] == [prop.id]
     result = await assign(db, b, CFG, NOW)
-    assert result.decision == "attached" and result.property.id == prop.id
-    assert b.property_id == prop.id and prop.price_usd_min_minor == 45000
+    assert (
+        result.decision == "review"
+        and result.candidate is not None
+        and result.candidate.id == prop.id
+    )
+    assert CFG.review_threshold <= result.score < CFG.merge_threshold
 
 
 async def test_review_range_creates_separate_property_and_review_row(
