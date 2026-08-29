@@ -389,6 +389,7 @@ Then in `backend/tests/test_pipeline.py` delete the local `FakeAdapter`, `_paylo
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+import pytest
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -451,17 +452,23 @@ async def test_changed_payload_with_fewer_photos_prunes_extra_rows(db: AsyncSess
 
 async def test_attach_rescores_every_contact_of_the_property(db: AsyncSession, tmp_path: Path) -> None:
     s = await _source(db)
-    # Both posted by the same channel (a shared telegram contact identity): contact 0.5 + photo 0.3 +
-    # rooms/floors 0.1 + area 0.05 + price 0.05 = 1.0 ≥ merge_threshold. Without a shared identity the
-    # spec's weights cap a match at 0.65 (review) — a photo-only match never auto-merges.
-    first = payload("1", OWNER, NOW - timedelta(days=1), photos=["1"], username="chilonzor_arenda")
-    second = payload("2", "Chilonzor 2-xonali 3/9 54 m² 430$ tel 93 402 18 55", NOW, photos=["1"], username="chilonzor_arenda")  # cheaper, later, other phone
-    await run_source(db, FakeAdapter([first, second], None), s, cfg=CFG, photo_dir=tmp_path, now=NOW)
-    owner = (await db.execute(select(Contact).where(Contact.identifier == "+998908112437"))).scalar_one()
-    agent = (await db.execute(select(Contact).where(Contact.identifier == "+998934021855"))).scalar_one()
-    # after the second listing attached, the first contact is no longer "cheapest" — its score was recomputed
-    assert owner.agency_score == 0.0 and agent.agency_score == 0.0  # both single-property, no markers; earliest vs cheapest cancel to 0 either way
+    # Same posting channel (shared telegram contact) so the pair merges: contact 0.5 + photo 0.3 + rooms/floors 0.1
+    # + area 0.05 + price 0.05 = 1.0 ≥ merge_threshold. The first poster is an agent (marker +0.3); once the
+    # second listing attaches, the first listing is the earliest in the property (−0.1) → 0.3 becomes 0.2 —
+    # a change only property-wide rescoring produces (the new listing's own contacts are rescored anyway).
+    first = payload("1", "Chilonzor, Qatortol, 2-xonali, 3/9 qavat, 54 m², evro remont. Rieltor. 450$. Tel 90 811 24 37",
+                    NOW - timedelta(days=1), photos=["1"], username="chilonzor_arenda")
+    await run_source(db, FakeAdapter([first], None), s, cfg=CFG, photo_dir=tmp_path, now=NOW - timedelta(days=1))
+    agent = (await db.execute(select(Contact).where(Contact.identifier == "+998908112437"))).scalar_one()
+    assert agent.agency_score == pytest.approx(0.3) and agent.classification == "owner"  # ≤ 0.3, alone on its property
+    second = payload("2", "Chilonzor 2-xonali 3/9 54 m² 430$ tel 93 402 18 55", NOW, photos=["1"], username="chilonzor_arenda")
+    run = await run_source(db, FakeAdapter([first, second], None), s, cfg=CFG, photo_dir=tmp_path, now=NOW)
+    assert run.new == 1
     assert (await db.execute(select(func.count()).select_from(Property))).scalar_one() == 1
+    await db.refresh(agent)
+    assert agent.agency_score == pytest.approx(0.2)  # rescored after the attach: earliest of two listings
+    other = (await db.execute(select(Contact).where(Contact.identifier == "+998934021855"))).scalar_one()
+    assert other.agency_score == pytest.approx(0.0)  # cheapest of two, clamped at 0
 
 
 async def test_age_out_returns_affected_properties(db: AsyncSession, tmp_path: Path) -> None:
@@ -473,8 +480,6 @@ async def test_age_out_returns_affected_properties(db: AsyncSession, tmp_path: P
     prop = (await db.execute(select(Property))).scalar_one()
     assert prop.source_removed is True
 ```
-Note on `test_attach_rescores_every_contact_of_the_property`: with the corrected flags (a lone listing is never "earliest"/"cheapest"), after the attach both listings compete: the owner's listing is earliest (−0.1) and the agent's is cheapest (−0.1); both clamp at 0.0 from a 0.0 base — so the meaningful assertion is that **no exception is raised and both contacts were rescored**; strengthen it by adding `human_decision`-free marker checks if you like, but keep the two `== 0.0` assertions.
-
 - [ ] **Step 3: Run them to verify they fail**
 
 Run: `cd backend && .venv/bin/pytest tests/test_pipeline_lifecycle.py -q`
