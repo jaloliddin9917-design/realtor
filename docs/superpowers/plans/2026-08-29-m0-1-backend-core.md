@@ -1413,7 +1413,7 @@ def extract_markers(text: str) -> tuple[bool, bool]:
 
 `backend/app/ingestion/parse/__init__.py`:
 ```python
-from typing import Any, TypeVar
+from typing import Any
 
 from pydantic import BaseModel
 
@@ -1463,10 +1463,7 @@ def _confidence(p: "ParsedListing") -> float:
     return round(score, 2)
 
 
-T = TypeVar("T")
-
-
-def _override(s: dict[str, Any], key: str, extracted: T) -> T:
+def _override[T](s: dict[str, Any], key: str, extracted: T) -> T:
     """A structured value wins only when present and not None."""
     value = s.get(key)
     return extracted if value is None else value
