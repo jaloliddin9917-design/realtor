@@ -1,0 +1,7 @@
+[
+  {"id": 101, "date": "2026-08-28T09:00:00+00:00", "text": "Chilonzor, Qatortol, 2-xonali, 3/9, 54 m², evro remont. Egasidan. 450$. Tel 90 811 24 37", "grouped_id": 555, "has_photo": true, "edit_date": null, "sender_id": 777, "sender_username": null},
+  {"id": 102, "date": "2026-08-28T09:00:01+00:00", "text": "", "grouped_id": 555, "has_photo": true, "edit_date": null, "sender_id": 777, "sender_username": null},
+  {"id": 103, "date": "2026-08-28T10:00:00+00:00", "text": "Yunusobod 11-kvartal 3-xonali 5/9 78 m² 650$ tel 94 128 44 60 @dilshod_uy", "grouped_id": null, "has_photo": false, "edit_date": null, "sender_id": 778, "sender_username": "dilshod_uy"},
+  {"id": 104, "date": "2026-08-28T11:00:00+00:00", "text": "Sergeli 7-mavze 2-xonali 1/5 48 m² 350$ tel 90 777 42 15", "grouped_id": null, "has_photo": true, "edit_date": "2026-08-29T08:00:00+00:00", "sender_id": 779, "sender_username": null},
+  {"id": 105, "date": "2026-08-28T12:00:00+00:00", "text": "", "grouped_id": null, "has_photo": true, "edit_date": null, "sender_id": 780, "sender_username": null}
+]
