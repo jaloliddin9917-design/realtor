@@ -1302,6 +1302,20 @@ git commit -m "feat(olx): JSON-driven OLX adapter — list discovery with signat
 
 ---
 
+#### Post-review amendments (Task 4, 2026-08-30)
+
+The task review found defects in this task's sample code; the implementation on the branch is the source of truth and differs from the samples above as follows:
+
+- **Removal window.** `seen_window` excludes promoted/highlighted ads (`isPromoted`/`isHighlighted`) from the boundary — OLX hoists them to the top of `created_at:desc` lists regardless of date (the recorded fixture shows it), so `min(createdTime)` over all walked ads reached months back while `ids` covered only the walked pages, and `apply_misses` would have flagged live listings on un-walked pages as removed. Promoted ids stay in `ids`; the boundary is `min(lastRefreshTime or createdTime)` over the remaining walked ads (sound under either OLX ordering because `lastRefreshTime >= createdTime`); with no qualifying ad the window is `SeenWindow(ids, oldest_posted_at=None)` (marks ids seen, disables removal detection for that run).
+- **Backoff escalation lives in the pipeline.** `run_source`'s `except AdapterBackoff` now calls `bump_backoff(source)` and pauses for `max(exc.retry_after, backoff_delay(level))`; the success path calls `reset_backoff(source)`. Adapters only raise `AdapterBackoff(backoff_delay(0), reason)` (OLX: reason names the status and host; Telegram: the exact flood-wait seconds, which `max()` keeps). Previously only `discover` escalated and `fetch`/phones/photos retried every minute forever.
+- **Known set is confirmed on fetch.** `discover` keeps a per-run walk (`ext → sig`, full/partial); a signature is confirmed only when `fetch(ref)` returns or raises `ListingGone`; `seen_window(source)` settles `source.state["known"]` — partial walk `{**known, **confirmed}`, full walk = walked ads that are unchanged-known or confirmed (delisted and failed-fetch ads drop out and are retried). `fetch_by_url` never touches `known`.
+- **A 404 on list page 1 is a failure** (raises; the run is recorded as failed and the circuit breaker sees it); 404 ends pagination only for page > 1.
+- `page_url` keeps `:` unescaped (`urlencode(..., safe=":")`, otherwise OLX's own `search[order]=created_at:desc` was mangled) and returns `base` unchanged for page <= 1.
+- `parse/fields.py`: `extract_phones` and `normalize_phone` share one `_to_e164(candidate) -> str | None` helper.
+- `ad_to_payload` stores the raw phone strings from the phones endpoint in the verbatim payload; normalization happens only when building `contact_hints`. A naive `createdTime` raises `ValueError` naming the ad (timezone-aware datetimes are a protocol requirement).
+- Fixture edits in tests use `"isActive": true` / `"status": "active"` **with the space after the colon** — that is how the recorded JSON is spelled.
+- Tests assert the discovery budget (`http.calls` per run: a full walk, then an unchanged run stops after page 1; a `full_walk_every` run drops a delisted id from `known`) and parametrize the blocked-status test over 429 and 403.
+
 ### Task 5: Telegram adapter (Telethon behind a client protocol)
 
 **Files:**
