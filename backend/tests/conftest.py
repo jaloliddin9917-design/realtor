@@ -7,6 +7,16 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
 
+# import every model module so Base.metadata is complete, mirroring alembic/env.py.
+# Without this, running a subset of test files (e.g. only the listings-service
+# tests) never imports app.modules.properties.models, and SQLAlchemy can't
+# resolve Listing.property_id's string-based ForeignKey("properties.id") at flush.
+import app.modules.contacts.models  # noqa: F401,E402
+import app.modules.dedupe.models  # noqa: F401,E402
+import app.modules.identity.models  # noqa: F401,E402
+import app.modules.listings.models  # noqa: F401,E402
+import app.modules.properties.models  # noqa: F401,E402
+import app.worker.models  # noqa: F401,E402
 from app.core.db import make_engine
 from app.core.settings import get_settings
 
