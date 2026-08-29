@@ -1,0 +1,281 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap">
+  <style>
+body { margin:0; background:#eef1f0; color:#15211e; font-family:"IBM Plex Sans","Segoe UI",system-ui,sans-serif; font-size:14px; line-height:1.45; -webkit-font-smoothing:antialiased; }
+* { box-sizing:border-box; }
+a { color:#0f6e63; text-decoration:none; } a:hover { color:#0b5349; }
+h1,h2,h3,p { margin:0; }
+.h1 { font-size:20px; font-weight:600; letter-spacing:-.01em; text-wrap:balance; }
+.h2 { font-size:15px; font-weight:600; }
+.h3 { font-size:13px; font-weight:600; }
+.eyebrow { font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:#5c6b67; font-weight:600; }
+.muted { color:#5c6b67; }
+.small { font-size:12px; }
+.mono { font-family:"IBM Plex Mono",ui-monospace,"Cascadia Mono",Menlo,monospace; font-variant-numeric:tabular-nums; }
+.num { font-variant-numeric:tabular-nums; }
+.big { font-size:30px; font-weight:600; letter-spacing:-.02em; line-height:1.1; font-variant-numeric:tabular-nums; }
+.ico { width:20px; height:20px; flex:none; stroke:currentColor; fill:none; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+.ico-16 { width:16px; height:16px; flex:none; stroke:currentColor; fill:none; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+.ico-24 { width:24px; height:24px; flex:none; stroke:currentColor; fill:none; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+.card { background:#fff; border:1px solid #dfe5e2; border-radius:10px; }
+.pill { display:inline-flex; align-items:center; gap:6px; height:24px; padding:0 10px; border-radius:999px; font-size:12px; font-weight:600; white-space:nowrap; }
+.pill .dot { width:7px; height:7px; border-radius:50%; background:currentColor; flex:none; }
+.s-available { background:#dff3e4; color:#1a6b36; }
+.s-rented { background:#f8dfe4; color:#9c2a40; }
+.s-noanswer { background:#fbeccf; color:#8a5410; }
+.s-progress { background:#dce7f8; color:#2650a0; }
+.s-new { background:#e6ebe9; color:#4c5b57; }
+.s-callback { background:#e8e2f7; color:#5a3fa5; }
+.s-bot { background:#e0f0ee; color:#0f6e63; }
+.s-owner { background:#e0f0ee; color:#0f6e63; }
+.s-agent { background:#f3e6dc; color:#8a4b1c; }
+.s-unknown { background:#e6ebe9; color:#4c5b57; }
+.btn { display:inline-flex; align-items:center; justify-content:center; gap:8px; height:40px; padding:0 16px; border-radius:8px; font-weight:600; font-size:14px; border:1px solid transparent; white-space:nowrap; cursor:pointer; }
+.btn-primary { background:#0f6e63; color:#fff; }
+.btn-secondary { background:#fff; color:#15211e; border-color:#cfd8d5; }
+.btn-ghost { background:transparent; color:#0f6e63; }
+.btn-danger { background:#fff; color:#9c2a40; border-color:#efc6cf; }
+.btn-lg { height:48px; font-size:15px; padding:0 20px; border-radius:10px; }
+.btn-sm { height:32px; font-size:13px; padding:0 12px; }
+.btn[disabled], .btn.off { background:#e6ebe9; color:#8c9a96; border-color:transparent; }
+.avatar { width:28px; height:28px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; color:#fff; flex:none; }
+.av-a { background:#2f7d6d; } .av-d { background:#3c5fb0; } .av-m { background:#a8531f; } .av-j { background:#6b4fb8; } .av-s { background:#15211e; } .av-bot { background:#0f6e63; }
+.tbl { width:100%; border-collapse:collapse; font-size:13px; }
+.tbl th { text-align:left; font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:#5c6b67; font-weight:600; padding:10px 12px; border-bottom:1px solid #dfe5e2; background:#f7f9f8; white-space:nowrap; }
+.tbl td { padding:10px 12px; border-bottom:1px solid #eaeeec; vertical-align:middle; }
+.tbl tr:last-child td { border-bottom:none; }
+.tbl tr.sel td { background:#f0f7f5; }
+.warn { background:#fff4e0; border:1px solid #f1d59a; color:#7a4a08; border-radius:8px; padding:10px 12px; display:flex; gap:10px; align-items:flex-start; font-size:13px; line-height:1.4; }
+.info { background:#e0f0ee; border:1px solid #bcdcd6; color:#0b5349; border-radius:8px; padding:10px 12px; display:flex; gap:10px; align-items:flex-start; font-size:13px; }
+.ph { background:#d8e2df; color:#6b7c77; display:flex; align-items:center; justify-content:center; border-radius:8px; flex-direction:column; gap:4px; font-size:11px; }
+.tag { display:inline-flex; align-items:center; gap:4px; height:22px; padding:0 8px; border-radius:6px; background:#eef1f0; color:#3f4d49; font-size:12px; font-weight:500; white-space:nowrap; }
+.chip { display:inline-flex; align-items:center; gap:6px; height:34px; padding:0 12px; border-radius:999px; border:1px solid #cfd8d5; background:#fff; font-size:13px; font-weight:500; white-space:nowrap; }
+.chip.on { background:#0f6e63; border-color:#0f6e63; color:#fff; }
+.chip.soft { background:#f7f9f8; }
+.chip-lg { height:44px; padding:0 14px; font-size:14px; }
+.progress { height:6px; background:#e3e9e7; border-radius:999px; overflow:hidden; }
+.progress div { height:100%; background:#0f6e63; border-radius:999px; }
+.kbd { font-family:"IBM Plex Mono",ui-monospace,monospace; font-size:11px; border:1px solid #cfd8d5; border-radius:4px; padding:1px 5px; color:#5c6b67; background:#fff; }
+.search { display:flex; align-items:center; gap:8px; height:36px; padding:0 12px; border-radius:8px; border:1px solid #cfd8d5; background:#f7f9f8; color:#5c6b67; font-size:13px; }
+.lang { display:inline-flex; border:1px solid #cfd8d5; border-radius:6px; overflow:hidden; font-size:12px; font-weight:600; }
+.lang span { padding:4px 8px; color:#5c6b67; background:#fff; }
+.lang span.on { background:#15211e; color:#fff; }
+.nav-item { display:flex; align-items:center; gap:10px; height:40px; padding:0 10px; border-radius:8px; color:#c9d6d2; font-weight:500; font-size:14px; }
+.nav-item.on { background:rgba(255,255,255,.12); color:#fff; }
+.nav-badge { min-width:20px; height:20px; padding:0 6px; border-radius:999px; background:#0f6e63; color:#fff; font-size:11px; font-weight:700; display:inline-flex; align-items:center; justify-content:center; }
+.seg { display:flex; background:#e3e9e7; border-radius:10px; padding:3px; gap:2px; }
+.seg span { flex:1; text-align:center; height:40px; line-height:40px; border-radius:8px; font-size:13px; font-weight:600; color:#5c6b67; }
+.seg span.on { background:#fff; color:#15211e; box-shadow:0 1px 2px rgba(21,33,30,.08); }
+.tab { height:40px; display:inline-flex; align-items:center; gap:6px; padding:0 4px; font-weight:600; font-size:13px; color:#5c6b67; border-bottom:2px solid transparent; }
+.tab.on { color:#15211e; border-bottom-color:#0f6e63; }
+.row { display:flex; align-items:center; gap:8px; }
+.field { display:flex; flex-direction:column; gap:6px; }
+.field label { font-size:12px; font-weight:600; color:#3f4d49; }
+.input { height:38px; border:1px solid #cfd8d5; border-radius:8px; background:#fff; padding:0 12px; display:flex; align-items:center; font-size:14px; color:#15211e; }
+.toggle { width:40px; height:22px; border-radius:999px; background:#0f6e63; position:relative; flex:none; }
+.toggle::after { content:""; position:absolute; top:3px; right:3px; width:16px; height:16px; border-radius:50%; background:#fff; }
+.toggle.off { background:#cfd8d5; } .toggle.off::after { right:auto; left:3px; }
+.tabbar { height:64px; flex:none; background:#fff; border-top:1px solid #dfe5e2; display:flex; align-items:stretch; }
+.tabbar a { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; font-size:11px; font-weight:600; color:#5c6b67; position:relative; }
+.tabbar a.on { color:#0f6e63; }
+.tabbar .nav-badge { position:absolute; top:8px; left:calc(50% + 6px); }
+.timeline { display:flex; flex-direction:column; gap:0; }
+.tl { display:flex; gap:12px; padding:8px 0; }
+.tl .line { width:20px; display:flex; flex-direction:column; align-items:center; flex:none; }
+.tl .line i { width:10px; height:10px; border-radius:50%; background:#cfd8d5; margin-top:5px; flex:none; }
+.tl .line b { width:2px; flex:1; background:#e3e9e7; margin-top:4px; }
+.tl .line i.g { background:#1a6b36; } .tl .line i.r { background:#9c2a40; } .tl .line i.t { background:#0f6e63; } .tl .line i.a { background:#8a5410; }
+
+  </style>
+</helmet>
+<div style="width:1440px;height:900px;display:flex;background:#eef1f0;overflow:hidden">
+<svg style="display:none" aria-hidden="true">
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path></symbol>
+  <symbol id="i-phone" viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"></path></symbol>
+  <symbol id="i-send" viewBox="0 0 24 24"><path d="M22 2L11 13"></path><path d="M22 2l-7 20-4-9-9-4 20-7z"></path></symbol>
+  <symbol id="i-message" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></symbol>
+  <symbol id="i-user" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></symbol>
+  <symbol id="i-home" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><path d="M9 22V12h6v10"></path></symbol>
+  <symbol id="i-building" viewBox="0 0 24 24"><rect x="4" y="2" width="16" height="20" rx="1"></rect><path d="M9 6h2M13 6h2M9 10h2M13 10h2M9 14h2M13 14h2M10 22v-4h4v4"></path></symbol>
+  <symbol id="i-list" viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13"></path><path d="M3 6h.01M3 12h.01M3 18h.01"></path></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></symbol>
+  <symbol id="i-bot" viewBox="0 0 24 24"><rect x="3" y="8" width="18" height="12" rx="2"></rect><path d="M12 8V5"></path><circle cx="12" cy="4" r="1"></circle><path d="M8 13h.01M16 13h.01M9 17h6"></path></symbol>
+  <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3"></path><path d="M1 14h6M9 8h6M17 16h6"></path></symbol>
+  <symbol id="i-warn" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><path d="M12 9v4M12 17h.01"></path></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><path d="M12 6v6l4 2"></path></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"></path></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"></path></symbol>
+  <symbol id="i-chev-r" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"></path></symbol>
+  <symbol id="i-chev-d" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"></path></symbol>
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="M19 12H5M12 19l-7-7 7-7"></path></symbol>
+  <symbol id="i-image" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><path d="M21 15l-5-5L5 21"></path></symbol>
+  <symbol id="i-filter" viewBox="0 0 24 24"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"></path></symbol>
+  <symbol id="i-more" viewBox="0 0 24 24"><circle cx="12" cy="12" r="1"></circle><circle cx="19" cy="12" r="1"></circle><circle cx="5" cy="12" r="1"></circle></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M23 4v6h-6M1 20v-6h6"></path><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></symbol>
+  <symbol id="i-external" viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><path d="M15 3h6v6M10 14L21 3"></path></symbol>
+  <symbol id="i-star" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"></path></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"></path></symbol>
+  <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"></rect><path d="M16 2v4M8 2v4M3 10h18"></path></symbol>
+  <symbol id="i-split" viewBox="0 0 24 24"><path d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l6 6M4 4l5 5"></path></symbol>
+  <symbol id="i-merge" viewBox="0 0 24 24"><path d="M6 3v6a6 6 0 0 0 6 6 6 6 0 0 0 6-6V3"></path><path d="M12 15v6M9 18l3 3 3-3"></path></symbol>
+  <symbol id="i-edit" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></symbol>
+  <symbol id="i-ban" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><path d="M4.93 4.93l14.14 14.14"></path></symbol>
+  <symbol id="i-share" viewBox="0 0 24 24"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path><path d="M16 6l-4-4-4 4M12 2v13"></path></symbol>
+  <symbol id="i-skip" viewBox="0 0 24 24"><path d="M5 4l10 8-10 8V4z"></path><path d="M19 5v14"></path></symbol>
+  <symbol id="i-phone-off" viewBox="0 0 24 24"><path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7 2 2 0 0 1 1.72 2v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.42 19.42 0 0 1-3.33-2.67m-2.67-3.34a19.79 19.79 0 0 1-3.07-8.63A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91"></path><path d="M23 1L1 23"></path></symbol>
+  <symbol id="i-trend" viewBox="0 0 24 24"><path d="M23 6l-9.5 9.5-5-5L1 18"></path><path d="M17 6h6v6"></path></symbol>
+</svg>
+<nav style="width:224px;flex:none;background:#15211e;color:#c9d6d2;display:flex;flex-direction:column;padding:16px 12px;gap:4px">
+  <div style="display:flex;align-items:center;gap:10px;padding:6px 10px 18px">
+    <div style="width:32px;height:32px;border-radius:8px;background:#0f6e63;display:flex;align-items:center;justify-content:center;color:#fff;flex:none"><svg class="ico-16"><use href="#i-building"></use></svg></div>
+    <div><div style="font-weight:700;color:#fff;font-size:15px;letter-spacing:-.01em">Realtor CRM</div><div style="font-size:11px;color:#8fa39d">Toshkent · 4 agent</div></div>
+  </div>
+  <a class="nav-item on" href="#"><svg class="ico"><use href="#i-home"></use></svg><span style="flex:1">Boshqaruv paneli</span></a><a class="nav-item" href="#"><svg class="ico"><use href="#i-list"></use></svg><span style="flex:1">Navbat</span><span class="nav-badge">38</span></a><a class="nav-item" href="#"><svg class="ico"><use href="#i-building"></use></svg><span style="flex:1">Uylar</span></a><a class="nav-item" href="#"><svg class="ico"><use href="#i-copy"></use></svg><span style="flex:1">Dublikatlar</span><span class="nav-badge">12</span></a><a class="nav-item" href="#"><svg class="ico"><use href="#i-bot"></use></svg><span style="flex:1">Bot</span><span class="nav-badge">3</span></a><a class="nav-item" href="#"><svg class="ico"><use href="#i-sliders"></use></svg><span style="flex:1">Sozlamalar</span></a>
+  <div style="flex:1"></div>
+  <div style="display:flex;align-items:center;gap:10px;padding:10px;border-radius:8px;background:rgba(255,255,255,.06)">
+    <span class="avatar av-s" style="background:#0f6e63">S</span>
+    <div style="min-width:0"><div style="color:#fff;font-weight:600;font-size:13px">Sardor</div><div style="font-size:11px;color:#8fa39d">admin · jamoa rahbari</div></div>
+  </div>
+</nav>
+<main style="flex:1;min-width:0;display:flex;flex-direction:column">
+<header style="height:56px;flex:none;display:flex;align-items:center;gap:16px;padding:0 24px;background:#fff;border-bottom:1px solid #dfe5e2">
+  <h1 class="h1" style="flex:none">Boshqaruv paneli</h1>
+  <div class="search" style="width:400px"><svg class="ico-16"><use href="#i-search"></use></svg><span style="flex:1">Manzil, telefon yoki tavsif bo'yicha qidirish</span><span class="kbd">/</span></div>
+  <div style="flex:1"></div>
+  <div class="lang"><span class="on">UZ</span><span>RU</span></div>
+  <div class="muted" style="font-size:13px">Shanba, 29-avgust · 14:42</div>
+  <a href="#" style="position:relative;color:#3f4d49;display:flex"><svg class="ico"><use href="#i-bell"></use></svg><span class="nav-badge" style="position:absolute;top:-8px;right:-10px;min-width:16px;height:16px;font-size:10px">2</span></a>
+</header>
+<section style="flex:1;overflow:hidden;padding:20px 24px;display:flex;flex-direction:column;gap:16px">
+
+  <div style="display:grid;grid-template-columns:repeat(4, minmax(0, 1fr));gap:16px">
+    <div class="card" style="padding:16px 18px;display:flex;flex-direction:column;gap:8px">
+      <span class="eyebrow">Bo'sh uylar</span>
+      <span class="big">148</span>
+      <span class="small muted">121 tasi 3 kun ichida tasdiqlangan</span>
+    </div>
+    <div class="card" style="padding:16px 18px;display:flex;flex-direction:column;gap:8px">
+      <span class="eyebrow">Bugun tekshirish kerak</span>
+      <span class="big" style="color:#8a5410">27</span>
+      <span class="small muted">tasdiqlanganiga 3 kundan oshgan</span>
+    </div>
+    <div class="card" style="padding:16px 18px;display:flex;flex-direction:column;gap:8px">
+      <span class="eyebrow">Yangi e'lonlar · 24 soat</span>
+      <span class="big">63</span>
+      <span class="small muted">OLX 38 · Telegram 25 · 9 tasi dublikat</span>
+    </div>
+    <div class="card" style="padding:16px 18px;display:flex;flex-direction:column;gap:8px">
+      <span class="eyebrow">Bot javoblari · 24 soat</span>
+      <div style="display:flex;align-items:baseline;gap:8px"><span class="big">41</span><span class="small muted">/ 96 yuborilgan</span></div>
+      <div style="display:flex;height:8px;border-radius:999px;overflow:hidden;gap:2px"><div style="flex:29;background:#1a6b36"></div><div style="flex:9;background:#9c2a40"></div><div style="flex:3;background:#8a5410"></div></div>
+      <div style="display:flex;gap:12px" class="small muted"><span><b style="color:#1a6b36">29</b> bo'sh</span><span><b style="color:#9c2a40">9</b> topshirilgan</span><span><b style="color:#8a5410">3</b> noaniq</span></div>
+    </div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:minmax(0, 1.5fr) minmax(0, 1fr);gap:16px;flex:1;min-height:0">
+    <div class="card" style="display:flex;flex-direction:column;overflow:hidden">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid #eaeeec">
+        <h2 class="h2">Agentlar — bugun</h2>
+        <span class="small muted">77 qo'ng'iroq · 31 bo'sh topildi · 2 marta takroriy qo'ng'iroq oldini olindi</span>
+      </div>
+      <table class="tbl">
+        <thead><tr><th>Agent</th><th>Navbatda</th><th>Qo'ng'iroqlar</th><th>Bo'sh topildi</th><th>Hozir ishlamoqda</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><div class="row"><span class="avatar av-a">A</span><span style="font-weight:500">Aziz</span></div></td>
+            <td class="num">14</td><td class="num">22</td><td class="num">9</td>
+            <td><div class="row"><span class="pill s-progress"><svg class="ico-16"><use href="#i-lock"></use></svg>Chilonzor · 2-xonali</span><span class="small muted mono" style="white-space:nowrap">16:05 gacha</span></div></td>
+          </tr>
+          <tr>
+            <td><div class="row"><span class="avatar av-m">M</span><span style="font-weight:500">Malika</span></div></td>
+            <td class="num">16</td><td class="num">25</td><td class="num">11</td>
+            <td><div class="row"><span class="pill s-progress"><svg class="ico-16"><use href="#i-lock"></use></svg>Yunusobod · 3-xonali</span><span class="small muted mono" style="white-space:nowrap">15:40 gacha</span></div></td>
+          </tr>
+          <tr>
+            <td><div class="row"><span class="avatar av-d">D</span><span style="font-weight:500">Dilshod</span></div></td>
+            <td class="num">11</td><td class="num">18</td><td class="num">7</td>
+            <td><span class="muted">— · keyingi: Mirobod 3-xonali, 17:00 qayta qo'ng'iroq</span></td>
+          </tr>
+          <tr>
+            <td><div class="row"><span class="avatar av-j">J</span><span style="font-weight:500">Jasur</span></div></td>
+            <td class="num">9</td><td class="num">12</td><td class="num">4</td>
+            <td><span class="muted">—</span></td>
+          </tr>
+        </tbody>
+      </table>
+      <div style="flex:1"></div>
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-top:1px solid #eaeeec">
+        <span class="small muted">Taqsimlanmagan uylar: <b style="color:#15211e">38</b> · avtomatik taqsimlash yoqilgan (navbat bilan)</span>
+        <a class="btn btn-secondary btn-sm" href="#">Navbatni ochish<svg class="ico-16"><use href="#i-chev-r"></use></svg></a>
+      </div>
+    </div>
+
+    <div class="card" style="display:flex;flex-direction:column;overflow:hidden">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid #eaeeec">
+        <div class="row"><h2 class="h2">Qayta tekshirish kerak</h2><span class="nav-badge" style="background:#8a5410">27</span></div>
+        <span class="small muted">eng eskisi birinchi</span>
+      </div>
+      <div style="display:flex;flex-direction:column">
+        <div style="display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid #eaeeec">
+          <div style="flex:1;min-width:0"><div style="font-weight:500">Sergeli, Sputnik · 2-xonali · $380</div><div class="small muted">4 kun oldin tasdiqlangan · Malika</div></div>
+          <a class="btn btn-ghost btn-sm" href="#"><svg class="ico-16"><use href="#i-bot"></use></svg>Tekshirish</a>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid #eaeeec">
+          <div style="flex:1;min-width:0"><div style="font-weight:500">Yakkasaroy, Shota Rustaveli · 1-xonali · $320</div><div class="small muted">4 kun oldin tasdiqlangan · Malika</div></div>
+          <a class="btn btn-ghost btn-sm" href="#"><svg class="ico-16"><use href="#i-bot"></use></svg>Tekshirish</a>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid #eaeeec">
+          <div style="flex:1;min-width:0"><div style="font-weight:500">Chilonzor, 19-kvartal · 3-xonali · $550</div><div class="small muted">3 kun oldin tasdiqlangan · Aziz · e'lon OLX dan o'chirilgan</div></div>
+          <a class="btn btn-ghost btn-sm" href="#"><svg class="ico-16"><use href="#i-bot"></use></svg>Tekshirish</a>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid #eaeeec">
+          <div style="flex:1;min-width:0"><div style="font-weight:500">Yunusobod, 11-kvartal · 2-xonali · $480</div><div class="small muted">3 kun oldin tasdiqlangan · Dilshod</div></div>
+          <a class="btn btn-ghost btn-sm" href="#"><svg class="ico-16"><use href="#i-bot"></use></svg>Tekshirish</a>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;padding:10px 16px">
+          <div style="flex:1;min-width:0"><div style="font-weight:500">Mirzo Ulug'bek, Buyuk Ipak yo'li · 2-xonali · $500</div><div class="small muted">3 kun oldin tasdiqlangan · bot (SMS)</div></div>
+          <a class="btn btn-ghost btn-sm" href="#"><svg class="ico-16"><use href="#i-bot"></use></svg>Tekshirish</a>
+        </div>
+      </div>
+      <div style="flex:1"></div>
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-top:1px solid #eaeeec">
+        <a href="#" class="small">Hammasini ko'rish</a>
+        <a class="btn btn-primary btn-sm" href="#"><svg class="ico-16"><use href="#i-send"></use></svg>27 tasini botga yuborish</a>
+      </div>
+    </div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:repeat(2, minmax(0, 1fr));gap:16px">
+    <div class="card" style="padding:14px 16px;display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;align-items:center;justify-content:space-between"><h2 class="h2">Bot — bugungi limitlar</h2><span class="pill s-available"><span class="dot"></span>Faol vaqt · 09:00–21:00</span></div>
+      <div style="display:grid;grid-template-columns:repeat(2, minmax(0, 1fr));gap:12px 24px">
+        <div style="display:flex;flex-direction:column;gap:6px"><div style="display:flex;justify-content:space-between" class="small"><span>Telegram</span><span class="mono muted">61 / 100</span></div><div class="progress"><div style="width:61%"></div></div></div>
+        <div style="display:flex;flex-direction:column;gap:6px"><div style="display:flex;justify-content:space-between" class="small"><span>SMS</span><span class="mono muted">35 / 100</span></div><div class="progress"><div style="width:35%"></div></div></div>
+      </div>
+      <div style="display:flex;gap:16px" class="small muted"><span>Aloqa qilmaslik: <b style="color:#15211e">14</b> kontakt</span><span>Noaniq javoblar: <a href="#">3 tasini ko'rib chiqish</a></span><span>Xato: 2 (Telegram — kutish)</span></div>
+    </div>
+    <div class="card" style="padding:14px 16px;display:flex;flex-direction:column;gap:10px">
+      <h2 class="h2">Manbalar</h2>
+      <div style="display:flex;align-items:center;gap:10px"><span class="pill s-available" style="width:8px;height:8px;padding:0;border-radius:50%;background:#1a6b36"></span><span style="width:150px;font-weight:500">OLX.uz</span><span class="small muted mono" style="width:150px">12 daqiqa oldin</span><span class="small">+38 bugun · 2 ta o'chirilgan</span></div>
+      <div style="display:flex;align-items:center;gap:10px"><span class="pill s-available" style="width:8px;height:8px;padding:0;border-radius:50%;background:#1a6b36"></span><span style="width:150px;font-weight:500">Telegram · 4 kanal</span><span class="small muted mono" style="width:150px">4 daqiqa oldin</span><span class="small">+25 bugun · 9 tasi tahlil qilinmadi</span></div>
+      <div style="display:flex;align-items:center;gap:10px"><span style="width:8px;height:8px;border-radius:50%;background:#8c9a96;flex:none"></span><span style="width:150px;font-weight:500">Qo'lda kiritilgan</span><span class="small muted mono" style="width:150px">bugun 13:50</span><span class="small">3 ta · Malika 2, Jasur 1</span></div>
+    </div>
+  </div>
+
+</section>
+</main>
+</div>
+
+</x-dc>
+</body>
+</html>

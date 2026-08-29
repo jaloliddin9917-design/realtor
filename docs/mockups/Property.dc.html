@@ -1,0 +1,222 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap">
+  <style>
+body { margin:0; background:#eef1f0; color:#15211e; font-family:"IBM Plex Sans","Segoe UI",system-ui,sans-serif; font-size:14px; line-height:1.45; -webkit-font-smoothing:antialiased; }
+* { box-sizing:border-box; }
+a { color:#0f6e63; text-decoration:none; } a:hover { color:#0b5349; }
+h1,h2,h3,p { margin:0; }
+.h1 { font-size:20px; font-weight:600; letter-spacing:-.01em; text-wrap:balance; }
+.h2 { font-size:15px; font-weight:600; }
+.h3 { font-size:13px; font-weight:600; }
+.eyebrow { font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:#5c6b67; font-weight:600; }
+.muted { color:#5c6b67; }
+.small { font-size:12px; }
+.mono { font-family:"IBM Plex Mono",ui-monospace,"Cascadia Mono",Menlo,monospace; font-variant-numeric:tabular-nums; }
+.num { font-variant-numeric:tabular-nums; }
+.big { font-size:30px; font-weight:600; letter-spacing:-.02em; line-height:1.1; font-variant-numeric:tabular-nums; }
+.ico { width:20px; height:20px; flex:none; stroke:currentColor; fill:none; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+.ico-16 { width:16px; height:16px; flex:none; stroke:currentColor; fill:none; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+.ico-24 { width:24px; height:24px; flex:none; stroke:currentColor; fill:none; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+.card { background:#fff; border:1px solid #dfe5e2; border-radius:10px; }
+.pill { display:inline-flex; align-items:center; gap:6px; height:24px; padding:0 10px; border-radius:999px; font-size:12px; font-weight:600; white-space:nowrap; }
+.pill .dot { width:7px; height:7px; border-radius:50%; background:currentColor; flex:none; }
+.s-available { background:#dff3e4; color:#1a6b36; }
+.s-rented { background:#f8dfe4; color:#9c2a40; }
+.s-noanswer { background:#fbeccf; color:#8a5410; }
+.s-progress { background:#dce7f8; color:#2650a0; }
+.s-new { background:#e6ebe9; color:#4c5b57; }
+.s-callback { background:#e8e2f7; color:#5a3fa5; }
+.s-bot { background:#e0f0ee; color:#0f6e63; }
+.s-owner { background:#e0f0ee; color:#0f6e63; }
+.s-agent { background:#f3e6dc; color:#8a4b1c; }
+.s-unknown { background:#e6ebe9; color:#4c5b57; }
+.btn { display:inline-flex; align-items:center; justify-content:center; gap:8px; height:40px; padding:0 16px; border-radius:8px; font-weight:600; font-size:14px; border:1px solid transparent; white-space:nowrap; cursor:pointer; }
+.btn-primary { background:#0f6e63; color:#fff; }
+.btn-secondary { background:#fff; color:#15211e; border-color:#cfd8d5; }
+.btn-ghost { background:transparent; color:#0f6e63; }
+.btn-danger { background:#fff; color:#9c2a40; border-color:#efc6cf; }
+.btn-lg { height:48px; font-size:15px; padding:0 20px; border-radius:10px; }
+.btn-sm { height:32px; font-size:13px; padding:0 12px; }
+.btn[disabled], .btn.off { background:#e6ebe9; color:#8c9a96; border-color:transparent; }
+.avatar { width:28px; height:28px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; color:#fff; flex:none; }
+.av-a { background:#2f7d6d; } .av-d { background:#3c5fb0; } .av-m { background:#a8531f; } .av-j { background:#6b4fb8; } .av-s { background:#15211e; } .av-bot { background:#0f6e63; }
+.tbl { width:100%; border-collapse:collapse; font-size:13px; }
+.tbl th { text-align:left; font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:#5c6b67; font-weight:600; padding:10px 12px; border-bottom:1px solid #dfe5e2; background:#f7f9f8; white-space:nowrap; }
+.tbl td { padding:10px 12px; border-bottom:1px solid #eaeeec; vertical-align:middle; }
+.tbl tr:last-child td { border-bottom:none; }
+.tbl tr.sel td { background:#f0f7f5; }
+.warn { background:#fff4e0; border:1px solid #f1d59a; color:#7a4a08; border-radius:8px; padding:10px 12px; display:flex; gap:10px; align-items:flex-start; font-size:13px; line-height:1.4; }
+.info { background:#e0f0ee; border:1px solid #bcdcd6; color:#0b5349; border-radius:8px; padding:10px 12px; display:flex; gap:10px; align-items:flex-start; font-size:13px; }
+.ph { background:#d8e2df; color:#6b7c77; display:flex; align-items:center; justify-content:center; border-radius:8px; flex-direction:column; gap:4px; font-size:11px; }
+.tag { display:inline-flex; align-items:center; gap:4px; height:22px; padding:0 8px; border-radius:6px; background:#eef1f0; color:#3f4d49; font-size:12px; font-weight:500; white-space:nowrap; }
+.chip { display:inline-flex; align-items:center; gap:6px; height:34px; padding:0 12px; border-radius:999px; border:1px solid #cfd8d5; background:#fff; font-size:13px; font-weight:500; white-space:nowrap; }
+.chip.on { background:#0f6e63; border-color:#0f6e63; color:#fff; }
+.chip.soft { background:#f7f9f8; }
+.chip-lg { height:44px; padding:0 14px; font-size:14px; }
+.progress { height:6px; background:#e3e9e7; border-radius:999px; overflow:hidden; }
+.progress div { height:100%; background:#0f6e63; border-radius:999px; }
+.kbd { font-family:"IBM Plex Mono",ui-monospace,monospace; font-size:11px; border:1px solid #cfd8d5; border-radius:4px; padding:1px 5px; color:#5c6b67; background:#fff; }
+.search { display:flex; align-items:center; gap:8px; height:36px; padding:0 12px; border-radius:8px; border:1px solid #cfd8d5; background:#f7f9f8; color:#5c6b67; font-size:13px; }
+.lang { display:inline-flex; border:1px solid #cfd8d5; border-radius:6px; overflow:hidden; font-size:12px; font-weight:600; }
+.lang span { padding:4px 8px; color:#5c6b67; background:#fff; }
+.lang span.on { background:#15211e; color:#fff; }
+.nav-item { display:flex; align-items:center; gap:10px; height:40px; padding:0 10px; border-radius:8px; color:#c9d6d2; font-weight:500; font-size:14px; }
+.nav-item.on { background:rgba(255,255,255,.12); color:#fff; }
+.nav-badge { min-width:20px; height:20px; padding:0 6px; border-radius:999px; background:#0f6e63; color:#fff; font-size:11px; font-weight:700; display:inline-flex; align-items:center; justify-content:center; }
+.seg { display:flex; background:#e3e9e7; border-radius:10px; padding:3px; gap:2px; }
+.seg span { flex:1; text-align:center; height:40px; line-height:40px; border-radius:8px; font-size:13px; font-weight:600; color:#5c6b67; }
+.seg span.on { background:#fff; color:#15211e; box-shadow:0 1px 2px rgba(21,33,30,.08); }
+.tab { height:40px; display:inline-flex; align-items:center; gap:6px; padding:0 4px; font-weight:600; font-size:13px; color:#5c6b67; border-bottom:2px solid transparent; }
+.tab.on { color:#15211e; border-bottom-color:#0f6e63; }
+.row { display:flex; align-items:center; gap:8px; }
+.field { display:flex; flex-direction:column; gap:6px; }
+.field label { font-size:12px; font-weight:600; color:#3f4d49; }
+.input { height:38px; border:1px solid #cfd8d5; border-radius:8px; background:#fff; padding:0 12px; display:flex; align-items:center; font-size:14px; color:#15211e; }
+.toggle { width:40px; height:22px; border-radius:999px; background:#0f6e63; position:relative; flex:none; }
+.toggle::after { content:""; position:absolute; top:3px; right:3px; width:16px; height:16px; border-radius:50%; background:#fff; }
+.toggle.off { background:#cfd8d5; } .toggle.off::after { right:auto; left:3px; }
+.tabbar { height:64px; flex:none; background:#fff; border-top:1px solid #dfe5e2; display:flex; align-items:stretch; }
+.tabbar a { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; font-size:11px; font-weight:600; color:#5c6b67; position:relative; }
+.tabbar a.on { color:#0f6e63; }
+.tabbar .nav-badge { position:absolute; top:8px; left:calc(50% + 6px); }
+.timeline { display:flex; flex-direction:column; gap:0; }
+.tl { display:flex; gap:12px; padding:8px 0; }
+.tl .line { width:20px; display:flex; flex-direction:column; align-items:center; flex:none; }
+.tl .line i { width:10px; height:10px; border-radius:50%; background:#cfd8d5; margin-top:5px; flex:none; }
+.tl .line b { width:2px; flex:1; background:#e3e9e7; margin-top:4px; }
+.tl .line i.g { background:#1a6b36; } .tl .line i.r { background:#9c2a40; } .tl .line i.t { background:#0f6e63; } .tl .line i.a { background:#8a5410; }
+
+  </style>
+</helmet>
+<div style="width:390px;height:1720px;display:flex;flex-direction:column;background:#eef1f0;overflow:hidden;position:relative">
+<svg style="display:none" aria-hidden="true">
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path></symbol>
+  <symbol id="i-phone" viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"></path></symbol>
+  <symbol id="i-send" viewBox="0 0 24 24"><path d="M22 2L11 13"></path><path d="M22 2l-7 20-4-9-9-4 20-7z"></path></symbol>
+  <symbol id="i-message" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></symbol>
+  <symbol id="i-user" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></symbol>
+  <symbol id="i-home" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><path d="M9 22V12h6v10"></path></symbol>
+  <symbol id="i-building" viewBox="0 0 24 24"><rect x="4" y="2" width="16" height="20" rx="1"></rect><path d="M9 6h2M13 6h2M9 10h2M13 10h2M9 14h2M13 14h2M10 22v-4h4v4"></path></symbol>
+  <symbol id="i-list" viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13"></path><path d="M3 6h.01M3 12h.01M3 18h.01"></path></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></symbol>
+  <symbol id="i-bot" viewBox="0 0 24 24"><rect x="3" y="8" width="18" height="12" rx="2"></rect><path d="M12 8V5"></path><circle cx="12" cy="4" r="1"></circle><path d="M8 13h.01M16 13h.01M9 17h6"></path></symbol>
+  <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3"></path><path d="M1 14h6M9 8h6M17 16h6"></path></symbol>
+  <symbol id="i-warn" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><path d="M12 9v4M12 17h.01"></path></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><path d="M12 6v6l4 2"></path></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"></path></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"></path></symbol>
+  <symbol id="i-chev-r" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"></path></symbol>
+  <symbol id="i-chev-d" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"></path></symbol>
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="M19 12H5M12 19l-7-7 7-7"></path></symbol>
+  <symbol id="i-image" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><path d="M21 15l-5-5L5 21"></path></symbol>
+  <symbol id="i-filter" viewBox="0 0 24 24"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"></path></symbol>
+  <symbol id="i-more" viewBox="0 0 24 24"><circle cx="12" cy="12" r="1"></circle><circle cx="19" cy="12" r="1"></circle><circle cx="5" cy="12" r="1"></circle></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M23 4v6h-6M1 20v-6h6"></path><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></symbol>
+  <symbol id="i-external" viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><path d="M15 3h6v6M10 14L21 3"></path></symbol>
+  <symbol id="i-star" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"></path></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"></path></symbol>
+  <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"></rect><path d="M16 2v4M8 2v4M3 10h18"></path></symbol>
+  <symbol id="i-split" viewBox="0 0 24 24"><path d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l6 6M4 4l5 5"></path></symbol>
+  <symbol id="i-merge" viewBox="0 0 24 24"><path d="M6 3v6a6 6 0 0 0 6 6 6 6 0 0 0 6-6V3"></path><path d="M12 15v6M9 18l3 3 3-3"></path></symbol>
+  <symbol id="i-edit" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></symbol>
+  <symbol id="i-ban" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><path d="M4.93 4.93l14.14 14.14"></path></symbol>
+  <symbol id="i-share" viewBox="0 0 24 24"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path><path d="M16 6l-4-4-4 4M12 2v13"></path></symbol>
+  <symbol id="i-skip" viewBox="0 0 24 24"><path d="M5 4l10 8-10 8V4z"></path><path d="M19 5v14"></path></symbol>
+  <symbol id="i-phone-off" viewBox="0 0 24 24"><path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7 2 2 0 0 1 1.72 2v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.42 19.42 0 0 1-3.33-2.67m-2.67-3.34a19.79 19.79 0 0 1-3.07-8.63A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91"></path><path d="M23 1L1 23"></path></symbol>
+  <symbol id="i-trend" viewBox="0 0 24 24"><path d="M23 6l-9.5 9.5-5-5L1 18"></path><path d="M17 6h6v6"></path></symbol>
+</svg>
+<header style="height:56px;flex:none;background:#fff;border-bottom:1px solid #dfe5e2;display:flex;align-items:center;gap:2px;padding:0 6px">
+  <a href="#" style="width:44px;height:44px;display:flex;align-items:center;justify-content:center;color:#15211e"><svg class="ico-24"><use href="#i-back"></use></svg></a>
+  <div style="flex:1;min-width:0"><div style="font-weight:600">Chilonzor, Qatortol</div><div class="small muted">2-xonali · #1042</div></div>
+  <a href="#" style="width:44px;height:44px;display:flex;align-items:center;justify-content:center;color:#15211e"><svg class="ico-24"><use href="#i-share"></use></svg></a>
+  <a href="#" style="width:44px;height:44px;display:flex;align-items:center;justify-content:center;color:#15211e"><svg class="ico-24"><use href="#i-more"></use></svg></a>
+</header>
+
+<section style="flex:1;overflow:hidden;display:flex;flex-direction:column;gap:12px;padding:12px 16px 100px">
+
+  <div style="display:grid;grid-template-columns:minmax(0, 2fr) minmax(0, 1fr);grid-template-rows:repeat(2, 96px);gap:6px">
+    <div class="ph" style="grid-row:span 2;background:#c9d6d2"><svg class="ico"><use href="#i-image"></use></svg>Rasm 1 / 7</div>
+    <div class="ph"><svg class="ico"><use href="#i-image"></use></svg>Rasm 2</div>
+    <div class="ph" style="font-weight:600;color:#3f4d49">+5 rasm</div>
+  </div>
+
+  <div class="card" style="padding:14px;display:flex;flex-direction:column;gap:6px">
+    <div style="display:flex;align-items:baseline;justify-content:space-between"><span class="num" style="font-weight:700;font-size:22px">$450 <span class="small muted" style="font-weight:400">/ oy</span></span><span class="small muted">≈ 5 355 000 so'm</span></div>
+    <div>2-xonali · 3/9 qavat · 54 m² · evro remont, mebel bilan</div>
+    <div class="small muted">Chilonzor tumani, Qatortol · manzil aniqligi: ko'cha</div>
+  </div>
+
+  <div class="card" style="padding:14px;display:flex;flex-direction:column;gap:10px">
+    <div style="display:flex;align-items:center;justify-content:space-between"><span class="pill s-available" style="height:28px;font-size:13px"><span class="dot"></span>Bo'sh</span><span class="small muted">Keyingi tekshiruv: 3 kundan keyin</span></div>
+    <div class="row small"><span class="avatar av-bot" style="width:22px;height:22px;font-size:10px">B</span><span>Bot tasdiqladi · Telegram · bugun 12:40 · javob <span class="mono">«1»</span></span></div>
+    <div style="display:flex;align-items:center;justify-content:space-between"><span class="pill s-progress" style="height:22px"><svg class="ico-16"><use href="#i-lock"></use></svg>Siz olgansiz · 16:05 gacha</span><a href="#" class="small" style="display:inline-flex;align-items:center;height:44px;margin:-12px 0;padding:0 6px">Bo'shatish</a></div>
+  </div>
+
+  <div class="warn"><span style="display:flex;flex:none"><svg class="ico-16"><use href="#i-warn"></use></svg></span><span><b>Diqqat:</b> Malika bugun 09:12 da shu raqamga qo'ng'iroq qildi — javob yo'q.</span></div>
+
+  <div class="card" style="padding:14px;display:flex;flex-direction:column;gap:10px;border-color:#bcdcd6">
+    <div style="display:flex;align-items:center;justify-content:space-between"><span class="eyebrow">Ehtimoliy egasi</span><span class="pill s-owner">ishonch 0.8</span></div>
+    <span class="mono" style="font-size:18px;font-weight:600">+998 90 811 24 37</span>
+    <span class="small muted">Faqat 1 ta uyda uchraydi · e'londa «egasidan» · birinchi bo'lib 12-avg e'lon bergan</span>
+    <div style="display:grid;grid-template-columns:repeat(2, minmax(0, 1fr));gap:8px">
+      <a class="btn btn-primary btn-lg" href="#"><svg class="ico"><use href="#i-phone"></use></svg>Qo'ng'iroq</a>
+      <a class="btn btn-secondary btn-lg" href="#"><svg class="ico"><use href="#i-send"></use></svg>Telegram</a>
+    </div>
+  </div>
+
+  <div class="card" style="padding:14px;display:flex;flex-direction:column;gap:10px">
+    <span class="eyebrow">Boshqa kontaktlar</span>
+    <div style="display:flex;align-items:center;justify-content:space-between"><span class="mono">+998 93 402 18 55</span><span class="pill s-agent">Rieltor · 6 ta uy</span></div>
+    <div style="display:flex;align-items:center;justify-content:space-between"><span class="mono">+998 33 780 15 49</span><span class="pill s-unknown">Noma'lum</span></div>
+  </div>
+
+  <div class="card" style="padding:14px;display:flex;flex-direction:column;gap:10px">
+    <div style="display:flex;align-items:center;justify-content:space-between"><span class="eyebrow">E'lonlar · 2 + 1</span><a href="#" class="small" style="display:inline-flex;align-items:center;height:44px;margin:-12px 0;padding:0 6px">Ajratish</a></div>
+    <div style="display:flex;align-items:center;gap:8px"><span class="tag">OLX</span><span class="small" style="flex:1">12-avg · egasidan</span><span class="num" style="font-weight:600">$450</span><span style="color:#5c6b67;display:flex"><svg class="ico-16"><use href="#i-external"></use></svg></span></div>
+    <div style="display:flex;align-items:center;gap:8px"><span class="tag" style="background:#fbeccf;color:#8a5410">TG ?</span><span class="small" style="flex:1">14-avg · @toshkent_ijara · dublikat, ko'rib chiqishda</span><span class="num" style="font-weight:600">$480</span><span style="color:#5c6b67;display:flex"><svg class="ico-16"><use href="#i-external"></use></svg></span></div>
+    <div style="display:flex;align-items:center;gap:8px"><span class="tag">OLX</span><span class="small muted" style="flex:1">15-avg · manbadan o'chirilgan</span><span class="num muted" style="font-weight:600">$470</span><span style="color:#cfd8d5;display:flex"><svg class="ico-16"><use href="#i-external"></use></svg></span></div>
+  </div>
+
+  <div class="card" style="padding:14px;display:flex;flex-direction:column;gap:10px">
+    <div style="display:flex;align-items:center;justify-content:space-between"><span class="eyebrow">Shartlar</span><a href="#" class="small" style="display:inline-flex;align-items:center;height:44px;margin:-12px 0;padding:0 6px">Tahrirlash</a></div>
+    <div style="display:grid;grid-template-columns:repeat(2, minmax(0, 1fr));gap:10px;font-size:13px">
+      <div><div class="small muted">Chet elliklarga</div><span class="pill s-available" style="height:22px"><svg class="ico-16"><use href="#i-check"></use></svg>Ha</span></div>
+      <div><div class="small muted">Kimga</div><div>Faqat oilaga</div></div>
+      <div><div class="small muted">Depozit</div><div>1 oy</div></div>
+      <div><div class="small muted">Muddat</div><div>6 oydan</div></div>
+    </div>
+  </div>
+
+  <div class="card" style="padding:14px 14px 4px">
+    <span class="eyebrow">Tarix</span>
+    <div class="timeline" style="margin-top:6px">
+      <div class="tl"><div class="line"><i class="t"></i><b></b></div><div style="flex:1"><div>Bot · Telegram — <b>bo'sh</b></div><div class="small muted mono">bugun 12:40</div></div></div>
+      <div class="tl"><div class="line"><i class="t"></i><b></b></div><div style="flex:1"><div>Dublikat taxmini — Telegram e'loni (ko'rib chiqishda)</div><div class="small muted mono">bugun 11:40</div></div></div>
+      <div class="tl"><div class="line"><i class="a"></i><b></b></div><div style="flex:1"><div>Malika qo'ng'iroq qildi — javob yo'q</div><div class="small muted mono">bugun 09:12</div></div></div>
+      <div class="tl"><div class="line"><i class="g"></i><b></b></div><div style="flex:1"><div>Aziz qo'ng'iroq qildi — <b>bo'sh</b> · «6 oy, depozit 1 oy»</div><div class="small muted mono">27-avg 15:20</div></div></div>
+      <div class="tl"><div class="line"><i></i></div><div style="flex:1"><div>OLX dan qo'shildi</div><div class="small muted mono">12-avg</div></div></div>
+    </div>
+  </div>
+
+</section>
+
+<div style="position:absolute;left:0;right:0;bottom:0;padding:10px 16px 14px;background:#fff;border-top:1px solid #dfe5e2;display:grid;grid-template-columns:minmax(0, 1.4fr) minmax(0, 1fr) 48px;gap:8px">
+  <a class="btn btn-primary btn-lg" href="#"><svg class="ico"><use href="#i-phone"></use></svg>Qo'ng'iroq</a>
+  <a class="btn btn-secondary btn-lg" href="#"><svg class="ico"><use href="#i-edit"></use></svg>Natija</a>
+  <a class="btn btn-secondary btn-lg" href="#" style="padding:0" title="Botga tekshirtirish"><svg class="ico"><use href="#i-bot"></use></svg></a>
+</div>
+</div>
+
+</x-dc>
+</body>
+</html>

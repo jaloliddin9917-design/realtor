@@ -1,0 +1,21 @@
+# python
+.venv/
+__pycache__/
+*.pyc
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+*.egg-info/
+# node
+node_modules/
+web/dist/
+# secrets & runtime data
+.env
+*.session
+*.session-journal
+/data/
+backend/data/
+# editors
+.idea/
+.vscode/
+.DS_Store

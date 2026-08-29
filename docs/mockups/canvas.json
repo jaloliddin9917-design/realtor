@@ -1,0 +1,18 @@
+{
+  "artboards": [
+    { "file": "Main.dc.html", "title": "Boshqaruv paneli — admin", "x": 0, "y": 0, "w": 1440, "h": 900 },
+    { "file": "Properties.dc.html", "title": "Uylar — ro'yxat va filtrlar", "x": 1540, "y": 0, "w": 1440, "h": 900 },
+    { "file": "Duplicates.dc.html", "title": "Dublikatlar — ko'rib chiqish", "x": 3080, "y": 0, "w": 1440, "h": 900 },
+    { "file": "BotMonitor.dc.html", "title": "Bot — monitoring va shablon", "x": 4620, "y": 0, "w": 1440, "h": 900 },
+    { "file": "Settings.dc.html", "title": "Sozlamalar", "x": 6160, "y": 0, "w": 1440, "h": 900 },
+    { "file": "Queue.dc.html", "title": "Navbatim — agent (mobil)", "x": 0, "y": 1120, "w": 390, "h": 1120 },
+    { "file": "Property.dc.html", "title": "Uy — agent (mobil, to'liq sahifa)", "x": 490, "y": 1120, "w": 390, "h": 1720 },
+    { "file": "LogCall.dc.html", "title": "Natijani yozish — agent (mobil)", "x": 980, "y": 1120, "w": 390, "h": 844 }
+  ],
+  "annotations": [
+    { "id": "note-admin", "x": 0, "y": -170, "w": 560, "text": "ADMIN — desktop 1440×900\nSardor (jamoa rahbari) ko'radigan ekranlar: boshqaruv paneli, uylar ro'yxati, dublikatlarni ko'rib chiqish, bot monitoringi, sozlamalar. Chapdan o'ngga: docs/02-architecture.md §11 ro'yxati." },
+    { "id": "note-agent", "x": 0, "y": 960, "w": 560, "text": "AGENT — mobil 390×844\nAziz ko'radigan ekranlar: Navbatim → Uy sahifasi → Natijani yozish (3 ta bosishdan oshmaydi). Uy sahifasi to'liq uzunlikda ko'rsatilgan (telefonda aylantiriladi)." },
+    { "id": "note-data", "x": 1540, "y": 960, "w": 560, "text": "Namuna ma'lumotlar to'qib chiqarilgan (ismlar, telefon raqamlari, kanallar). UI tili — o'zbek (lotin); RU tarjimasi 2-bosqichda. Rasmlar o'rnida plashka — real rasmlar manbadan nusxalanadi." }
+  ],
+  "launch": { "view": "canvas" }
+}
