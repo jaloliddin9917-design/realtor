@@ -19,6 +19,17 @@ class Settings(BaseSettings):
     dedupe_config_path: Path = BACKEND_DIR / "config" / "dedupe.yaml"
     tz: str = "Asia/Tashkent"
     log_level: str = "INFO"
+    http_user_agent: str = (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/124.0 Safari/537.36"
+    )
+    olx_proxy_url: str | None = None
+    olx_request_interval: float = 2.0
+    olx_max_pages: int = 25
+    telegram_backfill_days: int = 14
+    telegram_rescan_limit: int = 200
+    worker_tick_seconds: int = 60
+    daily_job_hour: int = 3
 
 
 @lru_cache
