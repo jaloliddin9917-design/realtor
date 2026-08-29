@@ -10,6 +10,7 @@ from app.ingestion.parse.fields import (
     extract_price,
     extract_rooms_floors,
     extract_username,
+    normalize_phone,
 )
 from app.ingestion.parse.normalize import normalize
 
@@ -96,4 +97,5 @@ __all__ = [
     "extract_price",
     "extract_rooms_floors",
     "extract_username",
+    "normalize_phone",
 ]

@@ -136,3 +136,20 @@ _AGENT = re.compile(
 def extract_markers(text: str) -> tuple[bool, bool]:
     t = translit(text)
     return bool(_OWNER.search(t)), bool(_AGENT.search(t))
+
+
+def normalize_phone(raw: str) -> str | None:
+    digits = re.sub(r"\D", "", raw)
+    if len(digits) == 12 and digits.startswith("998"):
+        candidate = "+" + digits
+    elif len(digits) == 9:
+        candidate = "+998" + digits
+    else:
+        return None
+    try:
+        parsed = phonenumbers.parse(candidate, "UZ")
+    except phonenumbers.NumberParseException:
+        return None
+    if not phonenumbers.is_valid_number(parsed):
+        return None
+    return phonenumbers.format_number(parsed, phonenumbers.PhoneNumberFormat.E164)
