@@ -813,7 +813,7 @@ def reset_backoff(source: Source) -> None:
     if "backoff_level" in source.state:
         source.state = {k: v for k, v in source.state.items() if k != "backoff_level"}
 ```
-Settings: add the fields listed in Interfaces to `backend/app/core/settings.py` and the corresponding lines to `backend/.env.example` (`HTTP_USER_AGENT=`, `OLX_PROXY_URL=`, `OLX_REQUEST_INTERVAL=2.0`, `OLX_MAX_PAGES=25`, `TELEGRAM_BACKFILL_DAYS=14`, `TELEGRAM_RESCAN_LIMIT=200`, `WORKER_TICK_SECONDS=60`, `DAILY_JOB_HOUR=3`).
+Settings: add the fields listed in Interfaces to `backend/app/core/settings.py` and the corresponding lines to `backend/.env.example` (`# HTTP_USER_AGENT=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36` — commented out: an empty `HTTP_USER_AGENT=` would override the default with an empty string; `# OLX_PROXY_URL=http://user:pass@host:port` likewise commented; `OLX_REQUEST_INTERVAL=2.0`, `OLX_MAX_PAGES=25`, `TELEGRAM_BACKFILL_DAYS=14`, `TELEGRAM_RESCAN_LIMIT=200`, `WORKER_TICK_SECONDS=60`, `DAILY_JOB_HOUR=3`).
 
 - [ ] **Step 4: Run the tests, suite and gates; commit**
 
