@@ -21,7 +21,8 @@ async def recompute(session: AsyncSession, prop: Property) -> None:
     if not listings:
         return
     best = max(
-        listings, key=lambda x: (x.parse_confidence, x.posted_at or x.created_at, x.created_at)
+        listings,
+        key=lambda x: (x.parse_confidence, x.posted_at or x.created_at, x.created_at, x.id),
     )
     prop.district, prop.rooms, prop.floor = best.district, best.rooms, best.floor
     prop.total_floors, prop.area_sqm = best.total_floors, best.area_sqm

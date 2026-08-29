@@ -113,7 +113,7 @@ async def update_probable_owner(session: AsyncSession, prop: Property) -> None:
         .join(ListingContact, ListingContact.contact_id == Contact.id)
         .join(Listing, Listing.id == ListingContact.listing_id)
         .where(Listing.property_id == prop.id)
-        .order_by(Contact.agency_score.asc(), Contact.created_at.asc())
+        .order_by(Contact.agency_score.asc(), Contact.created_at.asc(), Contact.id.asc())
         .limit(1)
     )
     best = (await session.execute(stmt)).scalar_one_or_none()

@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from app.modules.dedupe.config import DedupeConfig, load_config
 from app.modules.dedupe.scoring import ScoreInput, score
 
@@ -105,3 +107,43 @@ def test_custom_config() -> None:
         review_threshold=0.5,
     )
     assert score(_inp(shared_contact=True), cfg).total == 1.0
+
+
+def test_config_rejects_missing_weight_and_bad_thresholds() -> None:
+    missing_weight = dict(
+        weights={
+            "contact": 0.5,
+            "photo": 0.3,
+            "description": 0.15,
+            "rooms_floors": 0.1,
+            "area": 0.05,
+            # "price" is missing
+        },
+        photo_max_distance=10,
+        description_min_similarity=0.6,
+        area_tolerance=0.05,
+        price_tolerance=0.1,
+        merge_threshold=0.75,
+        review_threshold=0.5,
+    )
+    with pytest.raises(ValueError):
+        DedupeConfig.model_validate(missing_weight)
+
+    bad_thresholds = dict(
+        weights={
+            "contact": 0.5,
+            "photo": 0.3,
+            "description": 0.15,
+            "rooms_floors": 0.1,
+            "area": 0.05,
+            "price": 0.05,
+        },
+        photo_max_distance=10,
+        description_min_similarity=0.6,
+        area_tolerance=0.05,
+        price_tolerance=0.1,
+        merge_threshold=0.5,
+        review_threshold=0.75,  # review_threshold > merge_threshold is invalid
+    )
+    with pytest.raises(ValueError):
+        DedupeConfig.model_validate(bad_thresholds)

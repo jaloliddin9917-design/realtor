@@ -14,7 +14,9 @@ CBU_URL = "https://cbu.uz/uz/arkhiv-kursov-valyut/json/USD/"
 async def fetch_cbu_rate(client: httpx.AsyncClient) -> tuple[date, Decimal]:
     response = await client.get(CBU_URL, timeout=20)
     response.raise_for_status()
-    row = next(item for item in response.json() if item.get("Ccy") == "USD")
+    row = next((item for item in response.json() if item.get("Ccy") == "USD"), None)
+    if row is None:
+        raise ValueError("CBU response has no USD row")
     day = datetime.strptime(row["Date"], "%d.%m.%Y").date()
     return day, Decimal(row["Rate"])
 

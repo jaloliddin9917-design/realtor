@@ -6,7 +6,7 @@ from app.ingestion.parse.normalize import normalize, translit
 
 _NUM = r"(?P<amt>\d{1,3}(?:[ \xa0.,]\d{3})+|\d+)(?:[.,](?P<dec>\d{1,2})(?!\d))?"
 _MULT = r"(?:\s*(?P<mult>ming|tis|tys|mln|million|mlrd))?"
-_USD = r"(?:\$|usd|u\.?\s?e\.?|ye\b|doll\w*)"
+_USD = r"(?:\$|usd|\bu\.?\s?e\b\.?|ye\b|doll\w*)"
 _UZS = r"(?:so'?m\b|sum\b|uzs\b|sўm\b)"
 _PRICE_AFTER = re.compile(rf"(?<![\d/]){_NUM}{_MULT}\.?\s*(?P<cur>{_USD}|{_UZS})", re.IGNORECASE)
 _PRICE_BEFORE = re.compile(rf"(?P<cur>{_USD})\s*{_NUM}{_MULT}", re.IGNORECASE)
@@ -117,7 +117,7 @@ def extract_phones(text: str) -> list[str]:
     return out
 
 
-_USERNAME = re.compile(r"@([A-Za-z][A-Za-z0-9_]{4,31})\b")
+_USERNAME = re.compile(r"(?<![\w.])@([A-Za-z][A-Za-z0-9_]{4,31})\b(?!\.[a-z]{2,})")
 
 
 def extract_username(text: str) -> str | None:

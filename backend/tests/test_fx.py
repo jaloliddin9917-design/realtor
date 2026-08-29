@@ -2,6 +2,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 
 import httpx
+import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.listings.fx import CBU_URL, fetch_cbu_rate, rate_for, refresh_rate, to_usd_minor
@@ -31,6 +32,15 @@ def _client() -> httpx.AsyncClient:
 async def test_fetch_cbu_rate_parses_date_and_rate() -> None:
     async with _client() as client:
         assert await fetch_cbu_rate(client) == (date(2026, 8, 29), Decimal("12345.67"))
+
+
+async def test_fetch_cbu_rate_without_usd_row_raises() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=[])
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        with pytest.raises(ValueError):
+            await fetch_cbu_rate(client)
 
 
 async def test_refresh_rate_is_idempotent(db: AsyncSession) -> None:

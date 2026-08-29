@@ -65,9 +65,15 @@ async def test_contact_identity_is_unique(db: AsyncSession) -> None:
 
 
 async def test_photo_bucket_index_exists(db: AsyncSession) -> None:
-    rows = (
+    indexdef = (
         await db.execute(
-            text("SELECT indexname FROM pg_indexes WHERE tablename = 'listing_photos'")
+            text(
+                "SELECT indexdef FROM pg_indexes "
+                "WHERE tablename = 'listing_photos' AND indexname = 'ix_listing_photos_bucket'"
+            )
         )
-    ).all()
-    assert any("bucket" in r[0] for r in rows)
+    ).scalar_one()
+    assert "(phash >> 48)" in indexdef
+    # Postgres renders the bigint literal with an explicit cast in the stored indexdef.
+    assert "& (65535)" in indexdef
+    assert "WHERE (phash IS NOT NULL)" in indexdef

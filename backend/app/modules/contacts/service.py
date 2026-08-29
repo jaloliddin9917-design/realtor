@@ -39,6 +39,6 @@ async def contacts_for_listing(session: AsyncSession, listing_id: uuid.UUID) -> 
         select(Contact)
         .join(ListingContact, ListingContact.contact_id == Contact.id)
         .where(ListingContact.listing_id == listing_id)
-        .order_by(Contact.created_at)
+        .order_by(Contact.created_at, Contact.id)
     )
     return list((await session.execute(stmt)).scalars().all())

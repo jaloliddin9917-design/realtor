@@ -69,3 +69,7 @@ def test_confidence_is_low_when_little_is_found() -> None:
     p = parse_text("Ijaraga beriladi, qo'ng'iroq qiling")
     assert p.parse_confidence == 0.0
     assert p.title == "Ijaraga beriladi, qo'ng'iroq qiling"
+
+
+def test_email_address_is_not_mistaken_for_telegram_username() -> None:
+    assert parse_text("Chilonzor 2-xonali 450$ email: sardor@gmail.com").telegram_username is None

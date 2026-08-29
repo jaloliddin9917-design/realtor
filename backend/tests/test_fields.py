@@ -25,6 +25,7 @@ from app.ingestion.parse.fields import (
         ("2-xonali, 3/9 460$", (46000, "USD")),
         ("2/5/9 450$", (45000, "USD")),
         ("Narxi 1 000$ 5/9 qavat", (100000, "USD")),
+        ("boutique 500", None),
     ],
 )
 def test_extract_price(text: str, expected: tuple[int, str] | None) -> None:
@@ -90,6 +91,8 @@ def test_extract_phones_ignores_prices_and_years() -> None:
 def test_extract_username() -> None:
     assert extract_username("Риелтор Дилшод @dilshod_uy") == "dilshod_uy"
     assert extract_username("no handle here") is None
+    assert extract_username("email: sardor@gmail.com") is None
+    assert extract_username("aloqa @ijara_uy_bot yoki sardor@gmail.com") == "ijara_uy_bot"
 
 
 @pytest.mark.parametrize(

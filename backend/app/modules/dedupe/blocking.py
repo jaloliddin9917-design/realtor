@@ -1,4 +1,4 @@
-from sqlalchemy import ColumnElement, Integer, and_, cast, or_, select
+from sqlalchemy import ColumnElement, and_, literal_column, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ingestion.photos import phash_bucket
@@ -29,9 +29,12 @@ async def find_candidates(session: AsyncSession, listing: Listing) -> list[Prope
     )
     buckets = {phash_bucket(h) for h in hashes if h is not None}
     if buckets:
-        # Postgres has no bigint >> bigint overload (only bigint >> integer), so the
-        # shift amount must be bound as Integer, not inherit phash's BigInteger type.
-        bucket_expr = (ListingPhoto.phash.op(">>")(cast(48, Integer))).op("&")(65535)
+        # Render the shift/mask as literals, not bound parameters: ix_listing_photos_bucket
+        # is a functional index on this exact expression, and PostgreSQL only matches a
+        # functional index under a generic plan when the expression text lines up literally.
+        bucket_expr = (ListingPhoto.phash.op(">>")(literal_column("48"))).op("&")(
+            literal_column("65535")
+        )
         conditions.append(
             Listing.id.in_(
                 select(ListingPhoto.listing_id).where(
