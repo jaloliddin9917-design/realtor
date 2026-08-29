@@ -1180,7 +1180,8 @@ def test_extract_rooms_floors(text: str, expected: tuple[int | None, int | None,
 
 @pytest.mark.parametrize(
     ("text", "expected"),
-    [("54 m²", 54.0), ("78 кв.м", 78.0), ("32 кв.", 32.0), ("60 kv", 60.0), ("55.5 м2", 55.5), ("2-xonali", None)],
+    [("54 m²", 54.0), ("78 кв.м", 78.0), ("32 кв.", 32.0), ("60 kv", 60.0), ("55.5 м2", 55.5), ("2-xonali", None),
+     ("54 kvartirali uyda", None), ("12 kvartira sotiladi", None)],
 )
 def test_extract_area(text: str, expected: float | None) -> None:
     assert extract_area(text) == expected
@@ -1193,6 +1194,9 @@ def test_extract_phones_all_local_formats() -> None:
 
 def test_extract_phones_ignores_prices_and_years() -> None:
     assert extract_phones("Narxi 5 940 700 sum, 2026 yil") == []
+    assert extract_phones("994000000 so'm") == []
+    assert extract_phones("Narxi 999500000 сум") == []
+    assert extract_phones("tel 994000000") == ["+998994000000"]
 
 
 def test_extract_username() -> None:
@@ -1256,6 +1260,18 @@ def test_parse_ru_agent_post_uses_sender_username_fallback() -> None:
 def test_structured_values_override_text() -> None:
     p = parse_text("2-xonali, 3/9, Chilonzor, 400$", structured={"rooms": 3, "price_amount_minor": 50000, "price_currency": "USD", "district": "yunusobod"})
     assert (p.rooms, p.price_amount_minor, p.district) == (3, 50000, "yunusobod")
+
+
+def test_structured_none_and_partial_price_fall_back_to_text() -> None:
+    text = "2-xonali, 3/9, Chilonzor, 400$"
+    p = parse_text(text, structured={"price_amount_minor": 50000})
+    assert (p.price_amount_minor, p.price_currency) == (40000, "USD")
+    p = parse_text("2-xonali, 3/9, Chilonzor", structured={"price_amount_minor": 50000})
+    assert (p.price_amount_minor, p.price_currency) == (None, None)
+    p = parse_text(text, structured={"price_currency": "UZS"})
+    assert (p.price_amount_minor, p.price_currency) == (40000, "USD")
+    p = parse_text(text, structured={"title": None, "district": None})
+    assert p.title == "2-xonali, 3/9, Chilonzor, 400$" and p.district == "chilonzor"
 
 
 def test_confidence_is_low_when_little_is_found() -> None:
@@ -1342,7 +1358,7 @@ def extract_rooms_floors(text: str) -> tuple[int | None, int | None, int | None]
     return rooms, floor, total
 
 
-_AREA = re.compile(r"\b(\d{2,3}(?:[.,]\d)?)\s*(?:m²|m2|kv\.?\s*m\b|kv\.?(?!artal)|m\.?\s*kv\b|kvadrat)", re.IGNORECASE)
+_AREA = re.compile(r"\b(\d{2,3}(?:[.,]\d)?)\s*(?:m²|m2|kv\.?\s*m\b|kv\.?(?![a-z])|m\.?\s*kv\b|kvadrat)", re.IGNORECASE)
 
 
 def extract_area(text: str) -> float | None:
@@ -1352,11 +1368,19 @@ def extract_area(text: str) -> float | None:
 
 
 _PHONE = re.compile(r"(?<!\d)(?:\+?998|8)?[\s(-]*(\d{2})[\s)-]*(\d{3})[\s-]*(\d{2})[\s-]*(\d{2})(?!\d)")
+# a digit run followed by a currency marker is a price, not a phone (checked on the original script)
+_PRICED = re.compile(
+    r"^\s*(?:so'?m\b|sum\b|uzs\b|\$|usd\b|u\.?\s?e\b|у\.?\s?е\b|сум\b|сўм\b|ming\b|mln\b|тыс\b|млн\b)",
+    re.IGNORECASE,
+)
 
 
 def extract_phones(text: str) -> list[str]:
     out: list[str] = []
-    for m in _PHONE.finditer(normalize(text)):
+    clean = normalize(text)
+    for m in _PHONE.finditer(clean):
+        if _PRICED.match(clean[m.end():]):
+            continue
         candidate = "+998" + "".join(m.groups())
         try:
             parsed = phonenumbers.parse(candidate, "UZ")
@@ -1389,7 +1413,7 @@ def extract_markers(text: str) -> tuple[bool, bool]:
 
 `backend/app/ingestion/parse/__init__.py`:
 ```python
-from typing import Any
+from typing import Any, TypeVar
 
 from pydantic import BaseModel
 
@@ -1439,6 +1463,15 @@ def _confidence(p: "ParsedListing") -> float:
     return round(score, 2)
 
 
+T = TypeVar("T")
+
+
+def _override(s: dict[str, Any], key: str, extracted: T) -> T:
+    """A structured value wins only when present and not None."""
+    value = s.get(key)
+    return extracted if value is None else value
+
+
 def parse_text(
     text: str, *, sender_username: str | None = None, structured: dict[str, Any] | None = None
 ) -> ParsedListing:
@@ -1446,17 +1479,20 @@ def parse_text(
     clean = normalize(text)
     first_line = text.strip().splitlines()[0].strip() if text.strip() else ""
     price = extract_price(clean)
+    amount, currency = (price[0], price[1]) if price else (None, None)
+    if s.get("price_amount_minor") is not None and s.get("price_currency") is not None:
+        amount, currency = s["price_amount_minor"], s["price_currency"]  # atomic: never an amount without a currency
     rooms, floor, total = extract_rooms_floors(clean)
     p = ParsedListing(
-        title=str(s.get("title") or normalize(first_line))[:200],
+        title=str(_override(s, "title", normalize(first_line)))[:200],
         description=clean,
-        price_amount_minor=s.get("price_amount_minor", price[0] if price else None),
-        price_currency=s.get("price_currency", price[1] if price else None),
-        rooms=s.get("rooms", rooms),
-        floor=s.get("floor", floor),
-        total_floors=s.get("total_floors", total),
-        area_sqm=s.get("area_sqm", extract_area(clean)),
-        district=s.get("district", match_district(clean)),
+        price_amount_minor=amount,
+        price_currency=currency,
+        rooms=_override(s, "rooms", rooms),
+        floor=_override(s, "floor", floor),
+        total_floors=_override(s, "total_floors", total),
+        area_sqm=_override(s, "area_sqm", extract_area(clean)),
+        district=_override(s, "district", match_district(clean)),
         phones=extract_phones(clean),
         telegram_username=extract_username(clean) or sender_username,
     )
