@@ -79,8 +79,9 @@ async def save_listing_photo(
     else:
         try:
             stored = store_photo(photo_dir, listing.id, position, data)
-        except (OSError, ValueError) as exc:
-            # undecodable/truncated bytes, or the photo dir not writable
+        except (OSError, ValueError, Image.DecompressionBombError) as exc:
+            # undecodable/truncated bytes, an oversized "bomb" image, or the photo dir
+            # not writable
             _mark_failed(photo, f"undecodable image: {exc}")
         else:
             photo.storage_key = stored.storage_key

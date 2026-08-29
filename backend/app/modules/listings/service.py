@@ -94,6 +94,8 @@ async def persist_parsed(
     listing.posted_at = posted_at
     listing.last_seen_at = now
     listing.miss_count = 0
+    listing.source_removed = False
+    listing.removed_at = None
     listing.owner_marker, listing.agent_marker = parsed.owner_marker, parsed.agent_marker
     listing.parse_confidence = parsed.parse_confidence
     raw.parse_error = None

@@ -76,6 +76,27 @@ async def test_persist_parsed_is_idempotent_and_links_contacts(db: AsyncSession)
     }
 
 
+async def test_reappearing_listing_is_unremoved(db: AsyncSession) -> None:
+    s = await _source(db)
+    raw, _ = await upsert_raw(db, s.id, "1", None, {"text": TEXT}, NOW)
+    parsed = parse_text(TEXT)
+    listing = await persist_parsed(
+        db, raw, parsed, posted_at=NOW, now=NOW, usd_rate=None, contacts=[]
+    )
+    gone = SeenWindow(ids=set(), oldest_posted_at=NOW - timedelta(days=1))
+    for i in range(1, 4):
+        await apply_misses(db, s.id, gone, NOW + timedelta(minutes=15 * i))
+    await db.refresh(listing)
+    assert listing.source_removed is True and listing.removed_at is not None
+
+    later = NOW + timedelta(hours=2)
+    await persist_parsed(db, raw, parsed, posted_at=later, now=later, usd_rate=None, contacts=[])
+    await db.refresh(listing)
+    assert listing.source_removed is False
+    assert listing.removed_at is None
+    assert listing.miss_count == 0
+
+
 async def test_uzs_price_is_converted_with_rate(db: AsyncSession) -> None:
     s = await _source(db)
     raw, _ = await upsert_raw(db, s.id, "2", None, {"text": "x"}, NOW)
