@@ -2275,7 +2275,7 @@ git commit -m "feat(photos): rehost with resize, sha256 and perceptual hash; buc
   - `async create_from_listing(session, listing: Listing, now: datetime) -> Property` — status `new`, event `(None → new, crawler)`, attributes copied, listing attached
   - `async attach(session, prop: Property, listing: Listing, now: datetime) -> None` — sets `listing.property_id`, then `recompute`
   - `async recompute(session, prop: Property) -> None` — from all its listings: `price_usd_min_minor` = min non-null, `first_seen_at` = min, `last_seen_at` = max, attributes (`district, rooms, floor, total_floors, area_sqm`) from the listing with the highest `parse_confidence` (ties → newest `posted_at`, then newest `created_at`), `source_removed` = all listings removed, `search_vector` rebuilt from titles + descriptions + address texts
-  - `async set_status(session, prop: Property, status: str, *, actor_type: str, actor_id: UUID | None = None, note: str | None = None) -> PropertyStatusEvent` — raises `ValueError` for an unknown status/actor; no-op event is still written when status is unchanged? **No**: if `status == prop.status` return the latest event without writing
+  - `async set_status(session, prop: Property, status: str, *, actor_type: str, actor_id: UUID | None = None, note: str | None = None) -> PropertyStatusEvent` — raises `ValueError` for an unknown status/actor; if `status == prop.status` and the property already has history, returns the latest event without writing; a property with no history gets its initial `(None → status)` event even when the value is unchanged
   - `async status_history(session, property_id) -> list[PropertyStatusEvent]` newest first
 
 - [ ] **Step 1: Write the failing tests**
@@ -2292,6 +2292,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.ingestion.parse import parse_text
 from app.modules.listings.models import Listing, Source
 from app.modules.listings.service import persist_parsed, upsert_raw
+from app.modules.properties.models import Property
 from app.modules.properties.service import (
     attach,
     create_from_listing,
@@ -2334,7 +2335,7 @@ async def test_attach_recomputes_min_price_and_best_attributes(db: AsyncSession)
     await attach(db, prop, second, NOW)
     assert prop.price_usd_min_minor == 45000
     assert prop.area_sqm == 54.0  # from the higher-confidence listing
-    assert prop.first_seen_at == NOW - timedelta(days=2) or prop.first_seen_at == NOW
+    assert prop.first_seen_at == NOW  # both listings were persisted with now=NOW
     assert prop.last_seen_at == NOW
 
 
@@ -2373,6 +2374,17 @@ async def test_set_status_writes_event_and_rejects_unknown(db: AsyncSession) -> 
     with pytest.raises(ValueError):
         await set_status(db, prop, "inactive", actor_type="visitor")
     assert [e.to_status for e in await status_history(db, prop.id)] == ["active", "new"]
+
+
+async def test_set_status_on_property_without_history_writes_initial_event(db: AsyncSession) -> None:
+    prop = Property(status="new", first_seen_at=NOW, last_seen_at=NOW)
+    db.add(prop)
+    await db.flush()
+    ev = await set_status(db, prop, "new", actor_type="crawler")
+    assert (ev.from_status, ev.to_status, ev.actor_type) == (None, "new", "crawler")
+    assert [e.id for e in await status_history(db, prop.id)] == [ev.id]
+    again = await set_status(db, prop, "new", actor_type="crawler")
+    assert again.id == ev.id
 ```
 
 - [ ] **Step 2: Run them to verify they fail**
@@ -2460,10 +2472,16 @@ async def set_status(
     if actor_type not in ACTOR_TYPES:
         raise ValueError(f"unknown actor_type {actor_type!r}")
     if status == prop.status:
-        return (await status_history(session, prop.id))[0]
+        history = await status_history(session, prop.id)
+        if history:
+            return history[0]  # unchanged and already recorded: no new event
     event = PropertyStatusEvent(
-        property_id=prop.id, from_status=prop.status, to_status=status,
-        actor_type=actor_type, actor_id=actor_id, note=note,
+        property_id=prop.id,
+        from_status=None if status == prop.status else prop.status,  # no history yet → initial event
+        to_status=status,
+        actor_type=actor_type,
+        actor_id=actor_id,
+        note=note,
     )
     prop.status = status
     session.add(event)
