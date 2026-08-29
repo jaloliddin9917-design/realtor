@@ -5,6 +5,8 @@ from app.ingestion.photos import phash_bucket
 from app.modules.listings.models import Listing, ListingContact, ListingPhoto
 from app.modules.properties.models import Property
 
+MAX_CANDIDATES = 50
+
 
 async def find_candidates(session: AsyncSession, listing: Listing) -> list[Property]:
     conditions: list[ColumnElement[bool]] = []
@@ -61,6 +63,8 @@ async def find_candidates(session: AsyncSession, listing: Listing) -> list[Prope
         .join(Listing, Listing.property_id == Property.id)
         .where(or_(*conditions), Listing.id != listing.id, Listing.property_id.is_not(None))
         .distinct()
+        .order_by(Property.last_seen_at.desc(), Property.id)
+        .limit(MAX_CANDIDATES)
     )
     if listing.property_id is not None:
         stmt = stmt.where(Property.id != listing.property_id)

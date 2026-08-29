@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import imagehash
-from PIL import Image
+from PIL import Image, ImageOps
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -44,18 +44,22 @@ def hamming(a: int, b: int) -> int:
 def store_photo(
     photo_dir: Path, listing_id: uuid.UUID, position: int, data: bytes, max_side: int = 1280
 ) -> StoredPhoto:
-    img = Image.open(io.BytesIO(data)).convert("RGB")
-    img.thumbnail((max_side, max_side), Image.Resampling.LANCZOS)
-    key = f"{listing_id}/{position}.jpg"
-    target = photo_dir / key
-    target.parent.mkdir(parents=True, exist_ok=True)
-    img.save(target, format="JPEG", quality=85, optimize=True)
+    with Image.open(io.BytesIO(data)) as opened:
+        img = ImageOps.exif_transpose(opened) or opened
+        img = img.convert("RGB")
+        img.thumbnail((max_side, max_side), Image.Resampling.LANCZOS)
+        key = f"{listing_id}/{position}.jpg"
+        target = photo_dir / key
+        target.parent.mkdir(parents=True, exist_ok=True)
+        img.save(target, format="JPEG", quality=85, optimize=True)
+        hashed = phash_to_signed(str(imagehash.phash(img)))
+        width, height = img.width, img.height
     return StoredPhoto(
         storage_key=key,
         sha256=hashlib.sha256(data).hexdigest(),
-        phash=phash_to_signed(str(imagehash.phash(img))),
-        width=img.width,
-        height=img.height,
+        phash=hashed,
+        width=width,
+        height=height,
     )
 
 

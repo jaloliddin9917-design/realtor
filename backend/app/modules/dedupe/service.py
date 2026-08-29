@@ -2,7 +2,8 @@ import re
 from dataclasses import dataclass
 from datetime import datetime
 
-from sqlalchemy import func, select
+from sqlalchemy import bindparam, select, text
+from sqlalchemy.dialects.postgresql import ARRAY, TEXT
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ingestion.photos import hamming
@@ -90,17 +91,12 @@ async def gather_inputs(session: AsyncSession, listing: Listing, prop: Property)
 
     mine = strip_for_similarity(listing.description)
     similarity: float | None = None
-    if mine and others:
-        sims = [
-            (
-                await session.execute(
-                    select(func.similarity(mine, strip_for_similarity(o.description)))
-                )
-            ).scalar_one()
-            for o in others
-            if o.description
-        ]
-        similarity = max(sims) if sims else None
+    stripped = [strip_for_similarity(o.description) for o in others if o.description]
+    if mine and stripped:
+        stmt = text("SELECT max(similarity(:mine, s)) FROM unnest(:others) AS s").bindparams(
+            bindparam("mine", value=mine), bindparam("others", value=stripped, type_=ARRAY(TEXT))
+        )
+        similarity = (await session.execute(stmt)).scalar_one()
 
     rooms_floors_equal = (
         listing.rooms is not None

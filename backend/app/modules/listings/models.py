@@ -125,6 +125,7 @@ class Listing(IdMixin, TimestampMixin, Base):
 
 class ListingContact(Base):
     __tablename__ = "listing_contacts"
+    __table_args__ = (Index("ix_listing_contacts_contact_id", "contact_id"),)
 
     listing_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("listings.id", ondelete="CASCADE"), primary_key=True
@@ -144,6 +145,7 @@ class ListingPhoto(IdMixin, Base):
             text("((phash >> 48) & 65535)"),
             postgresql_where=text("phash IS NOT NULL"),
         ),
+        UniqueConstraint("listing_id", "position", name="uq_listing_photos_listing_position"),
     )
 
     listing_id: Mapped[uuid.UUID] = mapped_column(
