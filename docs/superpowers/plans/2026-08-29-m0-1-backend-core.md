@@ -3667,3 +3667,27 @@ git commit -m "feat(ingestion): adapter protocol and pipeline — raw, parse, pe
 - **Spec coverage.** §2 processes/DB — Task 1; §3.1 adapter interface — Task 11 (`SourceAdapter`); §3.5 removal detection (3 misses, 30-day age-out, property flag) — Tasks 6, 8, 11; §4 parsing rules and confidence — Tasks 3–4; §5.1–5.2 blocking, weights, thresholds, merge recompute — Tasks 8–9; §5.3 contacts and probable owner — Tasks 6, 10; §6 tables, indexes, append-only trigger — Task 2; §7 status model — Task 8; §10 error handling (savepoints, run records, failures counted) — Task 11; §12 tests without network, real PostgreSQL — Task 1 fixtures. Not in this plan by design: §3.2–3.4 adapters, worker loop and CLI (M0-2), §8 API (M0-3), §9 web (M0-4), §11 deployment (M0-4).
 - **Placeholders.** None — every step carries the code or the exact command.
 - **Type consistency.** `persist_parsed(..., contacts=...)` keyword is used identically in Tasks 6, 8, 9, 10, 11; `SeenWindow(ids, oldest_posted_at)` in Tasks 6 and 11; `assign(session, listing, cfg, now) -> AssignResult(property, decision, score, candidate)` in Tasks 9 and 11; `phash` is a signed `bigint` everywhere and the SQL bucket `((phash >> 48) & 65535)` in Task 2 matches `phash_bucket` in Task 7 and the `op(">>")` expression in Task 9.
+
+---
+
+## Post-review amendments (2026-08-30)
+
+The whole-branch review after Task 11 returned "with fixes". The code on `m0-1-backend-core` is the source of truth for the shapes below; the task sections above were kept as executed, and these amendments record what changed afterwards (commits `b44c684`, `883e07e`, `758c325`, `4f1e02c`, `739bff8`, `1daacfe`).
+
+| Area | Change | Where |
+|---|---|---|
+| Dedupe blocking | Bucket expression renders `48` / `65535` as SQL literals (`literal_column`) so the functional index is usable under prepared statements; schema test asserts the index definition | `dedupe/blocking.py`, `tests/test_schema.py` |
+| Parsing | `_USERNAME` ignores email addresses (`(?<![\w.])@…\b(?!\.[a-z]{2,})`); `_PRICE_BEFORE`'s `u.e` alternative is word-bounded | `parse/fields.py` |
+| Ordering | `Contact.id` tiebreak in `contacts_for_listing` and `update_probable_owner`; `x.id` in `recompute`'s best-listing key | `contacts/service.py`, `contacts/scoring.py`, `properties/service.py` |
+| Config | `DedupeConfig` validates the six weight keys and `0 ≤ review ≤ merge ≤ 1` | `dedupe/config.py` |
+| FX | `fetch_cbu_rate` raises `ValueError` on a USD-less body | `listings/fx.py` |
+| Pipeline | `ingest_payload` = `store_raw` (own savepoint: the raw row survives a parse failure, `raw.parse_error` recorded, counted in `failed`) + `process_raw`; every re-ingest recomputes the property; failed photos are retried on the next run; after `mark_seen` a set-based UPDATE advances `properties.last_seen_at`; module docstring states the transaction contract (the caller commits even after `run_source` raises); failure handler re-raises the original exception if its own flush fails | `ingestion/pipeline.py` |
+| Resurrection (spec §3.5) | `persist_parsed` clears `source_removed` / `removed_at` with `miss_count` | `listings/service.py` |
+| Photos | `Image.DecompressionBombError` caught | `ingestion/photos.py` |
+| Adapter contract | `SourceAdapter`, `RawRef`, `RawPayload` docstrings: `photo_refs` → `download_photo` verbatim; tz-aware `posted_at`; `seen_window` `None` disables removal; `source.state` must be reassigned; `RawRef.meta` is adapter-private | `ingestion/adapters/base.py` |
+| Schema hygiene | trgm and bucket indexes declared in ORM metadata so `alembic check` is clean (no new revision); `make check-migrations`; DELETE branch of the append-only trigger tested | `listings/models.py`, `Makefile`, `tests/test_schema.py` |
+| Circuit breaker | Test: three `discover` failures pause the source for 1 h; a later success resets | `tests/test_pipeline.py` |
+| Settings | `.env` resolved as `backend/.env` regardless of CWD; `.env.example` lives in `backend/` | `core/settings.py`, `backend/.env.example` |
+| Test safety | The `engine` fixture refuses to reset a database whose name does not start with `realtor_test` | `tests/conftest.py` |
+
+Deferred by spec decision (§5.2): re-scoring changed listings against other properties. Follow-ups for M0-2 are listed in `.superpowers/sdd/progress.md` and in the M0-2 plan's constraints.
