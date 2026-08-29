@@ -22,6 +22,9 @@ from app.ingestion.parse.fields import (
         ("450 ming so'm", (45000000, "UZS")),
         ("Цена 450", None),
         ("2-xonali, 3/9", None),
+        ("2-xonali, 3/9 460$", (46000, "USD")),
+        ("2/5/9 450$", (45000, "USD")),
+        ("Narxi 1 000$ 5/9 qavat", (100000, "USD")),
     ],
 )
 def test_extract_price(text: str, expected: tuple[int, str] | None) -> None:
