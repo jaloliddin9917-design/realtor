@@ -331,6 +331,44 @@ async def test_three_discover_failures_pause_the_source(db: AsyncSession, tmp_pa
     assert s.status == "ok"
 
 
+async def test_repeated_backoff_escalates_the_pause_and_success_clears_it(
+    db: AsyncSession, tmp_path: Path
+) -> None:
+    s = await _source(db)
+    for run_no, minutes in enumerate((1, 2, 4), start=1):
+        await run_source(
+            db,
+            FakeAdapter([], None, backoff_on_discover=timedelta(minutes=1)),
+            s,
+            cfg=CFG,
+            photo_dir=tmp_path,
+            now=NOW,
+        )
+        assert (s.status, s.paused_until) == ("paused", NOW + timedelta(minutes=minutes))
+        assert s.state["backoff_level"] == run_no
+    assert s.consecutive_failures == 0  # a backoff is never a failure
+
+    await run_source(db, FakeAdapter([], None), s, cfg=CFG, photo_dir=tmp_path, now=NOW)
+    assert s.status == "ok" and "backoff_level" not in s.state
+
+
+async def test_backoff_honours_a_retry_after_longer_than_the_level(
+    db: AsyncSession, tmp_path: Path
+) -> None:
+    # a Telegram flood wait states how long the server wants; the escalating level is a
+    # floor, never a ceiling
+    s = await _source(db)
+    await run_source(
+        db,
+        FakeAdapter([], None, backoff_on_discover=timedelta(hours=2)),
+        s,
+        cfg=CFG,
+        photo_dir=tmp_path,
+        now=NOW,
+    )
+    assert s.paused_until == NOW + timedelta(hours=2) and s.state["backoff_level"] == 1
+
+
 async def test_seen_only_listing_unflags_property(db: AsyncSession, tmp_path: Path) -> None:
     s = await _source(db)
     seen = SeenWindow(ids={"1"}, oldest_posted_at=NOW - timedelta(days=1))

@@ -98,21 +98,25 @@ _PRICED = re.compile(
 )
 
 
+def _to_e164(candidate: str) -> str | None:
+    """Validate one already-assembled number against region UZ; E.164 or None."""
+    try:
+        parsed = phonenumbers.parse(candidate, "UZ")
+    except phonenumbers.NumberParseException:
+        return None
+    if not phonenumbers.is_valid_number(parsed):
+        return None
+    return phonenumbers.format_number(parsed, phonenumbers.PhoneNumberFormat.E164)
+
+
 def extract_phones(text: str) -> list[str]:
     out: list[str] = []
     clean = normalize(text)
     for m in _PHONE.finditer(clean):
         if _PRICED.match(clean[m.end() :]):
             continue
-        candidate = "+998" + "".join(m.groups())
-        try:
-            parsed = phonenumbers.parse(candidate, "UZ")
-        except phonenumbers.NumberParseException:
-            continue
-        if not phonenumbers.is_valid_number(parsed):
-            continue
-        e164 = phonenumbers.format_number(parsed, phonenumbers.PhoneNumberFormat.E164)
-        if e164 not in out:
+        e164 = _to_e164("+998" + "".join(m.groups()))
+        if e164 is not None and e164 not in out:
             out.append(e164)
     return out
 
@@ -141,15 +145,7 @@ def extract_markers(text: str) -> tuple[bool, bool]:
 def normalize_phone(raw: str) -> str | None:
     digits = re.sub(r"\D", "", raw)
     if len(digits) == 12 and digits.startswith("998"):
-        candidate = "+" + digits
-    elif len(digits) == 9:
-        candidate = "+998" + digits
-    else:
-        return None
-    try:
-        parsed = phonenumbers.parse(candidate, "UZ")
-    except phonenumbers.NumberParseException:
-        return None
-    if not phonenumbers.is_valid_number(parsed):
-        return None
-    return phonenumbers.format_number(parsed, phonenumbers.PhoneNumberFormat.E164)
+        return _to_e164("+" + digits)
+    if len(digits) == 9:
+        return _to_e164("+998" + digits)
+    return None

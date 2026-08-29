@@ -16,6 +16,7 @@ from app.ingestion.adapters.olx.state import (
 from app.ingestion.http import HttpResponse, RateLimiter
 from app.ingestion.parse import normalize_phone
 from app.modules.listings.models import RawListing, Source
+from app.modules.listings.service import SeenWindow
 
 FIX = Path(__file__).parent / "fixtures" / "olx"
 LIST_HTML = (FIX / "list_page.html").read_text(encoding="utf-8")
@@ -48,17 +49,43 @@ def _adapter(routes: dict[str, tuple[int, bytes]], **kw: object) -> tuple[OlxAda
 
 
 def _routes() -> dict[str, tuple[int, bytes]]:
-    detail_url = list_ads(extract_state(LIST_HTML))[0]["url"]
-    return {
+    routes = {
         BASE: (200, LIST_HTML.encode()),
         BASE + "&page=2": (404, b""),
-        detail_url: (200, DETAIL_HTML.encode()),
         "https://www.olx.uz/api/v1/offers/65000001/limited-phones/": (200, PHONES_JSON.encode()),
         "https://frankfurt.apollo.olxcdn.com:443/v1/files/fixture-1-0-UZ/image;s=1280x960": (
             200,
             b"\xff\xd8jpegbytes",
         ),
     }
+    # every listed ad resolves to the same recorded detail page, so a test can fetch a
+    # whole discovery batch without caring which ad it is
+    for ad in list_ads(extract_state(LIST_HTML)):
+        routes[str(ad["url"])] = (200, DETAIL_HTML.encode())
+    return routes
+
+
+def _demote(html: str, slug: str) -> str:
+    """Clear one ad's promoted/highlighted flags, keyed by its unique detail-page slug.
+
+    Targeted on purpose: the recorded fixture stays exactly as OLX served it (all three
+    ads promoted), and each test states which ad it wants to look organic.
+    """
+    marker = f'{slug}.html\\", \\"isHighlighted\\": true, \\"isPromoted\\": true'
+    assert marker in html
+    return html.replace(marker, marker.replace("true", "false"))
+
+
+def _without_last_refresh(html: str, stamp: str) -> str:
+    marker = f'\\"lastRefreshTime\\": \\"{stamp}\\", '
+    assert marker in html
+    return html.replace(marker, "")
+
+
+def _without_ad(html: str, ad_id: str, next_ad_id: str) -> str:
+    start = html.index(f'{{\\"id\\": {ad_id},')
+    end = html.index(f'{{\\"id\\": {next_ad_id},')
+    return html[:start] + html[end:]
 
 
 def test_extract_state_and_accessors() -> None:
@@ -118,20 +145,142 @@ def test_normalize_phone(raw: str, expected: str | None) -> None:
     assert normalize_phone(raw) == expected
 
 
-async def test_discover_yields_new_and_changed_only_and_keeps_window(db) -> None:  # type: ignore[no-untyped-def]
+def _list_calls(http: FakeHttp, since: int = 0) -> list[str]:
+    """The list-page URLs requested since `since` — the discovery budget of a run."""
+    return [c for c in http.calls[since:] if c.startswith(BASE)]
+
+
+async def _run(adapter: OlxAdapter, source: Source) -> tuple[list[str], SeenWindow | None]:
+    """Drive one discovery run the way `run_source` does: discover → fetch each → seen_window."""
+    found: list[str] = []
+    async for ref in adapter.discover(source):
+        found.append(ref.external_id)
+        try:
+            await adapter.fetch(ref)
+        except ListingGone:
+            pass
+    return found, await adapter.seen_window(source)
+
+
+async def test_discover_yields_new_and_changed_only_and_keeps_window() -> None:
     adapter, http = _adapter(_routes())
     source = Source(kind="olx", name="olx", config={"url": BASE}, state={})
     refs = [r async for r in adapter.discover(source)]
     assert [r.external_id for r in refs] == ["65000001", "65000002", "65000003"]
     assert refs[0].posted_at == datetime.fromisoformat("2026-08-28T00:55:10+05:00")
+    assert http.calls == [BASE, BASE + "&page=2"]  # run 1 walks every page to the end
+    for ref in refs:
+        await adapter.fetch(ref)
     window = await adapter.seen_window(source)
     assert window is not None and window.ids == {"65000001", "65000002", "65000003"}
-    assert window.oldest_posted_at == min(r.posted_at for r in refs if r.posted_at)
     assert set(source.state["known"]) == window.ids and source.state["run_counter"] == 1
-    # second run: nothing changed → no refs; a changed signature → one ref
-    assert [r async for r in adapter.discover(source)] == []
+
+    # second run: nothing changed → no refs, and the walk stops after page 1
+    calls = len(http.calls)
+    found, _ = await _run(adapter, source)
+    assert found == [] and _list_calls(http, calls) == [BASE]
+
+    # a changed signature → one ref, and the walk goes on past page 1 again
     source.state = {**source.state, "known": {**source.state["known"], "65000002": "stale"}}
-    assert [r.external_id async for r in adapter.discover(source)] == ["65000002"]
+    calls = len(http.calls)
+    found, _ = await _run(adapter, source)
+    assert found == ["65000002"] and _list_calls(http, calls) == [BASE, BASE + "&page=2"]
+
+
+async def test_removal_window_ignores_promoted_ads_and_uses_last_refresh() -> None:
+    # ad 65000002 is the trap: created 2026-07-01 but hoisted to the top as a promoted
+    # ad, so min(createdTime) would push the removal boundary six weeks back over pages
+    # the walk never visited. Demoted, its own lastRefreshTime is the honest boundary.
+    routes = _routes()
+    routes[BASE] = (200, _demote(LIST_HTML, "fixture-2-ID00002").encode())
+    adapter, _ = _adapter(routes)
+    source = Source(kind="olx", name="olx", config={"url": BASE}, state={})
+    _, window = await _run(adapter, source)
+    assert window is not None
+    assert window.ids == {"65000001", "65000002", "65000003"}
+    assert window.oldest_posted_at == datetime.fromisoformat("2026-08-29T14:01:58+05:00")
+
+
+async def test_removal_window_falls_back_to_created_time() -> None:
+    routes = _routes()
+    page = _demote(LIST_HTML, "fixture-3-ID00003")
+    routes[BASE] = (200, _without_last_refresh(page, "2026-08-28T15:21:03+05:00").encode())
+    adapter, _ = _adapter(routes)
+    source = Source(kind="olx", name="olx", config={"url": BASE}, state={})
+    _, window = await _run(adapter, source)
+    assert window is not None
+    assert window.oldest_posted_at == datetime.fromisoformat("2026-08-10T15:20:45+05:00")
+
+
+async def test_all_promoted_walk_leaves_the_removal_window_open() -> None:
+    # every ad in the recorded fixture is promoted: nothing bounds the walk, so removal
+    # detection is disabled for the run while the ids are still marked seen
+    adapter, _ = _adapter(_routes())
+    source = Source(kind="olx", name="olx", config={"url": BASE}, state={})
+    _, window = await _run(adapter, source)
+    assert window is not None
+    assert window.ids == {"65000001", "65000002", "65000003"}
+    assert window.oldest_posted_at is None
+
+
+async def test_failed_fetch_leaves_the_ad_unknown_so_it_is_retried() -> None:
+    routes = _routes()
+    adapter, _ = _adapter(routes)
+    source = Source(kind="olx", name="olx", config={"url": BASE}, state={})
+    refs = [r async for r in adapter.discover(source)]
+    for ref in refs:
+        if ref.external_id != "65000002":  # 65000002's fetch blows up this run
+            await adapter.fetch(ref)
+    await adapter.seen_window(source)
+    assert set(source.state["known"]) == {"65000001", "65000003"}
+
+    found, _ = await _run(adapter, source)
+    assert found == ["65000002"]
+    assert set(source.state["known"]) == {"65000001", "65000002", "65000003"}
+
+
+async def test_listing_gone_counts_as_handled() -> None:
+    routes = _routes()
+    routes.pop(str(list_ads(extract_state(LIST_HTML))[1]["url"]))  # 65000002 → 404 → gone
+    adapter, _ = _adapter(routes)
+    source = Source(kind="olx", name="olx", config={"url": BASE}, state={})
+    found, _ = await _run(adapter, source)
+    assert found == ["65000001", "65000002", "65000003"]
+    assert set(source.state["known"]) == {"65000001", "65000002", "65000003"}
+    found, _ = await _run(adapter, source)
+    assert found == []
+
+
+async def test_full_walk_drops_a_delisted_ad_from_known() -> None:
+    routes = _routes()
+    adapter, http = _adapter(routes, full_walk_every=2)
+    source = Source(kind="olx", name="olx", config={"url": BASE}, state={})
+    found, _ = await _run(adapter, source)
+    assert found == ["65000001", "65000002", "65000003"]
+    assert set(source.state["known"]) == {"65000001", "65000002", "65000003"}
+
+    # run 2 is a full walk again (full_walk_every=2) and 65000002 is no longer listed
+    routes[BASE] = (200, _without_ad(LIST_HTML, "65000002", "65000003").encode())
+    calls = len(http.calls)
+    found, window = await _run(adapter, source)
+    assert found == []  # the two survivors are unchanged, so nothing is re-yielded
+    assert _list_calls(http, calls) == [BASE, BASE + "&page=2"]  # full walk despite fresh == 0
+    assert window is not None and window.ids == {"65000001", "65000003"}
+    assert set(source.state["known"]) == {"65000001", "65000003"}
+
+
+async def test_404_on_the_first_list_page_is_a_failure_not_an_empty_walk() -> None:
+    adapter, _ = _adapter({})
+    source = Source(kind="olx", name="olx", config={"url": BASE}, state={})
+    with pytest.raises(RuntimeError, match="olx list page 1"):
+        _ = [r async for r in adapter.discover(source)]
+
+
+async def test_404_on_a_later_list_page_ends_pagination() -> None:
+    adapter, http = _adapter(_routes())
+    source = Source(kind="olx", name="olx", config={"url": BASE}, state={})
+    refs = [r async for r in adapter.discover(source)]
+    assert len(refs) == 3 and http.calls == [BASE, BASE + "&page=2"]
 
 
 async def test_fetch_uses_detail_page_and_phone_endpoint() -> None:
@@ -146,6 +295,9 @@ async def test_fetch_uses_detail_page_and_phone_endpoint() -> None:
     ) == (55000, "USD")
     assert ("phone", "+998931793333") in p.contact_hints
     assert http.calls[-1].endswith("/limited-phones/")
+    # the verbatim payload keeps what the API actually returned; normalisation is a
+    # parsing decision that reparse must be free to redo
+    assert p.payload["phones"] == ["+99 893 1793333"]
 
 
 async def test_fetch_without_phone_endpoint_still_works() -> None:
@@ -183,12 +335,17 @@ async def test_fetch_404_and_inactive_raise_listing_gone() -> None:
         await adapter.fetch(RawRef(external_id="65000001", url=url, posted_at=None))
 
 
-async def test_http_429_raises_backoff_and_bumps_state() -> None:
-    adapter, _ = _adapter({BASE: (429, b"slow down")})
+@pytest.mark.parametrize("status", [429, 403])
+async def test_blocked_http_status_raises_backoff_with_a_one_minute_floor(status: int) -> None:
+    # escalation is the pipeline's job (it owns source.state); the adapter only names the
+    # shortest sane pause and why
+    adapter, _ = _adapter({BASE: (status, b"slow down")})
     source = Source(kind="olx", name="olx", config={"url": BASE}, state={})
     with pytest.raises(AdapterBackoff) as info:
         _ = [r async for r in adapter.discover(source)]
-    assert info.value.retry_after == timedelta(minutes=1) and source.state["backoff_level"] == 1
+    assert info.value.retry_after == timedelta(minutes=1)
+    assert info.value.reason == f"olx http {status} from www.olx.uz"
+    assert "backoff_level" not in source.state
 
 
 async def test_rebuild_payload_round_trips_and_photo_download() -> None:

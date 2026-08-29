@@ -83,6 +83,22 @@ def ad_signature(ad: dict[str, Any]) -> str:
     return f"{ad.get('lastRefreshTime')}|{amount}|{currency}"
 
 
+def ad_time(ad: dict[str, Any], key: str) -> datetime | None:
+    """Read one of the ad's ISO timestamps (`createdTime`, `lastRefreshTime`, ...).
+
+    Timezone-aware by protocol (`RawRef.posted_at`): a naive value would blow up later
+    when `recompute` orders it against aware timestamps, so reject it here where the ad
+    id is still at hand instead of at the far end of the pipeline.
+    """
+    raw = ad.get(key)
+    if not raw:
+        return None
+    value = datetime.fromisoformat(str(raw))
+    if value.tzinfo is None:
+        raise ValueError(f"ad {ad.get('id')}: naive {key} {raw!r}")
+    return value
+
+
 def _description_text(raw: str | None) -> str:
     text = _TAGS.sub("\n", raw or "")
     text = _ANY_TAG.sub("", text)
@@ -102,19 +118,18 @@ def ad_to_payload(ad: dict[str, Any], phones: list[str]) -> RawPayload:
     user_id = (ad.get("user") or {}).get("id")
     if user_id is not None:
         hints.append(("olx_user", str(user_id)))
-    normalized = [p for p in (normalize_phone(x) for x in phones) if p]
-    hints.extend(("phone", p) for p in normalized)
-    created = ad.get("createdTime")
-    posted_at = datetime.fromisoformat(created) if created else None
+    hints.extend(("phone", p) for p in (normalize_phone(x) for x in phones) if p)
     text = f"{structured['title']}\n{_description_text(ad.get('description'))}".strip()
     return RawPayload(
         external_id=str(ad["id"]),
         url=ad.get("url"),
-        posted_at=posted_at,
+        posted_at=ad_time(ad, "createdTime"),
         text=text,
         structured=structured,
         sender_username=None,
         contact_hints=hints,
         photo_refs=list(ad.get("photos") or []),
-        payload={"ad": ad, "phones": normalized},
+        # verbatim: the payload records what the source served, so `reparse` can redo
+        # today's normalisation with tomorrow's rules
+        payload={"ad": ad, "phones": list(phones)},
     )

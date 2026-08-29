@@ -23,6 +23,7 @@ from app.ingestion.adapters.base import (
     RawPayload,
     SourceAdapter,
 )
+from app.ingestion.http import bump_backoff, reset_backoff
 from app.ingestion.parse import parse_text
 from app.ingestion.photos import prune_photos, save_listing_photo
 from app.modules.contacts.scoring import (
@@ -316,8 +317,22 @@ async def run_source(
                     await recompute(session, prop)
         source.consecutive_failures = 0
         source.status = "ok"
+        reset_backoff(source)
     except AdapterBackoff as exc:
-        _pause(source, run, now, exc.retry_after, "paused", exc.reason)
+        # Escalation lives here, not in the adapter: a blocked detail page or photo has
+        # no `source` to bump, and a backoff is not counted as a failure, so without a
+        # rising pause the worker would retry a blocked source every interval forever.
+        # max(): the source's own retry_after (a Telegram flood wait) is a floor to obey,
+        # never a ceiling to shorten.
+        level, delay = bump_backoff(source)
+        log.warning(
+            "source_backoff",
+            source=source.name,
+            backoff_level=level + 1,
+            reason=exc.reason,
+            retry_after=str(max(exc.retry_after, delay)),
+        )
+        _pause(source, run, now, max(exc.retry_after, delay), "paused", exc.reason)
     except LoginRequired as exc:
         _pause(source, run, now, timedelta(hours=1), "login_required", str(exc) or "login required")
     except Exception as exc:  # noqa: BLE001

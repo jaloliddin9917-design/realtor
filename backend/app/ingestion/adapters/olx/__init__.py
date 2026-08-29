@@ -3,6 +3,7 @@
 import json
 import uuid
 from collections.abc import AsyncIterator
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
@@ -12,20 +13,14 @@ import structlog
 from app.ingestion.adapters.base import AdapterBackoff, ListingGone, RawPayload, RawRef
 from app.ingestion.adapters.olx.state import (
     ad_signature,
+    ad_time,
     ad_to_payload,
     detail_ad,
     extract_state,
     list_ads,
     list_pages,
 )
-from app.ingestion.http import (
-    HttpClient,
-    HttpResponse,
-    RateLimiter,
-    backoff_delay,
-    bump_backoff,
-    reset_backoff,
-)
+from app.ingestion.http import HttpClient, HttpResponse, RateLimiter, backoff_delay
 from app.modules.listings.models import RawListing, Source
 from app.modules.listings.service import SeenWindow
 
@@ -34,16 +29,25 @@ PHONES_URL = "https://www.olx.uz/api/v1/offers/{id}/limited-phones/"
 
 
 def page_url(base: str, page: int) -> str:
+    if page <= 1:
+        return base  # the category URL as configured; page 1 needs no rewriting at all
     parts = urlsplit(base)
     query = [(k, v) for k, v in parse_qsl(parts.query, keep_blank_values=True) if k != "page"]
-    if page > 1:
-        query.append(("page", str(page)))
+    query.append(("page", str(page)))
     # safe=":" — urlencode's default quoting escapes ":" to "%3A", which would mangle
-    # OLX's own query values (e.g. "created_at:desc") on every call, including a no-op
-    # page=1. Both forms are equivalent over HTTP, but leaving ":" alone matches what a
-    # browser sends and keeps the URL stable when nothing actually changed.
+    # OLX's own query values (e.g. "created_at:desc"). Both forms are equivalent over
+    # HTTP, but leaving ":" alone matches what a browser sends.
     encoded = urlencode(query, safe=":")
     return urlunsplit((parts.scheme, parts.netloc, parts.path, encoded, parts.fragment))
+
+
+@dataclass
+class _Walk:
+    """What one `discover` pass saw, held until `seen_window` closes the run out."""
+
+    walked: dict[str, str] = field(default_factory=dict)  # external_id → signature
+    boundary: list[datetime] = field(default_factory=list)
+    full: bool = False
 
 
 class OlxAdapter:
@@ -64,30 +68,34 @@ class OlxAdapter:
             full_walk_every,
             phone_lookup,
         )
-        self._windows: dict[uuid.UUID, SeenWindow] = {}
+        self._walks: dict[uuid.UUID, _Walk] = {}
+        self._confirmed: dict[str, str] = {}
 
-    async def _get(self, url: str, source: Source | None = None) -> HttpResponse:
+    async def _get(self, url: str) -> HttpResponse:
         await self.limiter.wait()
         response = await self.http.get(url)
         if response.status in (403, 429):
-            if source is not None:
-                _, delay = bump_backoff(source)
-            else:
-                delay = backoff_delay(0)
-            raise AdapterBackoff(delay, f"olx http {response.status}")
+            # the shortest sane pause; escalating it across runs is the pipeline's job,
+            # since it — not the adapter — owns source.state and sees every call site
+            raise AdapterBackoff(
+                backoff_delay(0), f"olx http {response.status} from {urlsplit(url).netloc}"
+            )
         return response
 
     async def discover(self, source: Source) -> AsyncIterator[RawRef]:
         base = str(source.config["url"])
         known: dict[str, str] = dict(source.state.get("known", {}))
         run_counter = int(source.state.get("run_counter", 0)) + 1
-        full_walk = run_counter == 1 or run_counter % self.full_walk_every == 0
-        new_known: dict[str, str] = {}
-        ids: set[str] = set()
-        created: list[datetime] = []
+        walk = _Walk(full=run_counter == 1 or run_counter % self.full_walk_every == 0)
+        self._walks[source.id] = walk
         for page in range(1, self.max_pages + 1):
-            response = await self._get(page_url(base, page), source)
+            url = page_url(base, page)
+            response = await self._get(url)
             if response.status == 404:
+                if page == 1:
+                    # the category URL itself is gone or wrong — a failed run the circuit
+                    # breaker must see, not an empty catalogue
+                    raise RuntimeError(f"olx list page 1 not found: {url}")
                 break
             if response.status != 200:
                 raise RuntimeError(f"olx list page {page}: http {response.status}")
@@ -98,13 +106,19 @@ class OlxAdapter:
             fresh = 0
             for ad in ads:
                 ext, sig = str(ad["id"]), ad_signature(ad)
-                new_known[ext] = sig
-                ids.add(ext)
-                posted = (
-                    datetime.fromisoformat(ad["createdTime"]) if ad.get("createdTime") else None
-                )
-                if posted is not None:
-                    created.append(posted)
+                walk.walked[ext] = sig
+                posted = ad_time(ad, "createdTime")
+                # OLX hoists promoted ads to the top of a created_at:desc list whatever
+                # their age, so their timestamps say nothing about how far back the walk
+                # reached — they stay in `ids` but never bound the removal window. For
+                # the rest prefer lastRefreshTime: the list may be ordered by creation or
+                # by last refresh, and since lastRefreshTime >= createdTime for every ad,
+                # the minimum last-refresh time of the walked, non-promoted ads is a
+                # boundary the walk has fully covered under either ordering.
+                if not (ad.get("isPromoted") or ad.get("isHighlighted")):
+                    edge = ad_time(ad, "lastRefreshTime") or posted
+                    if edge is not None:
+                        walk.boundary.append(edge)
                 if known.get(ext) != sig:
                     fresh += 1
                     yield RawRef(
@@ -113,19 +127,32 @@ class OlxAdapter:
             page_number, total_pages = list_pages(state)
             if page_number + 1 >= total_pages:
                 break
-            if not full_walk and fresh == 0:
+            if not walk.full and fresh == 0:
                 break
-        self._windows[source.id] = SeenWindow(
-            ids=ids, oldest_posted_at=min(created) if created else None
-        )
-        source.state = {
-            **source.state,
-            "known": {**known, **new_known} if not full_walk else new_known,
-            "run_counter": run_counter,
-        }
-        reset_backoff(source)
+        source.state = {**source.state, "run_counter": run_counter}
+
+    def _confirm(self, ref: RawRef) -> None:
+        """Record that this ad was handled, so `seen_window` may call it known.
+
+        Only a fetch that came back (or found the ad gone) counts: an ad whose fetch
+        failed must stay out of `known` or the next `discover` would skip it until OLX
+        happens to change its signature. `fetch_by_url` carries no signature and so
+        never touches `known`.
+        """
+        sig = ref.meta.get("sig")
+        if sig is not None:
+            self._confirmed[ref.external_id] = str(sig)
 
     async def fetch(self, ref: RawRef) -> RawPayload:
+        try:
+            payload = await self._fetch(ref)
+        except ListingGone:
+            self._confirm(ref)  # delisted is handled, not failed
+            raise
+        self._confirm(ref)
+        return payload
+
+    async def _fetch(self, ref: RawRef) -> RawPayload:
         if not ref.url:
             raise ListingGone(ref.external_id)
         response = await self._get(ref.url)
@@ -146,7 +173,7 @@ class OlxAdapter:
         except AdapterBackoff:
             raise
         except Exception as exc:  # noqa: BLE001 — best-effort by design (spec §3.3)
-            log.info("olx_phones_failed", ad_id=ad_id, error=str(exc))
+            log.warning("olx_phones_failed", ad_id=ad_id, error=str(exc))
             return []
         if response.status != 200:
             return []
@@ -160,7 +187,29 @@ class OlxAdapter:
         return await self.fetch(RawRef(external_id="", url=url, posted_at=None))
 
     async def seen_window(self, source: Source) -> SeenWindow | None:
-        return self._windows.pop(source.id, None)
+        """Close out the run: settle `source.state["known"]` and report the window.
+
+        Called by `run_source` after the fetch loop, which is the first moment we know
+        which of the walked ads were actually handled.
+        """
+        walk = self._walks.pop(source.id, None)
+        if walk is None:
+            return None
+        confirmed = {e: self._confirmed.pop(e) for e in list(self._confirmed) if e in walk.walked}
+        known: dict[str, str] = dict(source.state.get("known", {}))
+        if walk.full:
+            # rebuilt from what is listed now, so delisted ads drop out — and so do ads
+            # whose fetch failed, which are then re-yielded next run
+            new_known = {
+                e: s for e, s in walk.walked.items() if s == known.get(e) or e in confirmed
+            }
+        else:
+            # a partial walk saw only the first pages; everything else keeps what it had
+            new_known = {**known, **confirmed}
+        source.state = {**source.state, "known": new_known}
+        return SeenWindow(
+            ids=set(walk.walked), oldest_posted_at=min(walk.boundary) if walk.boundary else None
+        )
 
     async def download_photo(self, ref: Any) -> bytes:
         response = await self._get(str(ref))
