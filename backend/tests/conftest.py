@@ -26,6 +26,9 @@ BACKEND_DIR = Path(__file__).resolve().parents[1]
 @pytest.fixture(scope="session")
 async def engine() -> AsyncIterator[AsyncEngine]:
     url = get_settings().test_database_url
+    assert url.rsplit("/", 1)[-1].startswith("realtor_test"), (
+        f"refusing to reset non-test database {url!r}"
+    )
     reset = create_async_engine(url, isolation_level="AUTOCOMMIT")
     async with reset.connect() as conn:
         await conn.execute(text("DROP SCHEMA public CASCADE"))
