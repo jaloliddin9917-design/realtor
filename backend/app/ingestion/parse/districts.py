@@ -4,7 +4,7 @@ from app.ingestion.parse.normalize import translit
 
 # canonical key → alias patterns, matched on translit(text). Longer/more specific first.
 DISTRICTS: dict[str, list[str]] = {
-    "mirzo_ulugbek": [r"mirzo[\s-]*ulug'?bek\w*", r"\bm\.?\s*ulug'?bek\w*", r"\bttz\b"],
+    "mirzo_ulugbek": [r"\bmirzo[\s-]*ulug'?bek\w*", r"\bm\.?\s*ulug'?bek\w*", r"\bttz\b"],
     "chilonzor": [r"\bchilonzor\w*", r"\bchilanzar\w*", r"\bch[\s-]?zor\b"],
     "yunusobod": [r"\byunusobod\w*", r"\byunusabad\w*", r"\byu[\s-]?obod\b"],
     "yakkasaroy": [r"\byakkasaroy\w*", r"\byakkasaray\w*"],

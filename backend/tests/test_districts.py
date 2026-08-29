@@ -29,6 +29,7 @@ from app.ingestion.parse.districts import match_district
         ("Yangihayot tumani", "yangihayot"),
         ("Янги хаёт", "yangihayot"),
         ("2-xonali kvartira, evro remont", None),
+        ("Amirzo Ulugbek fasoni", None),
     ],
 )
 def test_match_district(text: str, expected: str | None) -> None:
