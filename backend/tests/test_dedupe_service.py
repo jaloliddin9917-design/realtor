@@ -9,7 +9,7 @@ from app.ingestion.photos import save_listing_photo
 from app.modules.dedupe.blocking import find_candidates
 from app.modules.dedupe.config import load_config
 from app.modules.dedupe.models import DedupeReview
-from app.modules.dedupe.service import assign, gather_inputs
+from app.modules.dedupe.service import assign, gather_inputs, strip_for_similarity
 from app.modules.listings.models import Listing, Source
 from app.modules.listings.service import persist_parsed, upsert_raw
 from app.modules.properties.service import create_from_listing
@@ -146,3 +146,16 @@ async def test_attribute_key_blocks_without_phone_or_photo(db: AsyncSession) -> 
     prop = await create_from_listing(db, a, NOW)
     b = await _listing(db, s, "2", "Chilonzor 2 xonali 3/9 qavat 54 kv 455$")
     assert [p.id for p in await find_candidates(db, b)] == [prop.id]
+
+
+def test_strip_for_similarity_removes_phones_prices_emoji_and_urls() -> None:
+    text = (
+        "Chilonzor 2-xonali 3/9 evro remont 🔥 450$ tel +998 90 811 24 37 "
+        "https://t.me/toshkent_ijara/123 www.olx.uz/obyavlenie/abc 5 940 700 so'm"
+    )
+    stripped = strip_for_similarity(text)
+    assert "998" not in stripped and "811" not in stripped
+    assert "450" not in stripped and "940" not in stripped
+    assert "🔥" not in stripped
+    assert "http" not in stripped and "t.me" not in stripped and "olx.uz" not in stripped
+    assert "chilonzor" in stripped and "evro remont" in stripped

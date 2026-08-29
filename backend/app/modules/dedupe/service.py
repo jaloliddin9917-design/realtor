@@ -16,7 +16,11 @@ from app.modules.properties.models import Property
 from app.modules.properties.service import attach, create_from_listing
 
 _STRIP = re.compile(
-    r"(\+?\d[\d\s()-]{6,}\d)|([\$€]\s?\d[\d\s.,]*)|(\d[\d\s.,]*\s*(?:\$|so'm|сум|сўм|у\.е\.?|usd))|[\U0001F300-\U0001FAFF☀-➿]",
+    r"(https?://\S+|www\.\S+|\bt\.me/\S+)"  # urls
+    r"|(\+?\d[\d\s()-]{6,}\d)"  # phones
+    r"|([\$€]\s?\d[\d\s.,]*)"  # currency-first prices
+    r"|(\d[\d\s.,]*(?:\$|so'm|сум|сўм|у\.е\.?|usd))"  # currency-last prices
+    r"|[\U0001F300-\U0001FAFF\U0001F1E6-\U0001F1FF☀-➿⬀-⯿]",  # emoji and symbols
     re.IGNORECASE,
 )
 
