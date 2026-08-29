@@ -1936,7 +1936,7 @@ import uuid
 from collections.abc import AsyncIterator
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 from urllib.parse import urlsplit
 
 from pydantic import BaseModel
@@ -1950,7 +1950,7 @@ from app.modules.dedupe.config import DedupeConfig
 from app.modules.listings.models import RawListing, Source
 from app.modules.listings.service import SeenWindow
 
-if False:  # pragma: no cover — typing only, avoids an import cycle at runtime
+if TYPE_CHECKING:  # the registry imports this module; import it for typing only
     from app.ingestion.registry import AdapterRegistry
 
 HOST_KINDS = {"olx.uz": "olx", "www.olx.uz": "olx", "t.me": "telegram", "telegram.me": "telegram"}
@@ -2045,8 +2045,6 @@ async def ingest_form(
     adapter = ManualAdapter({str(i): data for i, data in enumerate(photos)})
     return await ingest_payload(session, source, payload, adapter=adapter, cfg=cfg, photo_dir=photo_dir, now=now)
 ```
-Replace the `if False:` typing trick with `from typing import TYPE_CHECKING` / `if TYPE_CHECKING:` (ruff prefers it) — shown here inline for brevity.
-
 - [ ] **Step 5: Run the tests, suite and gates; commit**
 
 Run: `cd backend && .venv/bin/pytest tests/test_manual.py -q && .venv/bin/pytest -q && .venv/bin/ruff check . && .venv/bin/ruff format --check . && .venv/bin/mypy app`
@@ -2224,7 +2222,7 @@ from app.ingestion.registry import AdapterRegistry, build_registry
 from app.modules.contacts.scoring import rescore_all
 from app.modules.dedupe.config import DedupeConfig, load_config
 from app.modules.listings.fx import refresh_rate
-from app.modules.listings.models import Source
+from app.modules.listings.models import CrawlRun, Source
 from app.modules.listings.service import age_out
 from app.modules.properties.service import recompute_many
 from app.worker.models import WorkerHeartbeat
@@ -2261,24 +2259,22 @@ async def run_due_sources(
             source = await session.get(Source, source_id)
             if source is None:
                 continue
+            run_id: uuid.UUID | None = None
             try:
                 adapter = registry.for_source(source)
                 run = await run_source(session, adapter, source, cfg=cfg, photo_dir=photo_dir, now=now)
-                run_ids.append(run.id)
+                run_id = run.id
                 log.info("source_run", source=source.name, found=run.found, new=run.new, changed=run.changed, failed=run.failed, removed=run.removed, error=run.error)
-            except Exception as exc:  # noqa: BLE001 — bookkeeping is already on the session; commit it
+            except Exception as exc:  # noqa: BLE001 — the bookkeeping is already on the session; commit it
                 log.warning("source_run_failed", source=source.name, error=str(exc))
-                run_ids.extend([])
             finally:
                 await session.commit()  # the pipeline's contract: commit after return AND after raise
-        if run_ids and run_ids[-1] is None:  # pragma: no cover — defensive
-            run_ids.pop()
-    # the run id of a failed source is fetched back so callers see every run of this tick
-    async with session_factory() as session:
-        from app.modules.listings.models import CrawlRun
-
-        stmt = select(CrawlRun.id).where(CrawlRun.started_at == now, CrawlRun.source_id.in_(due))
-        return list((await session.execute(stmt)).scalars().all())
+            if run_id is None:  # a failed run's row was written by run_source before it raised
+                stmt = select(CrawlRun.id).where(CrawlRun.source_id == source_id, CrawlRun.started_at == now)
+                run_id = (await session.execute(stmt)).scalar_one_or_none()
+            if run_id is not None:
+                run_ids.append(run_id)
+    return run_ids
 
 
 def daily_due(last: datetime | None, now: datetime, tz: str, hour: int) -> bool:
@@ -2354,8 +2350,6 @@ async def main() -> None:
     await engine.dispose()
     log.info("worker_stop")
 ```
-Simplify `run_due_sources`'s return: collect `run.id` in the `try`, and in the `except` look the run up by `(source_id, started_at == now)` after the commit — replace the odd `run_ids.extend([])`/`pop` lines with that; the final `CrawlRun` query then becomes unnecessary. (Written out here so the intent is unambiguous: **every** run of the tick is returned, failed ones included.)
-
 `backend/app/worker/__main__.py`:
 ```python
 import asyncio
