@@ -19,3 +19,6 @@ backend/data/
 .idea/
 .vscode/
 .DS_Store
+
+# superpowers scratch (progress ledger, briefs)
+.superpowers/
