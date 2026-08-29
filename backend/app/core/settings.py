@@ -7,7 +7,7 @@ BACKEND_DIR = Path(__file__).resolve().parents[2]
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(env_file=str(BACKEND_DIR / ".env"), extra="ignore")
 
     database_url: str = "postgresql+asyncpg://realtor:realtor@localhost:5432/realtor"
     test_database_url: str = "postgresql+asyncpg://realtor:realtor@localhost:5432/realtor_test"
