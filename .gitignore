@@ -22,3 +22,6 @@ backend/data/
 
 # superpowers scratch (progress ledger, briefs)
 .superpowers/
+
+# parallel task worktrees
+.worktrees/
