@@ -2730,7 +2730,7 @@ from app.ingestion.photos import save_listing_photo
 from app.modules.dedupe.blocking import find_candidates
 from app.modules.dedupe.config import load_config
 from app.modules.dedupe.models import DedupeReview
-from app.modules.dedupe.service import assign, gather_inputs
+from app.modules.dedupe.service import assign, gather_inputs, strip_for_similarity
 from app.modules.listings.models import Listing, Source
 from app.modules.listings.service import persist_parsed, upsert_raw
 from app.modules.properties.service import create_from_listing
@@ -2762,6 +2762,19 @@ async def _listing(db: AsyncSession, source: Source, ext: str, text_: str, photo
 OWNER_TEXT = "Chilonzor, Qatortol, 2-xonali, 3/9 qavat, 54 m², evro remont, mebel va texnika bilan, uzoq muddatga, faqat oilaga. 450$. Tel 90 811 24 37"
 AGENT_TEXT = "Chilonzor Qatortol 2 xonali 3/9 qavat 55 m² evro remont mebel texnika bor uzoq muddat oila uchun 480$ xizmat 50% tel 93 402 18 55"
 OTHER_TEXT = "Yunusobod 11-kvartal 3-xonali 5/9 78 m² 650$ tel 94 128 44 60"
+
+
+def test_strip_for_similarity_removes_phones_prices_emoji_and_urls() -> None:
+    text = (
+        "Chilonzor 2-xonali 3/9 evro remont 🔥 450$ tel +998 90 811 24 37 "
+        "https://t.me/toshkent_ijara/123 www.olx.uz/obyavlenie/abc 5 940 700 so'm"
+    )
+    stripped = strip_for_similarity(text)
+    assert "998" not in stripped and "811" not in stripped
+    assert "450" not in stripped and "940" not in stripped
+    assert "🔥" not in stripped
+    assert "http" not in stripped and "t.me" not in stripped and "olx.uz" not in stripped
+    assert "chilonzor" in stripped and "evro remont" in stripped
 
 
 async def test_same_phone_and_shared_photo_merge(db: AsyncSession, tmp_path: Path) -> None:
@@ -2903,7 +2916,14 @@ from app.modules.listings.models import Listing, ListingContact, ListingPhoto
 from app.modules.properties.models import Property
 from app.modules.properties.service import attach, create_from_listing
 
-_STRIP = re.compile(r"(\+?\d[\d\s()-]{6,}\d)|([\$€]\s?\d[\d\s.,]*)|(\d[\d\s.,]*\s*(?:\$|so'm|сум|сўм|у\.е\.?|usd))|[\U0001F300-\U0001FAFF☀-➿]", re.IGNORECASE)
+_STRIP = re.compile(
+    r"(https?://\S+|www\.\S+|\bt\.me/\S+)"  # urls (first, so a url's digits never look like a phone)
+    r"|(\+?\d[\d\s()-]{6,}\d)"  # phones
+    r"|([\$€]\s?\d[\d\s.,]*)"  # currency-first prices
+    r"|(\d[\d\s.,]*(?:\$|so'm|сум|сўм|у\.е\.?|usd))"  # currency-last prices
+    r"|[\U0001F300-\U0001FAFF\U0001F1E6-\U0001F1FF\u2600-\u27BF\u2B00-\u2BFF]",  # emoji and symbols
+    re.IGNORECASE,
+)
 
 
 def strip_for_similarity(text: str) -> str:
