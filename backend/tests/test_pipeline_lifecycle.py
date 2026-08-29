@@ -1,6 +1,7 @@
 from datetime import timedelta
 from pathlib import Path
 
+import pytest
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -119,34 +120,51 @@ async def test_attach_rescores_every_contact_of_the_property(
     db: AsyncSession, tmp_path: Path
 ) -> None:
     s = await _source(db)
-    # Same posting channel (shared telegram contact) as well as matching photo/rooms/floor/
-    # area/price puts the pair's dedupe score at 1.0 (contact 0.5 + photo 0.3 + rooms_floors
-    # 0.1 + area 0.05 + price 0.05), safely over merge_threshold=0.75 so the second listing
-    # actually attaches — without a shared identity, this config's weights cap a non-contact
-    # match at 0.65, which never reaches "attached" (see task-2-report.md for the trace).
-    first = payload("1", OWNER, NOW - timedelta(days=1), photos=["1"], username="chilonzor_arenda")
+    # Same posting channel (shared telegram contact) so the pair merges: contact 0.5 +
+    # photo 0.3 + rooms/floors 0.1 + area 0.05 + price 0.05 = 1.0 ≥ merge_threshold.
+    # The first poster is an agent (marker +0.3); once the second listing attaches, the
+    # first listing is the earliest in the property (−0.1) → 0.3 becomes 0.2 — a change
+    # only property-wide rescoring produces (the new listing's own contacts rescored).
+    agent_text = (
+        "Chilonzor, Qatortol, 2-xonali, 3/9 qavat, 54 m², evro remont. Rieltor. "
+        "450$. Tel 90 811 24 37"
+    )
+    first = payload(
+        "1",
+        agent_text,
+        NOW - timedelta(days=1),
+        photos=["1"],
+        username="chilonzor_arenda",
+    )
+    await run_source(
+        db, FakeAdapter([first], None), s, cfg=CFG, photo_dir=tmp_path, now=NOW - timedelta(days=1)
+    )
+    agent = (
+        await db.execute(select(Contact).where(Contact.identifier == "+998908112437"))
+    ).scalar_one()
+    assert (
+        agent.agency_score == pytest.approx(0.3) and agent.classification == "owner"
+    )  # ≤ 0.3, alone on its property
     second = payload(
         "2",
         "Chilonzor 2-xonali 3/9 54 m² 430$ tel 93 402 18 55",
         NOW,
         photos=["1"],
         username="chilonzor_arenda",
-    )  # cheaper, later, other phone, same channel
-    await run_source(
+    )
+    run = await run_source(
         db, FakeAdapter([first, second], None), s, cfg=CFG, photo_dir=tmp_path, now=NOW
     )
-    owner = (
-        await db.execute(select(Contact).where(Contact.identifier == "+998908112437"))
-    ).scalar_one()
-    agent = (
+    assert run.new == 1
+    assert (await db.execute(select(func.count()).select_from(Property))).scalar_one() == 1
+    await db.refresh(agent)
+    assert agent.agency_score == pytest.approx(
+        0.2
+    )  # rescored after the attach: earliest of two listings
+    other = (
         await db.execute(select(Contact).where(Contact.identifier == "+998934021855"))
     ).scalar_one()
-    # after the second listing attached, the first contact is no longer "cheapest" — its
-    # score was recomputed
-    assert (
-        owner.agency_score == 0.0 and agent.agency_score == 0.0
-    )  # both single-property, no markers; earliest vs cheapest cancel to 0 either way
-    assert (await db.execute(select(func.count()).select_from(Property))).scalar_one() == 1
+    assert other.agency_score == pytest.approx(0.0)  # cheapest of two, clamped at 0
 
 
 async def test_age_out_returns_affected_properties(db: AsyncSession, tmp_path: Path) -> None:
