@@ -16,6 +16,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -76,7 +77,15 @@ class RawListing(IdMixin, TimestampMixin, Base):
 
 class Listing(IdMixin, TimestampMixin, Base):
     __tablename__ = "listings"
-    __table_args__ = (Index("ix_listings_attr_key", "district", "rooms", "floor", "total_floors"),)
+    __table_args__ = (
+        Index("ix_listings_attr_key", "district", "rooms", "floor", "total_floors"),
+        Index(
+            "ix_listings_description_trgm",
+            "description",
+            postgresql_using="gin",
+            postgresql_ops={"description": "gin_trgm_ops"},
+        ),
+    )
 
     raw_listing_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("raw_listings.id", ondelete="CASCADE"), unique=True, nullable=False
@@ -129,6 +138,13 @@ class ListingContact(Base):
 
 class ListingPhoto(IdMixin, Base):
     __tablename__ = "listing_photos"
+    __table_args__ = (
+        Index(
+            "ix_listing_photos_bucket",
+            text("((phash >> 48) & 65535)"),
+            postgresql_where=text("phash IS NOT NULL"),
+        ),
+    )
 
     listing_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("listings.id", ondelete="CASCADE"), nullable=False, index=True

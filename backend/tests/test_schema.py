@@ -50,10 +50,19 @@ async def test_status_events_are_append_only(db: AsyncSession) -> None:
     )
     db.add(ev)
     await db.flush()
+    # Each statement runs in its own savepoint: the trigger aborts the savepoint on
+    # failure, so without one the UPDATE's failure would poison the whole transaction
+    # and the following DELETE could never run.
     with pytest.raises(DBAPIError):
-        await db.execute(
-            text("UPDATE property_status_events SET note = 'x' WHERE id = :id"), {"id": ev.id}
-        )
+        async with db.begin_nested():
+            await db.execute(
+                text("UPDATE property_status_events SET note = 'x' WHERE id = :id"), {"id": ev.id}
+            )
+    with pytest.raises(DBAPIError):
+        async with db.begin_nested():
+            await db.execute(
+                text("DELETE FROM property_status_events WHERE id = :id"), {"id": ev.id}
+            )
 
 
 async def test_contact_identity_is_unique(db: AsyncSession) -> None:

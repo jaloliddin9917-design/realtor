@@ -1,6 +1,5 @@
-.PHONY: venv up down migrate revision test lint typecheck
+.PHONY: venv up down migrate revision check-migrations test lint typecheck
 
-VENV := backend/.venv
 COMPOSE := docker compose -f deploy/docker-compose.dev.yml
 
 venv:
@@ -17,6 +16,9 @@ migrate:
 
 revision:
 	cd backend && .venv/bin/alembic revision --autogenerate -m "$(m)"
+
+check-migrations:
+	cd backend && .venv/bin/alembic upgrade head && .venv/bin/alembic check
 
 test: up
 	cd backend && .venv/bin/pytest -q
