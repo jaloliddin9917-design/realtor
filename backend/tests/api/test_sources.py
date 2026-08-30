@@ -1,5 +1,5 @@
 import uuid
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 import httpx
@@ -99,16 +99,15 @@ async def test_list_shows_last_run_and_fx_banner_state(
         and row["config"] == {"url": "https://www.olx.uz/x/"}
     )
     assert row["last_run"]["found"] == 6 and row["last_run"]["error"] == "boom"
-    db.add(
-        FxRate(date=date.today() - timedelta(days=10), usd_uzs=Decimal("12500.00"), fetched_at=NOW)
-    )
+    today = datetime.now(UTC).date()  # matches the router's own `datetime.now(UTC).date()`
+    db.add(FxRate(date=today - timedelta(days=10), usd_uzs=Decimal("12500.00"), fetched_at=NOW))
     await db.flush()
     fx = (await client.get("/api/v1/sources", headers=h)).json()["fx"]
     assert fx["stale"] is True and fx["usd_uzs"] == "12500.00"
-    db.add(FxRate(date=date.today(), usd_uzs=Decimal("12600.00"), fetched_at=NOW))
+    db.add(FxRate(date=today, usd_uzs=Decimal("12600.00"), fetched_at=NOW))
     await db.flush()
     fx = (await client.get("/api/v1/sources", headers=h)).json()["fx"]
-    assert fx["stale"] is False and fx["date"] == date.today().isoformat()
+    assert fx["stale"] is False and fx["date"] == today.isoformat()
 
 
 async def test_add_telegram_source_validates_the_peer(
@@ -220,3 +219,28 @@ async def test_runs_returns_the_newest_twenty(
     assert len(runs) == 20 and [x["found"] for x in runs] == list(range(20))
     r = await client.get(f"/api/v1/sources/{uuid.uuid4()}/runs", headers=h)
     assert r.status_code == 404
+
+
+async def test_list_breaks_started_at_ties_by_highest_run_id(
+    client: httpx.AsyncClient, settings: Settings, admin: User, db: AsyncSession
+) -> None:
+    h = auth_headers(settings, admin)
+    src = Source(kind="olx", name="olx-tie", config={"url": "https://www.olx.uz/tie/"})
+    db.add(src)
+    await db.flush()
+    a, b = uuid.uuid4(), uuid.uuid4()
+    hi, lo = (a, b) if a > b else (b, a)
+    # Both runs share started_at; only `id` breaks the tie. Insert the higher id
+    # first so a naive "last row wins" bug (no ORDER BY -> arbitrary DB row order)
+    # would surface the lower id's `found` instead of the correct one.
+    db.add_all(
+        [
+            CrawlRun(id=hi, source_id=src.id, started_at=NOW, found=42),
+            CrawlRun(id=lo, source_id=src.id, started_at=NOW, found=7),
+        ]
+    )
+    await db.flush()
+    r = await client.get("/api/v1/sources", headers=h)
+    assert r.status_code == 200, r.text
+    (row,) = r.json()["items"]
+    assert row["last_run"]["found"] == 42

@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 from typing import Protocol, runtime_checkable
 
 from fastapi import APIRouter
-from sqlalchemy import and_, func, select
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
 from app.api.deps import AdminUser, RegistryDep, SessionDep
@@ -34,15 +34,14 @@ class PeerResolver(Protocol):
 async def _last_runs(session: SessionDep, source_ids: list[uuid.UUID]) -> dict[uuid.UUID, CrawlRun]:
     if not source_ids:
         return {}
-    latest = (
-        select(CrawlRun.source_id, func.max(CrawlRun.started_at).label("started"))
+    # DISTINCT ON (source_id), ordered started_at DESC, id DESC: picks one deterministic
+    # row per source even when two runs share the same started_at (matches source_runs'
+    # tie-break below).
+    stmt = (
+        select(CrawlRun)
+        .distinct(CrawlRun.source_id)
         .where(CrawlRun.source_id.in_(source_ids))
-        .group_by(CrawlRun.source_id)
-        .subquery()
-    )
-    stmt = select(CrawlRun).join(
-        latest,
-        and_(latest.c.source_id == CrawlRun.source_id, latest.c.started == CrawlRun.started_at),
+        .order_by(CrawlRun.source_id, CrawlRun.started_at.desc(), CrawlRun.id.desc())
     )
     return {run.source_id: run for run in (await session.execute(stmt)).scalars()}
 
