@@ -2418,6 +2418,14 @@ git commit -m "feat(worker): scheduling loop with commit-always runs, heartbeat 
 
 ---
 
+#### Post-review amendments (Task 7, 2026-08-30)
+
+- The test helper is `tests/fakes.py::savepoint_session_factory(db)` (not `test_session_factory` — a `test_*` name imported into a test module is collected by pytest as a phantom test that asserts nothing).
+- `run_due_sources` keeps `commit()` in `finally`, but guarded: if the commit itself raises (the pipeline logs `run_bookkeeping_failed` when a DB error poisoned the transaction, after which `commit()` raises `PendingRollbackError`), it logs `source_commit_failed`, rolls back, and continues with the next source — otherwise one poisoned source would stall the whole batch on every tick because `next_run_at` never advances.
+- The `CrawlRun` fallback lookup orders by `started_at DESC LIMIT 1` (`crawl_runs` has no unique key on `(source_id, started_at)`).
+- `main()` disposes the engine and removes the signal handlers in a `finally`; `stop` is only checked between ticks, so shutdown waits for the current tick's sources (accepted for M0).
+- `test_daily_jobs_age_out_rescore_and_fx`: the 40-day-old listing is past `age_out`'s 30-day window but inside `rescore_all`'s 90-day `last_seen_at` window, so the expected result is `{"aged_out_properties": 1, "rescored_contacts": 1, "fx": 1}` (the sample asserted `0` rescored); `usd_uzs` is compared to `Decimal("12345.67")`, not a float. The tick test also asserts the `FxRate` row written by the first daily run; an extra test covers a source whose adapter kind is not registered (skipped, no `CrawlRun`, bookkeeping untouched).
+
 ### Task 8: CLI
 
 **Files:**
