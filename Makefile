@@ -1,4 +1,4 @@
-.PHONY: venv up down migrate revision check-migrations test lint typecheck worker cli
+.PHONY: venv up down migrate revision check-migrations test lint typecheck worker api cli
 
 COMPOSE := docker compose -f deploy/docker-compose.dev.yml
 
@@ -31,6 +31,9 @@ typecheck:
 
 worker:
 	cd backend && .venv/bin/python -m app.worker
+
+api:
+	cd backend && .venv/bin/python -m app.api
 
 cli:
 	cd backend && .venv/bin/python -m app.cli $(args)
