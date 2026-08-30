@@ -1,8 +1,10 @@
 """Test doubles shared by pipeline, worker and CLI tests."""
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from datetime import UTC, datetime, timedelta
 from typing import Any
+
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ingestion.adapters.base import (
     AdapterBackoff,
@@ -104,3 +106,20 @@ class FakeAdapter:
             p.get("photos"),
             p.get("username"),
         )
+
+
+async def test_session_factory(db: AsyncSession) -> Callable[[], AsyncSession]:
+    """Build a session factory bound to `db`'s own connection.
+
+    A worker's `commit()` then only releases a savepoint
+    (`join_transaction_mode="create_savepoint"`), and the test's outer transaction still
+    rolls everything back at teardown (see `tests/conftest.py`).
+    """
+    conn = await db.connection()
+
+    def factory() -> AsyncSession:
+        return AsyncSession(
+            bind=conn, expire_on_commit=False, join_transaction_mode="create_savepoint"
+        )
+
+    return factory
