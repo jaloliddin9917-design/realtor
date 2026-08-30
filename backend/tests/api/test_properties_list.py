@@ -280,7 +280,7 @@ async def test_two_listings_collapse_to_one_row_with_the_first_photo(
     row = page["items"][0]
     assert row["id"] == str(prop.id)
     assert row["listing_count"] == 2 and row["source_kinds"] == ["telegram"]
-    assert row["photo_url"] == f"/photos/{with_photo.id}/0.jpg"
+    assert row["photo_url"] == f"/api/v1/photos/{with_photo.id}/0.jpg"
 
 
 async def test_unknown_uuid_filters_do_not_crash(

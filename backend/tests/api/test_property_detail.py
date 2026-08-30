@@ -70,7 +70,8 @@ async def test_detail_shows_listings_photos_contacts_and_source(
     assert [c["identifier"] for c in listing["contacts"]] == ["+998901110001"]
     (photo,) = listing["photos"]
     assert photo["position"] == 0
-    assert photo["url"].startswith("/photos/")
+    # under /api so one reverse-proxy route serves the JSON API and the photos alike
+    assert photo["url"].startswith("/api/v1/photos/")
     assert photo["width"] and photo["height"]
     assert d["photo_url"] == photo["url"]
     img = await client.get(photo["url"])
@@ -161,3 +162,33 @@ async def test_duplicates_list_the_other_property_with_best_score(
         f"/api/v1/properties/{other.property.id}", headers=auth_headers(settings, agent)
     )
     assert r2.json()["duplicates"] == [{"property_id": str(prop.id), "score": 0.62}]
+
+
+async def test_reposting_the_same_status_writes_no_second_event(
+    client: httpx.AsyncClient, settings: Settings, agent: User, db: AsyncSession
+) -> None:
+    """`set_status` is idempotent: a second "active" returns the event already on record
+    (note and all), so a double tap in the UI cannot fill the timeline with noise."""
+    prop, _ = await seed_with_photo(db, settings)
+    h = auth_headers(settings, agent)
+    first = await client.post(
+        f"/api/v1/properties/{prop.id}/status",
+        json={"status": "active", "note": "first"},
+        headers=h,
+    )
+    assert first.status_code == 200, first.text
+    again = await client.post(
+        f"/api/v1/properties/{prop.id}/status",
+        json={"status": "active", "note": "second"},
+        headers=h,
+    )
+    assert again.status_code == 200
+    assert again.json() == first.json()
+    stmt = (
+        select(PropertyStatusEvent)
+        .where(PropertyStatusEvent.property_id == prop.id)
+        .order_by(PropertyStatusEvent.id)
+    )
+    events = (await db.execute(stmt)).scalars().all()
+    assert [e.to_status for e in events] == ["new", "active"]
+    assert [e.note for e in events] == [None, "first"]

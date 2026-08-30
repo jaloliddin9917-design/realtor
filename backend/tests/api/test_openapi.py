@@ -11,6 +11,7 @@ EXPECTED_PATHS = {
     "/api/v1/auth/login",
     "/api/v1/auth/refresh",
     "/api/v1/me",
+    "/api/v1/meta",
     "/api/v1/properties",
     "/api/v1/properties/{property_id}",
     "/api/v1/properties/{property_id}/status",
@@ -50,6 +51,24 @@ def test_error_bodies_are_part_of_the_contract() -> None:
     assert _model_of(paths["/api/v1/sources"]["get"]["responses"]["403"]) == "Problem"
     # our own 422 replaces FastAPI's auto-generated one everywhere
     assert "HTTPValidationError" not in json.dumps(paths)
+
+
+def test_closed_value_sets_are_enumerated() -> None:
+    """The web generates its client from this file: closed sets must be enums there,
+    not bare strings it has to guess at."""
+    components = create_app(Settings(_env_file=None)).openapi()["components"]["schemas"]
+    assert components["PropertyRow"]["properties"]["status"]["enum"] == [
+        "new",
+        "active",
+        "inactive",
+    ]
+    assert components["SourceRef"]["properties"]["kind"]["enum"] == ["olx", "telegram", "manual"]
+    assert components["ContactOut"]["properties"]["classification"]["enum"] == [
+        "owner",
+        "agent",
+        "unknown",
+    ]
+    assert "misconfigured" in components["SourceOut"]["properties"]["status"]["enum"]
 
 
 def test_committed_contract_is_current() -> None:

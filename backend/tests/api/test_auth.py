@@ -39,7 +39,7 @@ async def test_wrong_password_and_unknown_phone_are_401(
         assert r.headers["www-authenticate"] == "Bearer"
 
 
-async def test_refresh_rotates_and_rejects_an_access_token(
+async def test_refresh_issues_a_new_pair_and_rejects_an_access_token(
     client: httpx.AsyncClient, agent: User
 ) -> None:
     pair = (
@@ -48,6 +48,9 @@ async def test_refresh_rotates_and_rejects_an_access_token(
         )
     ).json()
     r = await client.post("/api/v1/auth/refresh", json={"refresh": pair["refresh"]})
+    # A new pair, not necessarily a different one: `exp`/`iat` have one-second
+    # resolution, so tokens minted within the same second are byte-identical. Refresh
+    # tokens are not rotated or revoked in M0 (carried to M0-4).
     assert r.status_code == 200 and set(r.json()) == {"access", "refresh", "token_type"}
     r = await client.post("/api/v1/auth/refresh", json={"refresh": pair["access"]})
     assert r.status_code == 401 and r.json()["code"] == "auth.token_invalid"

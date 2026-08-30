@@ -4,6 +4,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Protocol, runtime_checkable
 
+import structlog
 from fastapi import APIRouter
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -22,6 +23,7 @@ from app.modules.listings.schemas import (
 )
 
 router = APIRouter(tags=["sources"])
+log = structlog.get_logger()
 FX_STALE_DAYS = 7
 RUNS_LIMIT = 20
 
@@ -99,6 +101,9 @@ async def create_source(
     except AdapterBackoff as exc:
         raise ApiError(503, "source.unavailable", str(exc)) from exc
     except Exception as exc:  # Telethon raises several error types for a bad peer
+        # The 422 tells the admin their peer is wrong; only this line tells us whether it
+        # really was, or whether Telethon failed for a reason we should have handled.
+        log.warning("peer_unresolved", peer=body.peer, error=f"{type(exc).__name__}: {exc}")
         raise ApiError(
             422, "source.peer_unresolved", f"cannot resolve {body.peer!r}: {exc}"
         ) from exc

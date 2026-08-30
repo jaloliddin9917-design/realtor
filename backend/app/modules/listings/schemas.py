@@ -4,11 +4,15 @@ import uuid
 from datetime import date as _date
 from datetime import datetime
 from decimal import Decimal
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 from pydantic import BaseModel, Field
 
 from app.modules.listings.models import CrawlRun, FxRate, Source
+
+SourceKind = Literal["olx", "telegram", "manual"]
+# every value `pipeline.run_source` and `worker.loop` write to `sources.status`
+SourceStatus = Literal["ok", "failing", "login_required", "paused", "misconfigured"]
 
 
 class CrawlRunOut(BaseModel):
@@ -39,11 +43,11 @@ class CrawlRunOut(BaseModel):
 
 class SourceOut(BaseModel):
     id: uuid.UUID
-    kind: str
+    kind: SourceKind
     name: str
     enabled: bool
     interval_seconds: int
-    status: str
+    status: SourceStatus
     last_run_at: datetime | None
     next_run_at: datetime | None
     paused_until: datetime | None
@@ -55,11 +59,12 @@ class SourceOut(BaseModel):
     def from_source(cls, source: Source, last_run: CrawlRun | None) -> "SourceOut":
         return cls(
             id=source.id,
-            kind=source.kind,
+            # plain `str` columns; pydantic still validates them against the sets above
+            kind=cast(SourceKind, source.kind),
             name=source.name,
             enabled=source.enabled,
             interval_seconds=source.interval_seconds,
-            status=source.status,
+            status=cast(SourceStatus, source.status),
             last_run_at=source.last_run_at,
             next_run_at=source.next_run_at,
             paused_until=source.paused_until,

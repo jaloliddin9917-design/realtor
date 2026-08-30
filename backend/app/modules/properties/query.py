@@ -1,19 +1,28 @@
-"""Read queries behind GET /properties and GET /properties/{id}."""
+"""Read queries behind GET /properties and GET /properties/{id}.
+
+The `cast`s below turn the plain `str` columns SQLAlchemy hands back into the closed
+value sets the response schemas declare. They assert nothing: pydantic still validates
+every one on construction, so a value outside the set raises here rather than reaching
+the web as an unmodelled string.
+"""
 
 import uuid
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, cast
 
 from sqlalchemy import Select, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased, defer, selectinload
 
+from app.core.settings import PHOTO_URL_PREFIX
 from app.modules.contacts.models import Contact
 from app.modules.contacts.service import contacts_for_listing
 from app.modules.dedupe.models import DedupeReview
 from app.modules.listings.models import Listing, ListingPhoto, RawListing, Source
+from app.modules.listings.schemas import SourceKind
 from app.modules.properties.models import Property, PropertyStatusEvent
 from app.modules.properties.schemas import (
+    ContactClassification,
     ContactOut,
     DuplicateOut,
     ListingOut,
@@ -22,6 +31,7 @@ from app.modules.properties.schemas import (
     PriceOut,
     PropertyDetail,
     PropertyRow,
+    PropertyStatus,
     SortKey,
     SourceRef,
     StatusEventOut,
@@ -35,7 +45,7 @@ class PropertyFilters:
     rooms: list[int] = field(default_factory=list)
     price_min: int | None = None  # whole USD
     price_max: int | None = None
-    status: list[str] = field(default_factory=list)
+    status: list[PropertyStatus] = field(default_factory=list)
     source: str | None = None
     owner_only: bool = False
     removed: bool = False
@@ -170,7 +180,7 @@ def _owner_out(contact: Contact | None, confidence: float | None) -> OwnerOut | 
         kind=contact.kind,
         identifier=contact.identifier,
         display_name=contact.display_name,
-        classification=contact.classification,
+        classification=cast(ContactClassification, contact.classification),
         agency_score=contact.agency_score,
         confidence=confidence,
     )
@@ -186,7 +196,7 @@ def row_from(
 ) -> PropertyRow:
     return PropertyRow(
         id=prop.id,
-        status=prop.status,
+        status=cast(PropertyStatus, prop.status),
         district=prop.district,
         rooms=prop.rooms,
         floor=prop.floor,
@@ -200,7 +210,7 @@ def row_from(
         listing_count=listing_count,
         source_kinds=sorted(source_kinds),
         probable_owner=_owner_out(owner, prop.owner_confidence),
-        photo_url=f"/photos/{photo_key}" if photo_key else None,
+        photo_url=f"{PHOTO_URL_PREFIX}/{photo_key}" if photo_key else None,
         last_status_event=event_out(event),
     )
 
@@ -227,7 +237,9 @@ async def _listing_out(session: AsyncSession, listing: Listing) -> ListingOut:
     contacts = await contacts_for_listing(session, listing.id)
     return ListingOut(
         id=listing.id,
-        source=SourceRef(id=raw.source.id, kind=raw.source.kind, name=raw.source.name),
+        source=SourceRef(
+            id=raw.source.id, kind=cast(SourceKind, raw.source.kind), name=raw.source.name
+        ),
         external_id=raw.external_id,
         url=raw.url,
         title=listing.title,
@@ -253,7 +265,7 @@ async def _listing_out(session: AsyncSession, listing: Listing) -> ListingOut:
         photos=[
             PhotoOut(
                 position=p.position,
-                url=f"/photos/{p.storage_key}",
+                url=f"{PHOTO_URL_PREFIX}/{p.storage_key}",
                 width=p.width,
                 height=p.height,
             )
@@ -266,7 +278,7 @@ async def _listing_out(session: AsyncSession, listing: Listing) -> ListingOut:
                 kind=c.kind,
                 identifier=c.identifier,
                 display_name=c.display_name,
-                classification=c.classification,
+                classification=cast(ContactClassification, c.classification),
                 agency_score=c.agency_score,
             )
             for c in contacts

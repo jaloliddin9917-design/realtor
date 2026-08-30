@@ -9,13 +9,12 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.problems import PROBLEM_401, PROBLEM_403, install_problem_handlers
-from app.api.routers import auth, health, listings, properties, sources
+from app.api.routers import auth, health, listings, meta, properties, sources
 from app.core.db import make_engine, make_session_factory
-from app.core.settings import Settings, get_settings
+from app.core.settings import API_PREFIX, PHOTO_URL_PREFIX, Settings, get_settings
 from app.ingestion.registry import AdapterRegistry, build_registry
 from app.modules.dedupe.config import load_config
 
-API_PREFIX = "/api/v1"
 INSECURE_JWT_SECRET = (
     "JWT_SECRET is insecure: set a random secret of at least 32 bytes "
     "(python -c 'import secrets;print(secrets.token_urlsafe(48))') "
@@ -78,9 +77,13 @@ def create_app(
     # declares one on the route, so only the fully authenticated routers get it here.
     app.include_router(health.router, prefix=API_PREFIX)
     app.include_router(auth.router, prefix=API_PREFIX)
-    for router in (properties.router, listings.router):
+    for router in (meta.router, properties.router, listings.router):
         app.include_router(router, prefix=API_PREFIX, responses=PROBLEM_401)
     app.include_router(sources.router, prefix=API_PREFIX, responses={**PROBLEM_401, **PROBLEM_403})
     # photos are keyed <listing uuid>/<position>.jpg — unguessable, so no auth in M0
-    app.mount("/photos", StaticFiles(directory=str(cfg.photo_dir), check_dir=False), name="photos")
+    app.mount(
+        PHOTO_URL_PREFIX,
+        StaticFiles(directory=str(cfg.photo_dir), check_dir=False),
+        name="photos",
+    )
     return app

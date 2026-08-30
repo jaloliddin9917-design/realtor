@@ -6,7 +6,11 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from app.modules.listings.schemas import SourceKind
+
 SortKey = Literal["last_seen", "first_seen", "price_asc", "price_desc"]
+PropertyStatus = Literal["new", "active", "inactive"]
+ContactClassification = Literal["owner", "agent", "unknown"]
 
 
 class PriceOut(BaseModel):
@@ -20,7 +24,7 @@ class OwnerOut(BaseModel):
     kind: str
     identifier: str
     display_name: str | None
-    classification: str
+    classification: ContactClassification
     agency_score: float
     confidence: float | None
 
@@ -37,7 +41,7 @@ class StatusEventOut(BaseModel):
 
 class PropertyRow(BaseModel):
     id: uuid.UUID
-    status: str
+    status: PropertyStatus
     district: str | None
     rooms: int | None
     floor: int | None
@@ -74,13 +78,13 @@ class ContactOut(BaseModel):
     kind: str
     identifier: str
     display_name: str | None
-    classification: str
+    classification: ContactClassification
     agency_score: float
 
 
 class SourceRef(BaseModel):
     id: uuid.UUID
-    kind: str
+    kind: SourceKind
     name: str
 
 

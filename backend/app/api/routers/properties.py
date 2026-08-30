@@ -15,11 +15,12 @@ from app.modules.properties.query import (
 from app.modules.properties.schemas import (
     PropertyDetail,
     PropertyPage,
+    PropertyStatus,
     SortKey,
     StatusEventOut,
     StatusIn,
 )
-from app.modules.properties.service import STATUSES, set_status
+from app.modules.properties.service import set_status
 
 router = APIRouter(tags=["properties"])
 
@@ -32,7 +33,7 @@ async def list_properties_endpoint(
     rooms: Annotated[list[int] | None, Query()] = None,
     price_min: Annotated[int | None, Query(ge=0, description="whole USD")] = None,
     price_max: Annotated[int | None, Query(ge=0, description="whole USD")] = None,
-    status: Annotated[list[str] | None, Query()] = None,
+    status: Annotated[list[PropertyStatus] | None, Query()] = None,
     source: Annotated[Literal["olx", "telegram", "manual"] | None, Query()] = None,
     owner_only: bool = False,
     removed: Annotated[bool, Query(description="include properties removed at the source")] = False,
@@ -41,15 +42,6 @@ async def list_properties_endpoint(
     page: Annotated[int, Query(ge=1)] = 1,
     page_size: Annotated[int, Query(ge=1, le=100)] = 20,
 ) -> PropertyPage:
-    unknown = [s for s in (status or []) if s not in STATUSES]
-    if unknown:
-        message = f"unknown status {unknown[0]!r}"
-        raise ApiError(
-            422,
-            "validation_error",
-            message,
-            extra={"errors": [{"loc": ["query", "status"], "msg": message, "type": "enum"}]},
-        )
     filters = PropertyFilters(
         district=district or [],
         rooms=rooms or [],
@@ -98,5 +90,6 @@ async def set_property_status(
     )
     await session.commit()
     out = event_out(event)
-    assert out is not None  # set_status always returns an event
+    if out is None:  # set_status always returns an event; `-O` must not skip the check
+        raise RuntimeError("set_status returned no event")
     return out

@@ -38,7 +38,7 @@ python -m app.api                          # serves http://127.0.0.1:8000 (API_H
 make openapi                               # regenerates backend/openapi.json (the contract the web client is generated from)
 ```
 
-All endpoints live under `/api/v1` and expect `Authorization: Bearer <access>`; errors are RFC 7807 problems (`application/problem+json`) with a `code` such as `auth.invalid_credentials`. Log in with the phone and password created by `create-user`:
+All endpoints live under `/api/v1` and expect `Authorization: Bearer <access>`; errors are RFC 7807 problems (`application/problem+json`) with a `code` such as `auth.invalid_credentials` — the one exception is `GET /api/v1/healthz`, whose 503 body is its plain JSON status document, because an uptime monitor reads those fields. Log in with the phone and password created by `create-user`:
 
 ```
 curl -s http://127.0.0.1:8000/api/v1/auth/login -H 'content-type: application/json' \
@@ -46,4 +46,13 @@ curl -s http://127.0.0.1:8000/api/v1/auth/login -H 'content-type: application/js
 # → {"access": "...", "refresh": "...", "token_type": "bearer"}   (access 15 min, refresh 30 days)
 ```
 
-Then `GET /api/v1/properties?district=…&rooms=2&status=active&page=1`, `GET /api/v1/properties/{id}`, `POST /api/v1/properties/{id}/status {"status": "active"}`, `POST /api/v1/listings/manual {"url": "…"}`, and (admin) `GET|POST /api/v1/sources`, `PATCH /api/v1/sources/{id}`, `GET /api/v1/sources/{id}/runs`. `GET /api/v1/healthz` returns 200 only when the database answers and the worker heartbeat is under 5 minutes old. Photos are served from `/photos/<listing id>/<n>.jpg`.
+Then `POST /api/v1/auth/refresh {"refresh": "…"}` and `GET /api/v1/me` for the session itself; `GET /api/v1/meta` for the district, status, source-kind and contact-classification values the filters offer; `GET /api/v1/properties?district=…&rooms=2&status=active&page=1`, `GET /api/v1/properties/{property_id}`, `POST /api/v1/properties/{property_id}/status {"status": "active"}`, `POST /api/v1/listings/manual {"url": "…"}` and `POST /api/v1/listings/manual/form` (multipart: the same fields plus up to 10 photos); and, for admins, `GET|POST /api/v1/sources`, `PATCH /api/v1/sources/{source_id}`, `GET /api/v1/sources/{source_id}/runs`. `GET /api/v1/healthz` returns 200 only when the database answers and the worker heartbeat is under 5 minutes old. Photos are served from `/api/v1/photos/<listing id>/<n>.jpg`.
+
+#### First deployment checklist
+
+- **`JWT_SECRET`** — a real random secret, at least 32 bytes (`python -c 'import secrets;print(secrets.token_urlsafe(48))'`). The API refuses to start on the shipped placeholder or anything shorter; `ALLOW_INSECURE_JWT_SECRET=true` is for local development only.
+- **`PHOTO_DIR`** — an absolute path the API and the worker can both write to, on the volume the nightly backup covers.
+- **`CORS_ORIGINS`** — exactly the web panel's origin (comma-separated if there is more than one), not `*`.
+- **Reverse proxy** — one route for `/api` covers both the JSON API and the photos (`/api/v1/photos/…`), so there is nothing else to publish.
+- **Request-body size cap** at the proxy — `POST /api/v1/listings/manual/form` accepts up to 10 photos; the API itself does not bound the upload.
+- **`python -m app.cli telegram-login`** before enabling any Telegram source; without a session the worker parks them as `misconfigured`.

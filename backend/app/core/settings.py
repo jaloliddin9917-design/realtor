@@ -5,6 +5,12 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BACKEND_DIR = Path(__file__).resolve().parents[2]
 
+# Everything the browser talks to sits under one prefix — photos included — so a
+# deployment needs a single reverse-proxy route for `/api`. Here rather than in
+# `app/api/` because `app/modules/` builds photo URLs and must not import the API layer.
+API_PREFIX = "/api/v1"
+PHOTO_URL_PREFIX = f"{API_PREFIX}/photos"
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(

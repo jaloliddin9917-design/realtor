@@ -144,6 +144,11 @@
             "type": "number"
           },
           "classification": {
+            "enum": [
+              "owner",
+              "agent",
+              "unknown"
+            ],
             "title": "Classification",
             "type": "string"
           },
@@ -546,6 +551,61 @@
         "title": "ManualUrlIn",
         "type": "object"
       },
+      "MetaOut": {
+        "properties": {
+          "contact_classifications": {
+            "items": {
+              "enum": [
+                "owner",
+                "agent",
+                "unknown"
+              ],
+              "type": "string"
+            },
+            "title": "Contact Classifications",
+            "type": "array"
+          },
+          "districts": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Districts",
+            "type": "array"
+          },
+          "source_kinds": {
+            "items": {
+              "enum": [
+                "olx",
+                "telegram",
+                "manual"
+              ],
+              "type": "string"
+            },
+            "title": "Source Kinds",
+            "type": "array"
+          },
+          "statuses": {
+            "items": {
+              "enum": [
+                "new",
+                "active",
+                "inactive"
+              ],
+              "type": "string"
+            },
+            "title": "Statuses",
+            "type": "array"
+          }
+        },
+        "required": [
+          "districts",
+          "statuses",
+          "source_kinds",
+          "contact_classifications"
+        ],
+        "title": "MetaOut",
+        "type": "object"
+      },
       "OwnerOut": {
         "properties": {
           "agency_score": {
@@ -553,6 +613,11 @@
             "type": "number"
           },
           "classification": {
+            "enum": [
+              "owner",
+              "agent",
+              "unknown"
+            ],
             "title": "Classification",
             "type": "string"
           },
@@ -862,6 +927,11 @@
             "type": "boolean"
           },
           "status": {
+            "enum": [
+              "new",
+              "active",
+              "inactive"
+            ],
             "title": "Status",
             "type": "string"
           },
@@ -1063,6 +1133,11 @@
             "type": "boolean"
           },
           "status": {
+            "enum": [
+              "new",
+              "active",
+              "inactive"
+            ],
             "title": "Status",
             "type": "string"
           },
@@ -1179,6 +1254,11 @@
             "type": "integer"
           },
           "kind": {
+            "enum": [
+              "olx",
+              "telegram",
+              "manual"
+            ],
             "title": "Kind",
             "type": "string"
           },
@@ -1233,6 +1313,13 @@
             "title": "Paused Until"
           },
           "status": {
+            "enum": [
+              "ok",
+              "failing",
+              "login_required",
+              "paused",
+              "misconfigured"
+            ],
             "title": "Status",
             "type": "string"
           }
@@ -1275,6 +1362,11 @@
             "type": "string"
           },
           "kind": {
+            "enum": [
+              "olx",
+              "telegram",
+              "manual"
+            ],
             "title": "Kind",
             "type": "string"
           },
@@ -1845,6 +1937,42 @@
         ]
       }
     },
+    "/api/v1/meta": {
+      "get": {
+        "operationId": "meta_api_v1_meta_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetaOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "missing, invalid or expired token; or inactive user"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Meta",
+        "tags": [
+          "meta"
+        ]
+      }
+    },
     "/api/v1/properties": {
       "get": {
         "operationId": "list_properties_endpoint_api_v1_properties_get",
@@ -1933,6 +2061,11 @@
               "anyOf": [
                 {
                   "items": {
+                    "enum": [
+                      "new",
+                      "active",
+                      "inactive"
+                    ],
                     "type": "string"
                   },
                   "type": "array"
