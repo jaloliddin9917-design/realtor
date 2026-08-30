@@ -11,7 +11,7 @@
     "columns": { "property": "Квартира", "price": "Цена", "status": "Статус", "owner": "Вероятный хозяин", "listings": "Объявления", "lastEvent": "Последнее изменение", "seen": "Последний раз видели" }
   },
   "property": {
-    "back": "Квартиры", "photos": "{{count}} фото", "noPhotos": "Нет фото", "perMonth": "/ мес", "statusTitle": "Статус", "setActive": "Свободна", "setInactive": "Сдана", "note": "Комментарий", "notePlaceholder": "Необязательный комментарий", "statusChanged": "Статус обновлён",
+    "back": "Квартиры", "photos": "{{count}} фото", "noPhotos": "Нет фото", "photoAlt": "Фото квартиры", "perMonth": "/ мес", "statusTitle": "Статус", "setActive": "Свободна", "setInactive": "Сдана", "note": "Комментарий", "notePlaceholder": "Необязательный комментарий", "statusChanged": "Статус обновлён",
     "owner": "Вероятный хозяин", "confidence": "уверенность {{value}}", "noOwner": "Хозяин не определён", "contacts": "Другие контакты", "noContacts": "Контактов нет",
     "listings": "Объявления", "openSource": "Открыть в источнике", "sourceRemoved": "удалено в источнике", "duplicate": "Возможный дубликат", "duplicateOf": "Эта квартира похожа на другую (сходство {{score}})",
     "timeline": "История", "notFound": "Квартира не найдена", "attrs": { "rooms": "Комнаты", "floor": "Этаж", "area": "Площадь", "district": "Район" }

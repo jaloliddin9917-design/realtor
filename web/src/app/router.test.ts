@@ -1,6 +1,7 @@
 import { allSettled, fork } from "effector";
 import { createMemoryHistory } from "history";
 import { $districts } from "@/entities/meta";
+import { $detail } from "@/entities/property";
 import { $tokens, sessionRestored } from "@/entities/session";
 import { router, routes } from "@/shared/router";
 import { authorized } from "./router";
@@ -68,6 +69,22 @@ describe("auth guard", () => {
     await allSettled(routes.property.navigate, { scope, params: { params: { id: "p1" }, query: {} } });
     expect(scope.getState(authorized.property.$isOpened)).toBe(true);
     expect(metaCalls).toBe(1);
+  });
+
+  it("loads the property when /properties/:id opens and drops it when the route closes", async () => {
+    const scope = fork({ values: [[$tokens, { access: "a", refresh: "r" }]] });
+    const json = (body: unknown) => new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
+    vi.stubGlobal("fetch", vi.fn(async (req: Request) => {
+      if (req.url.includes("/api/v1/properties/p1")) return json({ id: "p1", status: "new", district: "chilonzor", rooms: 2, floor: 3, total_floors: 9, area_sqm: 54, price_usd_min_minor: 45000, source_removed: false, needs_recheck: false, first_seen_at: "2026-08-12T09:00:00Z", last_seen_at: "2026-08-29T12:40:00Z", listing_count: 1, source_kinds: ["olx"], probable_owner: null, photo_url: null, last_status_event: null, listings: [], status_events: [], duplicates: [] });
+      if (req.url.includes("/api/v1/properties")) return json({ items: [], total: 0, page: 1, page_size: 20 });
+      if (req.url.includes("/api/v1/meta")) return json({ districts: [], statuses: [], source_kinds: [], contact_classifications: [] });
+      return json({ id: "u", phone: "+998900000001", name: "A", role: "agent", locale: "uz" });
+    }));
+    await allSettled(router.setHistory, { scope, params: createMemoryHistory({ initialEntries: ["/properties/p1"] }) });
+    expect(scope.getState($detail)?.id).toBe("p1");
+    await allSettled(routes.properties.navigate, { scope, params: { params: {}, query: {} } });
+    expect(scope.getState(authorized.property.$isOpened)).toBe(false);
+    expect(scope.getState($detail)).toBeNull();
   });
 
   // No `notFoundRoute` (see shared/router): an unknown path is redirected, address bar and all.

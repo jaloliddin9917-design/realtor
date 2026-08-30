@@ -88,4 +88,24 @@ export default defineConfig([
       "fsd/insignificant-slice": "warn",
     },
   },
+  {
+    // The property page's four blocks (photos + price, the listings, the contacts, the status
+    // history) and the two entity rows they render. Only one page can ever show a property's
+    // detail, so each of these has exactly one consumer by construction — but folding them
+    // into pages/property would make that single file the whole screen, and `entities/listing`
+    // / `entities/contact` are the API's own nouns, reused by whatever later shows a listing
+    // or a contact outside this page. "warn" rather than "off" for the same reason as the
+    // overrides above: still visible in the report, not a hard failure.
+    files: [
+      "src/entities/listing/**",
+      "src/entities/contact/**",
+      "src/widgets/property-header/**",
+      "src/widgets/listings-list/**",
+      "src/widgets/contacts-list/**",
+      "src/widgets/status-timeline/**",
+    ],
+    rules: {
+      "fsd/insignificant-slice": "warn",
+    },
+  },
 ]);

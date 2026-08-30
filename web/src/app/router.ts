@@ -2,6 +2,7 @@ import { chainRoute, redirect, type RouteInstance, type RouteParams, type RouteP
 import { createEvent, sample } from "effector";
 import { and, not } from "patronum";
 import { $meta, loadMetaFx } from "@/entities/meta";
+import { detailCleared, fetchPropertyFx } from "@/entities/property";
 import { $isAdmin, $isAuthorized, $sessionChecked, loginFx, logout, restoreSessionFx, sessionRestored } from "@/entities/session";
 import { fetchSourcesFx } from "@/entities/source";
 import { router, routes } from "@/shared/router";
@@ -42,6 +43,11 @@ redirect({ clock: router.routeNotFound, route: routes.properties, replace: true 
 
 // load the admin sources list (and FX rate) whenever /admin/sources opens
 sample({ clock: authorized.adminSources.opened, target: fetchSourcesFx });
+
+// load the property whenever /properties/:id opens, and drop it again on the way out so the
+// next property never renders the previous one's photos while its own request is in flight
+sample({ clock: authorized.property.opened, fn: ({ params }) => params.id, target: fetchPropertyFx });
+sample({ clock: authorized.property.closed, target: detailCleared });
 
 /**
  * The API's enumerations (districts, statuses, source kinds) are fetched once per session,

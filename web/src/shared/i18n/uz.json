@@ -11,7 +11,7 @@
     "columns": { "property": "Uy", "price": "Narx", "status": "Holat", "owner": "Ehtimoliy egasi", "listings": "E'lonlar", "lastEvent": "So'nggi o'zgarish", "seen": "So'nggi ko'rilgan" }
   },
   "property": {
-    "back": "Uylar", "photos": "{{count}} rasm", "noPhotos": "Rasm yo'q", "perMonth": "/ oy", "statusTitle": "Holat", "setActive": "Faol", "setInactive": "Nofaol", "note": "Izoh", "notePlaceholder": "Ixtiyoriy izoh", "statusChanged": "Holat yangilandi",
+    "back": "Uylar", "photos": "{{count}} rasm", "noPhotos": "Rasm yo'q", "photoAlt": "Uy rasmi", "perMonth": "/ oy", "statusTitle": "Holat", "setActive": "Faol", "setInactive": "Nofaol", "note": "Izoh", "notePlaceholder": "Ixtiyoriy izoh", "statusChanged": "Holat yangilandi",
     "owner": "Ehtimoliy egasi", "confidence": "ishonch {{value}}", "noOwner": "Egasi aniqlanmagan", "contacts": "Boshqa kontaktlar", "noContacts": "Kontaktlar yo'q",
     "listings": "E'lonlar", "openSource": "Manbada ochish", "sourceRemoved": "manbadan o'chirilgan", "duplicate": "Ehtimoliy dublikat", "duplicateOf": "Bu uy boshqa uyga o'xshaydi (o'xshashlik {{score}})",
     "timeline": "Tarix", "notFound": "Uy topilmadi", "attrs": { "rooms": "Xonalar", "floor": "Qavat", "area": "Maydon", "district": "Tuman" }
