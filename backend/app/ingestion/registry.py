@@ -1,5 +1,7 @@
 """Build and look up the adapters the worker and the CLI drive."""
 
+from collections.abc import Callable
+
 from app.core.settings import Settings
 from app.ingestion.adapters.base import SourceAdapter
 from app.ingestion.adapters.olx import OlxAdapter
@@ -11,21 +13,42 @@ from app.modules.listings.models import Source
 
 
 class AdapterRegistry:
-    def __init__(self, adapters: dict[str, SourceAdapter]) -> None:
-        self._adapters = adapters
+    """Looks up a `SourceAdapter` by kind, building lazily-registered ones on first use.
+
+    `factories` lets `build_registry` defer constructing an adapter that needs
+    credentials (Telegram) until it is actually needed, so an OLX-only deployment can
+    build the registry — and run every other adapter — without Telegram configured. A
+    factory that raises is *not* cached: the next `get`/`for_source` call retries it,
+    since the underlying cause (e.g. missing credentials) may be fixed without
+    restarting the process.
+    """
+
+    def __init__(
+        self,
+        adapters: dict[str, SourceAdapter],
+        factories: dict[str, Callable[[], SourceAdapter]] | None = None,
+    ) -> None:
+        self._adapters: dict[str, SourceAdapter] = dict(adapters)
+        self._factories: dict[str, Callable[[], SourceAdapter]] = (
+            dict(factories) if factories else {}
+        )
 
     def get(self, kind: str) -> SourceAdapter:
-        return self._adapters[kind]
+        if kind in self._adapters:
+            return self._adapters[kind]
+        adapter = self._factories[kind]()  # raises KeyError for an unknown kind too
+        self._adapters[kind] = adapter
+        return adapter
 
     def for_source(self, source: Source) -> SourceAdapter:
         try:
-            return self._adapters[source.kind]
+            return self.get(source.kind)
         except KeyError as exc:
             raise ValueError(f"no adapter for source kind {source.kind!r}") from exc
 
     @property
     def kinds(self) -> list[str]:
-        return sorted(self._adapters)
+        return sorted(set(self._adapters) | set(self._factories))
 
 
 def build_registry(
@@ -38,9 +61,20 @@ def build_registry(
     olx = OlxAdapter(
         http, RateLimiter(settings.olx_request_interval), max_pages=settings.olx_max_pages
     )
-    telegram = TelegramAdapter(
-        telegram_client or make_client(settings),
-        backfill_days=settings.telegram_backfill_days,
-        rescan_limit=settings.telegram_rescan_limit,
-    )
-    return AdapterRegistry({"olx": olx, "telegram": telegram, "manual": ManualAdapter()})
+    adapters: dict[str, SourceAdapter] = {"olx": olx, "manual": ManualAdapter()}
+    factories: dict[str, Callable[[], SourceAdapter]] = {}
+    if telegram_client is not None:
+        adapters["telegram"] = TelegramAdapter(
+            telegram_client,
+            backfill_days=settings.telegram_backfill_days,
+            rescan_limit=settings.telegram_rescan_limit,
+        )
+    else:
+        # Deferred: constructing a real `TelethonClient` (via `make_client`) requires
+        # TELEGRAM_API_ID/TELEGRAM_API_HASH, which an OLX-only deployment need not have.
+        factories["telegram"] = lambda: TelegramAdapter(
+            make_client(settings),
+            backfill_days=settings.telegram_backfill_days,
+            rescan_limit=settings.telegram_rescan_limit,
+        )
+    return AdapterRegistry(adapters, factories)

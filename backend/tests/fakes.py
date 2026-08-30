@@ -13,11 +13,47 @@ from app.ingestion.adapters.base import (
     RawPayload,
     RawRef,
 )
+from app.ingestion.adapters.telegram.client import TgMessage
 from app.modules.listings.models import RawListing, Source
 from app.modules.listings.service import SeenWindow
 from tests.helpers import make_jpeg
 
 NOW = datetime(2026, 8, 29, 12, 0, tzinfo=UTC)
+
+
+class FakeTelegramClient:
+    """A `TelegramClientLike` double that fails loudly if any of its methods are called.
+
+    Used wherever a test needs to prove that some code path (registry construction, a
+    URL a regex already rejected, ...) never actually reaches out to Telegram.
+    """
+
+    async def connect(self) -> None:
+        raise AssertionError("telegram client method called unexpectedly")
+
+    async def is_user_authorized(self) -> bool:
+        raise AssertionError("telegram client method called unexpectedly")
+
+    async def resolve_peer(self, peer: str | int) -> tuple[int, str | None]:
+        raise AssertionError("telegram client method called unexpectedly")
+
+    async def iter_messages(
+        self,
+        chat_id: int,
+        *,
+        min_id: int = 0,
+        offset_date: datetime | None = None,
+        reverse: bool = False,
+        limit: int | None = None,
+    ) -> AsyncIterator[TgMessage]:
+        raise AssertionError("telegram client method called unexpectedly")
+        yield  # pragma: no cover — never reached; keeps this an async generator
+
+    async def get_messages(self, chat_id: int, ids: list[int]) -> list[TgMessage]:
+        raise AssertionError("telegram client method called unexpectedly")
+
+    async def download_photo(self, chat_id: int, message_id: int) -> bytes:
+        raise AssertionError("telegram client method called unexpectedly")
 
 
 def payload(

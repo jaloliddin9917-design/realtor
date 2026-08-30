@@ -148,6 +148,41 @@ async def test_run_due_sources_skips_a_source_with_no_registered_adapter(
     assert orphan.consecutive_failures == 0 and orphan.status == "ok"
 
 
+async def test_run_due_sources_skips_a_telegram_source_missing_credentials(
+    db: AsyncSession, tmp_path: Path
+) -> None:
+    """`registry.for_source` can raise `ValueError` not only for an unregistered kind
+    but also when a *registered* kind's lazy factory fails to build (e.g. a Telegram
+    source when TELEGRAM_API_ID/TELEGRAM_API_HASH aren't configured — see
+    `app.ingestion.registry.AdapterRegistry`). That must be treated exactly like an
+    unregistered kind: logged and skipped, never stopping the rest of the batch."""
+
+    class Olx(FakeAdapter):
+        kind = "olx"
+
+    def missing_credentials() -> FakeAdapter:
+        raise ValueError(
+            "telegram credentials are not configured (TELEGRAM_API_ID / TELEGRAM_API_HASH)"
+        )
+
+    ok = Source(kind="olx", name="ok-olx", config={"url": "x"})
+    broken = Source(kind="telegram", name="no-creds-telegram", config={"peer": "@x"})
+    db.add_all([ok, broken])
+    await db.flush()
+    registry = AdapterRegistry(
+        {"olx": Olx([payload("1", OWNER)], SeenWindow({"1"}, NOW - timedelta(days=1)))},
+        factories={"telegram": missing_credentials},
+    )
+    factory = await savepoint_session_factory(db)
+    run_ids = await run_due_sources(factory, registry, cfg=CFG, photo_dir=tmp_path, now=NOW)
+    runs = {r.source_id: r for r in (await db.execute(select(CrawlRun))).scalars().all()}
+    assert run_ids == [runs[ok.id].id]
+    assert runs[ok.id].new == 1
+    assert broken.id not in runs
+    await db.refresh(broken)
+    assert broken.consecutive_failures == 0 and broken.status == "ok"
+
+
 def test_daily_due_uses_local_date_and_hour() -> None:
     assert daily_due(None, NOW, "Asia/Tashkent", 3)
     assert not daily_due(NOW - timedelta(hours=1), NOW, "Asia/Tashkent", 3)  # already ran today

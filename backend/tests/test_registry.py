@@ -4,53 +4,15 @@ None of these touch the network or the database: `build_registry` itself never d
 (see the assertions below), so every test here is a plain, synchronous unit test.
 """
 
-from collections.abc import AsyncIterator
-from datetime import datetime
-
 import pytest
 
 from app.core.settings import Settings
 from app.ingestion.adapters.olx import OlxAdapter
 from app.ingestion.adapters.telegram import TelegramAdapter
-from app.ingestion.adapters.telegram.client import TgMessage
 from app.ingestion.manual import ManualAdapter
 from app.ingestion.registry import AdapterRegistry, build_registry
 from app.modules.listings.models import Source
-
-
-class FakeTelegramClient:
-    """A `TelegramClientLike` double that fails loudly if `build_registry` ever calls it.
-
-    `build_registry` only stores the client on `TelegramAdapter`; construction itself
-    must never touch the network, so every method here raises if actually invoked.
-    """
-
-    async def connect(self) -> None:
-        raise AssertionError("network touched during registry construction")
-
-    async def is_user_authorized(self) -> bool:
-        raise AssertionError("network touched during registry construction")
-
-    async def resolve_peer(self, peer: str | int) -> tuple[int, str | None]:
-        raise AssertionError("network touched during registry construction")
-
-    async def iter_messages(
-        self,
-        chat_id: int,
-        *,
-        min_id: int = 0,
-        offset_date: datetime | None = None,
-        reverse: bool = False,
-        limit: int | None = None,
-    ) -> AsyncIterator[TgMessage]:
-        raise AssertionError("network touched during registry construction")
-        yield  # pragma: no cover — never reached; keeps this an async generator
-
-    async def get_messages(self, chat_id: int, ids: list[int]) -> list[TgMessage]:
-        raise AssertionError("network touched during registry construction")
-
-    async def download_photo(self, chat_id: int, message_id: int) -> bytes:
-        raise AssertionError("network touched during registry construction")
+from tests.fakes import FakeTelegramClient
 
 
 def test_get_raises_key_error_for_unknown_kind() -> None:
@@ -83,3 +45,31 @@ def test_build_registry_wires_adapters_from_settings_without_touching_network_or
     assert olx.max_pages == settings.olx_max_pages
     assert isinstance(registry.get("telegram"), TelegramAdapter)
     assert isinstance(registry.get("manual"), ManualAdapter)
+
+
+def test_build_registry_defers_telegram_construction_until_first_use() -> None:
+    """No `telegram_client` injected and no TELEGRAM_API_ID/TELEGRAM_API_HASH configured
+    must not stop an OLX-only deployment: `build_registry` itself must never call
+    `make_client` (which would raise) — only actually asking for the Telegram adapter
+    should fail."""
+    settings = Settings(_env_file=None, telegram_api_id=0, telegram_api_hash="")
+    registry = build_registry(settings)
+    assert isinstance(registry.get("olx"), OlxAdapter)
+    assert "telegram" in registry.kinds
+    with pytest.raises(ValueError, match="credentials are not configured"):
+        registry.get("telegram")
+
+
+def test_registry_builds_a_factory_only_once_and_caches_the_result() -> None:
+    calls = 0
+
+    def factory() -> ManualAdapter:
+        nonlocal calls
+        calls += 1
+        return ManualAdapter()
+
+    registry = AdapterRegistry({}, factories={"telegram": factory})
+    first = registry.get("telegram")
+    second = registry.get("telegram")
+    assert first is second
+    assert calls == 1

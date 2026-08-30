@@ -9,6 +9,7 @@ from urllib.parse import urlsplit
 import typer
 from argon2 import PasswordHasher
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import make_engine, make_session_factory
@@ -47,6 +48,19 @@ def _run(fn: Callable[[AsyncSession], Awaitable[Any]]) -> Any:
             await engine.dispose()
 
     return asyncio.run(go())
+
+
+async def _require_source(session: AsyncSession, name: str) -> Source:
+    """Look up a source by name, or print an error and exit 1.
+
+    Shared by `run-source` and `reparse`, both of which take a source name on the
+    command line and must fail the same way when it doesn't exist.
+    """
+    source = (await session.execute(select(Source).where(Source.name == name))).scalar_one_or_none()
+    if source is None:
+        typer.echo(f"no source named {name}", err=True)
+        raise typer.Exit(code=1)
+    return source
 
 
 @app.command("create-user")
@@ -101,6 +115,16 @@ def add_source(
                 kind=kind, name=source_name, config=config, interval_seconds=interval, enabled=True
             )
         )
+        try:
+            await session.commit()
+        except IntegrityError:
+            # Backstop for a race between two concurrent `add-source` calls: the
+            # app-level check above raced and lost against another insert of the same
+            # name between its SELECT and this commit. `sources.name` has a unique
+            # constraint (`uq_sources_name`) for exactly this.
+            await session.rollback()
+            typer.echo(f"source {source_name} already exists", err=True)
+            raise typer.Exit(code=1) from None
         typer.echo(f"added {kind} source {source_name} (every {interval}s)")
 
     _run(go)
@@ -128,12 +152,7 @@ def list_sources() -> None:
 @app.command("run-source")
 def run_source_cmd(name: str) -> None:
     async def go(session: AsyncSession) -> None:
-        source = (
-            await session.execute(select(Source).where(Source.name == name))
-        ).scalar_one_or_none()
-        if source is None:
-            typer.echo(f"no source named {name}", err=True)
-            raise typer.Exit(code=1)
+        source = await _require_source(session, name)
         settings = get_settings()
         registry = build_registry(settings)
         try:
@@ -169,12 +188,7 @@ def reparse(
     """
 
     async def go(session: AsyncSession) -> None:
-        src = (
-            await session.execute(select(Source).where(Source.name == source))
-        ).scalar_one_or_none()
-        if src is None:
-            typer.echo(f"no source named {source}", err=True)
-            raise typer.Exit(code=1)
+        src = await _require_source(session, source)
         settings = get_settings()
         registry = build_registry(settings)
         adapter = registry.for_source(src)
@@ -182,7 +196,11 @@ def reparse(
         stmt = (
             select(RawListing).where(RawListing.source_id == src.id).order_by(RawListing.fetched_at)
         )
-        raws = (await session.execute(stmt.limit(limit) if limit else stmt)).scalars().all()
+        raws = (
+            (await session.execute(stmt.limit(limit) if limit is not None else stmt))
+            .scalars()
+            .all()
+        )
         done = failed = 0
         for raw in raws:
             try:
@@ -241,14 +259,23 @@ def add_listing(url: str = typer.Option(..., "--url")) -> None:
 
     async def go(session: AsyncSession) -> None:
         settings = get_settings()
-        result = await ingest_url(
-            session,
-            url,
-            build_registry(settings),
-            cfg=load_config(settings.dedupe_config_path),
-            photo_dir=settings.photo_dir,
-            now=datetime.now(UTC),
-        )
+        try:
+            result = await ingest_url(
+                session,
+                url,
+                build_registry(settings),
+                cfg=load_config(settings.dedupe_config_path),
+                photo_dir=settings.photo_dir,
+                now=datetime.now(UTC),
+            )
+        except ValueError as e:
+            # The up-front HOST_KINDS check above only rejects an unrecognised host; a
+            # recognised one can still fail deeper, e.g. the Telegram adapter's
+            # `fetch_by_url` raises plain `ValueError` for a `t.me` channel link with no
+            # message id, or for a message that no longer exists. Both must become a
+            # clean CLI error, not an unhandled traceback.
+            typer.echo(f"unsupported url: {e}", err=True)
+            raise typer.Exit(code=1) from e
         typer.echo(
             f"property {result.property.id} ({result.decision}); listing {result.listing.id}"
         )

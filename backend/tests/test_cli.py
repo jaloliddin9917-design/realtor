@@ -9,8 +9,10 @@ does network I/O, and `TelethonClient.login_interactive` is exercised at the
 client-wrapper level with its underlying Telethon client stubbed out.
 """
 
+import asyncio
 import os
 from collections.abc import AsyncIterator
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -18,11 +20,30 @@ from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 from typer.testing import CliRunner
 
+from app import cli as cli_module
 from app.core.settings import get_settings
+from app.ingestion.adapters.telegram import TelegramAdapter
+from app.ingestion.registry import AdapterRegistry
 from app.modules.identity.models import User
-from app.modules.listings.models import Source
+from app.modules.listings.models import RawListing, Source
+from tests.fakes import FakeTelegramClient
 
 runner = CliRunner()
+
+# Fixed literals `cli_env` creates and cleans up; kept in one place so the cleanup and
+# the tests that use these names/phone can never drift out of sync.
+CLI_TEST_PHONE = "+998900000101"
+CLI_TEST_TELEGRAM_SOURCE = "@cli_test"
+CLI_TEST_OLX_SOURCE = "olx-cli"
+CLI_TEST_REPARSE_SOURCE = "cli-reparse-test"
+CLI_TEST_SOURCE_NAMES = [CLI_TEST_TELEGRAM_SOURCE, CLI_TEST_OLX_SOURCE, CLI_TEST_REPARSE_SOURCE]
+
+
+async def _delete_cli_test_rows(engine: AsyncEngine) -> None:
+    async with AsyncSession(engine) as session:
+        await session.execute(delete(User).where(User.phone_e164 == CLI_TEST_PHONE))
+        await session.execute(delete(Source).where(Source.name.in_(CLI_TEST_SOURCE_NAMES)))
+        await session.commit()
 
 
 @pytest.fixture
@@ -30,11 +51,12 @@ async def cli_env(engine: AsyncEngine) -> AsyncIterator[None]:
     url = get_settings().test_database_url
     os.environ["DATABASE_URL"] = url
     get_settings.cache_clear()
+    # Clean up before too: a previous run that was interrupted mid-test (Ctrl-C, a
+    # crash) can leave these fixed rows committed, which would otherwise make the next
+    # run's "already exists" checks fail for the wrong reason.
+    await _delete_cli_test_rows(engine)
     yield
-    async with AsyncSession(engine) as session:
-        await session.execute(delete(User).where(User.phone_e164.in_(["+998900000101"])))
-        await session.execute(delete(Source).where(Source.name.in_(["@cli_test", "olx-cli"])))
-        await session.commit()
+    await _delete_cli_test_rows(engine)
     os.environ.pop("DATABASE_URL", None)
     get_settings.cache_clear()
 
@@ -47,7 +69,7 @@ def test_create_user_and_list(cli_env: None) -> None:
         [
             "create-user",
             "--phone",
-            "+998900000101",
+            CLI_TEST_PHONE,
             "--name",
             "Aziz",
             "--password",
@@ -59,7 +81,7 @@ def test_create_user_and_list(cli_env: None) -> None:
     assert result.exit_code == 0, result.output
     assert "Aziz" in result.output and "agent" in result.output
     again = runner.invoke(
-        app, ["create-user", "--phone", "+998900000101", "--name", "Aziz", "--password", "x"]
+        app, ["create-user", "--phone", CLI_TEST_PHONE, "--name", "Aziz", "--password", "x"]
     )
     assert again.exit_code != 0 and "exists" in again.output
 
@@ -67,7 +89,7 @@ def test_create_user_and_list(cli_env: None) -> None:
 def test_add_and_list_sources(cli_env: None) -> None:
     from app.cli import app
 
-    assert runner.invoke(app, ["add-source", "telegram", "@cli_test"]).exit_code == 0
+    assert runner.invoke(app, ["add-source", "telegram", CLI_TEST_TELEGRAM_SOURCE]).exit_code == 0
     assert (
         runner.invoke(
             app,
@@ -76,7 +98,7 @@ def test_add_and_list_sources(cli_env: None) -> None:
                 "olx",
                 "https://www.olx.uz/nedvizhimost/kvartiry/arenda-dolgosrochnaya/tashkent/",
                 "--name",
-                "olx-cli",
+                CLI_TEST_OLX_SOURCE,
                 "--interval",
                 "600",
             ],
@@ -86,11 +108,11 @@ def test_add_and_list_sources(cli_env: None) -> None:
     listed = runner.invoke(app, ["list-sources"])
     assert (
         listed.exit_code == 0
-        and "@cli_test" in listed.output
-        and "olx-cli" in listed.output
+        and CLI_TEST_TELEGRAM_SOURCE in listed.output
+        and CLI_TEST_OLX_SOURCE in listed.output
         and "600" in listed.output
     )
-    dup = runner.invoke(app, ["add-source", "telegram", "@cli_test"])
+    dup = runner.invoke(app, ["add-source", "telegram", CLI_TEST_TELEGRAM_SOURCE])
     assert dup.exit_code != 0 and "exists" in dup.output
 
 
@@ -99,6 +121,55 @@ def test_reparse_reports_counts_for_unknown_source(cli_env: None) -> None:
 
     result = runner.invoke(app, ["reparse", "--source", "does-not-exist"])
     assert result.exit_code != 0 and "no source" in result.output
+
+
+def test_reparse_limit_zero_reparses_nothing(cli_env: None) -> None:
+    """`--limit 0` must limit to zero rows, not mean "no limit" — the old
+    `stmt.limit(limit) if limit else stmt` treated the int `0` as falsy.
+
+    The raw listing's payload is deliberately empty: `rebuild_payload` would raise on
+    it if the (buggy) old code tried to reparse the row, keeping this test's failure
+    mode obvious either way and never touching `properties`/`listings`.
+
+    A plain `def` (not `async def`), like every other test here that calls
+    `runner.invoke` on a command backed by `app.cli._run`: that helper calls
+    `asyncio.run(...)` itself, which raises if the test function is already running
+    inside pytest-asyncio's own event loop. The row setup below builds its own
+    throwaway engine inside its own `asyncio.run` (mirroring `_run` itself) rather
+    than reusing the session-scoped `engine` fixture, whose pooled connections are
+    bound to a different event loop than a fresh `asyncio.run` call spins up.
+    """
+    from app.cli import app
+    from app.core.db import make_engine
+
+    async def seed() -> None:
+        engine = make_engine(get_settings().database_url)
+        try:
+            async with AsyncSession(engine) as session:
+                source = Source(
+                    kind="manual", name=CLI_TEST_REPARSE_SOURCE, config={}, enabled=False
+                )
+                session.add(source)
+                await session.flush()
+                session.add(
+                    RawListing(
+                        source_id=source.id,
+                        external_id="reparse-1",
+                        url=None,
+                        payload={},
+                        content_hash="h" * 8,
+                        fetched_at=datetime.now(UTC),
+                    )
+                )
+                await session.commit()
+        finally:
+            await engine.dispose()
+
+    asyncio.run(seed())
+
+    result = runner.invoke(app, ["reparse", "--source", CLI_TEST_REPARSE_SOURCE, "--limit", "0"])
+    assert result.exit_code == 0, result.output
+    assert "reparsed 0 listings, 0 failed" in result.output
 
 
 def test_run_source_reports_missing_source(cli_env: None) -> None:
@@ -118,6 +189,23 @@ def test_add_listing_rejects_unsupported_url(cli_env: None) -> None:
 
     result = runner.invoke(app, ["add-listing", "--url", "https://example.com/flat"])
     assert result.exit_code != 0 and "unsupported url" in result.output
+
+
+def test_add_listing_rejects_telegram_link_without_message_id(
+    cli_env: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A `t.me` URL passes the `HOST_KINDS` host precheck (the host is recognised), but
+    the Telegram adapter's own `_TME` regex rejects a channel link with no message id —
+    that plain `ValueError` from `fetch_by_url` must become a clean CLI error, not an
+    unhandled traceback. The fake client's every method raises `AssertionError` if
+    called, proving the regex check happens before any client call.
+    """
+    registry = AdapterRegistry({"telegram": TelegramAdapter(FakeTelegramClient())})
+    monkeypatch.setattr(cli_module, "build_registry", lambda settings, **kw: registry)
+
+    result = runner.invoke(cli_module.app, ["add-listing", "--url", "https://t.me/somechannel"])
+    assert result.exit_code == 1
+    assert "not a t.me message link" in result.output
 
 
 def test_telegram_login_requires_api_credentials(monkeypatch: pytest.MonkeyPatch) -> None:

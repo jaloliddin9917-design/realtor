@@ -155,6 +155,10 @@ def _translate(exc: Exception) -> Exception:
 
 
 def make_client(settings: Settings) -> TelethonClient:
+    if not settings.telegram_api_id or not settings.telegram_api_hash:
+        raise ValueError(
+            "telegram credentials are not configured (TELEGRAM_API_ID / TELEGRAM_API_HASH)"
+        )
     settings.telegram_session_path.parent.mkdir(parents=True, exist_ok=True)
     return TelethonClient(
         str(settings.telegram_session_path), settings.telegram_api_id, settings.telegram_api_hash

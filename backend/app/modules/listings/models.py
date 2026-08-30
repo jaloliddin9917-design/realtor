@@ -26,6 +26,7 @@ from app.core.db import Base, IdMixin, TimestampMixin
 
 class Source(IdMixin, TimestampMixin, Base):
     __tablename__ = "sources"
+    __table_args__ = (UniqueConstraint("name", name="uq_sources_name"),)
 
     kind: Mapped[str] = mapped_column(String(16), nullable=False)  # telegram | olx | manual
     name: Mapped[str] = mapped_column(String(120), nullable=False)

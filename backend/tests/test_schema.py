@@ -73,6 +73,16 @@ async def test_contact_identity_is_unique(db: AsyncSession) -> None:
         await db.flush()
 
 
+async def test_source_name_is_unique(db: AsyncSession) -> None:
+    """`add-source`, `run-source` and `reparse` all look sources up by name; the DB
+    constraint is the backstop for a race between two concurrent `add-source` calls."""
+    db.add(Source(kind="manual", name="dup-source", config={}, enabled=False))
+    await db.flush()
+    db.add(Source(kind="olx", name="dup-source", config={}, enabled=False))
+    with pytest.raises(DBAPIError):
+        await db.flush()
+
+
 async def test_photo_bucket_index_exists(db: AsyncSession) -> None:
     indexdef = (
         await db.execute(
