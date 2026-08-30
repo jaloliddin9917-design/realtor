@@ -153,6 +153,17 @@ class FakeAdapter:
         )
 
 
+class UrlFake(FakeAdapter):
+    def __init__(self, kind: str, p: RawPayload) -> None:
+        super().__init__([p], None)
+        self.kind = kind
+        self.urls: list[str] = []
+
+    async def fetch_by_url(self, url: str) -> RawPayload:
+        self.urls.append(url)
+        return self.payloads[0]
+
+
 async def savepoint_session_factory(db: AsyncSession) -> Callable[[], AsyncSession]:
     """Build a session factory bound to `db`'s own connection.
 

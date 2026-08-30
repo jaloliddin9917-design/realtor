@@ -6,7 +6,6 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.ingestion.adapters.base import RawPayload
 from app.ingestion.manual import (
     ManualAdapter,
     ManualListingForm,
@@ -22,22 +21,11 @@ from app.modules.contacts.service import contacts_for_listing
 from app.modules.dedupe.config import load_config
 from app.modules.listings.models import ListingPhoto, RawListing, Source
 from app.modules.listings.service import SeenWindow
-from tests.fakes import FakeAdapter, payload
+from tests.fakes import FakeAdapter, UrlFake, payload
 from tests.helpers import make_jpeg
 
 CFG = load_config(Path(__file__).resolve().parents[1] / "config" / "dedupe.yaml")
 NOW = datetime(2026, 8, 30, 12, 0, tzinfo=UTC)
-
-
-class UrlFake(FakeAdapter):
-    def __init__(self, kind: str, p: RawPayload) -> None:
-        super().__init__([p], None)
-        self.kind = kind
-        self.urls: list[str] = []
-
-    async def fetch_by_url(self, url: str) -> RawPayload:
-        self.urls.append(url)
-        return self.payloads[0]
 
 
 async def test_ingest_url_routes_by_host_and_prefers_the_enabled_source(
