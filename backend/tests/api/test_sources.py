@@ -14,10 +14,6 @@ from app.modules.identity.models import User
 from app.modules.listings.models import CrawlRun, FxRate, Source
 from tests.api.conftest import auth_headers
 
-# The short literal secret in the `settings` fixture is an intentional test fixture, not
-# a production value; PyJWT's InsecureKeyLengthWarning (HMAC key < 32 bytes) is expected noise.
-pytestmark = pytest.mark.filterwarnings("ignore::jwt.InsecureKeyLengthWarning")
-
 NOW = datetime(2026, 8, 30, 12, 0, tzinfo=UTC)
 
 

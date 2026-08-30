@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.problems import install_problem_handlers
+from app.api.problems import PROBLEM_401, PROBLEM_403, install_problem_handlers
 from app.api.routers import auth, health, listings, properties, sources
 from app.core.db import make_engine, make_session_factory
 from app.core.settings import Settings, get_settings
@@ -16,6 +16,11 @@ from app.ingestion.registry import AdapterRegistry, build_registry
 from app.modules.dedupe.config import load_config
 
 API_PREFIX = "/api/v1"
+INSECURE_JWT_SECRET = (
+    "JWT_SECRET is insecure: set a random secret of at least 32 bytes "
+    "(python -c 'import secrets;print(secrets.token_urlsafe(48))') "
+    "or ALLOW_INSECURE_JWT_SECRET=true for local development"
+)
 
 
 def create_app(
@@ -31,6 +36,11 @@ def create_app(
         engine = None
         active_registry: AdapterRegistry | None = None
         try:
+            # Checked at startup, not in `create_app`: building the app to print the
+            # OpenAPI schema (`python -m app.api openapi`, `tests/api/test_openapi.py`)
+            # needs no secret at all, and must not require one.
+            if cfg.jwt_secret_is_insecure and not cfg.allow_insecure_jwt_secret:
+                raise RuntimeError(INSECURE_JWT_SECRET)
             if session_factory is None:
                 engine = make_engine(cfg.database_url)
                 app.state.session_factory = make_session_factory(engine)
@@ -64,8 +74,13 @@ def create_app(
         allow_headers=["*"],
     )
     install_problem_handlers(app)
-    for router in (health.router, auth.router, properties.router, listings.router, sources.router):
-        app.include_router(router, prefix=API_PREFIX)
+    # health is open; the auth router's login/refresh document their own 401 and `/me`
+    # declares one on the route, so only the fully authenticated routers get it here.
+    app.include_router(health.router, prefix=API_PREFIX)
+    app.include_router(auth.router, prefix=API_PREFIX)
+    for router in (properties.router, listings.router):
+        app.include_router(router, prefix=API_PREFIX, responses=PROBLEM_401)
+    app.include_router(sources.router, prefix=API_PREFIX, responses={**PROBLEM_401, **PROBLEM_403})
     # photos are keyed <listing uuid>/<position>.jpg — unguessable, so no auth in M0
     app.mount("/photos", StaticFiles(directory=str(cfg.photo_dir), check_dir=False), name="photos")
     return app

@@ -4,7 +4,7 @@ from typing import Annotated, Literal
 from fastapi import APIRouter, Query
 
 from app.api.deps import CurrentUser, SessionDep
-from app.api.problems import ApiError
+from app.api.problems import PROBLEM_422, ApiError, problem_response
 from app.modules.properties.models import Property
 from app.modules.properties.query import (
     PropertyFilters,
@@ -24,7 +24,7 @@ from app.modules.properties.service import STATUSES, set_status
 router = APIRouter(tags=["properties"])
 
 
-@router.get("/properties", response_model=PropertyPage)
+@router.get("/properties", response_model=PropertyPage, responses=PROBLEM_422)
 async def list_properties_endpoint(
     session: SessionDep,
     _: CurrentUser,
@@ -71,7 +71,7 @@ async def list_properties_endpoint(
 @router.get(
     "/properties/{property_id}",
     response_model=PropertyDetail,
-    responses={404: {"description": "unknown property"}},
+    responses={404: problem_response("unknown property"), **PROBLEM_422},
 )
 async def property_detail(
     property_id: uuid.UUID, session: SessionDep, _: CurrentUser
@@ -85,7 +85,7 @@ async def property_detail(
 @router.post(
     "/properties/{property_id}/status",
     response_model=StatusEventOut,
-    responses={404: {"description": "unknown property"}},
+    responses={404: problem_response("unknown property"), **PROBLEM_422},
 )
 async def set_property_status(
     property_id: uuid.UUID, body: StatusIn, session: SessionDep, user: CurrentUser

@@ -17,6 +17,10 @@ class Settings(BaseSettings):
     test_database_url: str = "postgresql+asyncpg://realtor:realtor@localhost:5432/realtor_test"
     photo_dir: Path = Path("./data/photos")
     jwt_secret: str = "change-me"
+    # HS256 signs with the raw secret: anything shorter than the 32-byte digest weakens
+    # it (PyJWT warns), and the shipped placeholder is public. The API refuses to start
+    # on such a secret unless a developer opts in explicitly.
+    allow_insecure_jwt_secret: bool = False
     telegram_api_id: int = 0
     telegram_api_hash: str = ""
     telegram_session_path: Path = Path("./data/telegram.session")
@@ -33,6 +37,10 @@ class Settings(BaseSettings):
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
+
+    @property
+    def jwt_secret_is_insecure(self) -> bool:
+        return self.jwt_secret in ("", "change-me") or len(self.jwt_secret.encode()) < 32
 
     http_user_agent: str = (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "

@@ -16,10 +16,6 @@ from tests.api.conftest import auth_headers
 from tests.fakes import UrlFake, payload
 from tests.helpers import make_jpeg
 
-# The short literal secret in the `settings` fixture is an intentional test fixture, not
-# a production value; PyJWT's InsecureKeyLengthWarning (HMAC key < 32 bytes) is expected noise.
-pytestmark = pytest.mark.filterwarnings("ignore::jwt.InsecureKeyLengthWarning")
-
 AD = payload("77", "Сдаётся 2-комн, Чиланзар, 400$ +998901110009", structured={"rooms": 2})
 
 

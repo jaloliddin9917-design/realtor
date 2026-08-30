@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 
 from app.api.deps import CurrentUser, SessionDep, SettingsDep
-from app.api.problems import ApiError
+from app.api.problems import PROBLEM_401, PROBLEM_422, ApiError, problem_response
 from app.core.auth import AuthError, create_token, decode_token
 from app.core.settings import Settings
 from app.ingestion.parse import normalize_phone
@@ -22,7 +22,7 @@ def _pair(settings: Settings, user: User) -> TokenPair:
 @router.post(
     "/auth/login",
     response_model=TokenPair,
-    responses={401: {"description": "wrong phone or password"}},
+    responses={401: problem_response("wrong phone or password"), **PROBLEM_422},
 )
 async def login(body: LoginIn, session: SessionDep, settings: SettingsDep) -> TokenPair:
     phone = normalize_phone(body.phone) or body.phone.strip()
@@ -35,7 +35,7 @@ async def login(body: LoginIn, session: SessionDep, settings: SettingsDep) -> To
 @router.post(
     "/auth/refresh",
     response_model=TokenPair,
-    responses={401: {"description": "invalid or expired refresh token"}},
+    responses={401: problem_response("invalid or expired refresh token"), **PROBLEM_422},
 )
 async def refresh(body: RefreshIn, session: SessionDep, settings: SettingsDep) -> TokenPair:
     try:
@@ -48,6 +48,6 @@ async def refresh(body: RefreshIn, session: SessionDep, settings: SettingsDep) -
     return _pair(settings, user)
 
 
-@router.get("/me", response_model=UserOut)
+@router.get("/me", response_model=UserOut, responses=PROBLEM_401)
 async def me(user: CurrentUser) -> UserOut:
     return UserOut.from_user(user)

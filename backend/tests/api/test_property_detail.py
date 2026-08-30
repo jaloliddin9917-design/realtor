@@ -3,7 +3,6 @@
 import uuid
 
 import httpx
-import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -16,10 +15,6 @@ from app.modules.listings.models import Listing, Source
 from app.modules.properties.models import Property, PropertyStatusEvent
 from tests.api.conftest import auth_headers
 from tests.fakes import NOW, FakeAdapter, payload
-
-# The short literal secret in the `settings` fixture is an intentional test fixture, not
-# a production value; PyJWT's InsecureKeyLengthWarning (HMAC key < 32 bytes) is expected noise.
-pytestmark = pytest.mark.filterwarnings("ignore::jwt.InsecureKeyLengthWarning")
 
 CFG = load_config(Settings(_env_file=None).dedupe_config_path)
 

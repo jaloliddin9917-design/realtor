@@ -6,12 +6,9 @@ import pytest
 from app.core.auth import AuthError, create_token, decode_token
 from app.core.settings import Settings
 
-# The short literal secrets below are intentional test fixtures, not production
-# values; PyJWT's InsecureKeyLengthWarning (HMAC key < 32 bytes) is expected noise.
-pytestmark = pytest.mark.filterwarnings("ignore::jwt.InsecureKeyLengthWarning")
-
 NOW = datetime(2026, 8, 30, 12, 0, tzinfo=UTC)
-SETTINGS = Settings(_env_file=None, jwt_secret="test-secret")
+# 48 bytes each: HS256 signing warns (InsecureKeyLengthWarning) below 32.
+SETTINGS = Settings(_env_file=None, jwt_secret="test-secret-" * 4)
 USER = uuid.uuid4()
 
 
@@ -40,7 +37,7 @@ def test_wrong_type_secret_or_garbage_is_invalid() -> None:
     with pytest.raises(AuthError) as exc:
         decode_token(SETTINGS, refresh, expected_typ="access", now=NOW)
     assert exc.value.code == "auth.token_invalid"
-    other = Settings(_env_file=None, jwt_secret="other")
+    other = Settings(_env_file=None, jwt_secret="other-secret" * 4)
     with pytest.raises(AuthError):
         decode_token(other, refresh, expected_typ="refresh", now=NOW)
     with pytest.raises(AuthError):

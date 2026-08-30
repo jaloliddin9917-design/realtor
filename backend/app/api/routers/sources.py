@@ -9,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
 from app.api.deps import AdminUser, RegistryDep, SessionDep
-from app.api.problems import ApiError
+from app.api.problems import PROBLEM_422, ApiError, problem_response
 from app.ingestion.adapters.base import AdapterBackoff, LoginRequired
 from app.modules.listings.models import CrawlRun, FxRate, Source
 from app.modules.listings.schemas import (
@@ -76,9 +76,9 @@ async def list_sources(session: SessionDep, _: AdminUser) -> SourcesOut:
     response_model=SourceOut,
     status_code=201,
     responses={
-        409: {"description": "name taken"},
-        422: {"description": "peer cannot be resolved"},
-        503: {"description": "telegram unavailable"},
+        409: problem_response("name taken"),
+        **PROBLEM_422,
+        503: problem_response("telegram unavailable"),
     },
 )
 async def create_source(
@@ -122,7 +122,7 @@ async def create_source(
 @router.patch(
     "/sources/{source_id}",
     response_model=SourceOut,
-    responses={404: {"description": "unknown source"}},
+    responses={404: problem_response("unknown source"), **PROBLEM_422},
 )
 async def patch_source(
     source_id: uuid.UUID, body: SourcePatchIn, session: SessionDep, _: AdminUser
@@ -140,7 +140,7 @@ async def patch_source(
 @router.get(
     "/sources/{source_id}/runs",
     response_model=list[CrawlRunOut],
-    responses={404: {"description": "unknown source"}},
+    responses={404: problem_response("unknown source"), **PROBLEM_422},
 )
 async def source_runs(source_id: uuid.UUID, session: SessionDep, _: AdminUser) -> list[CrawlRunOut]:
     await _require_source(session, source_id)

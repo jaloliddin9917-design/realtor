@@ -20,7 +20,9 @@ from app.modules.identity.service import create_user
 def settings(tmp_path: Path) -> Settings:
     return Settings(
         _env_file=None,
-        jwt_secret="test-secret",
+        # 48 bytes: long enough that HS256 signing raises no InsecureKeyLengthWarning and
+        # that `create_app`'s startup guard lets the app boot.
+        jwt_secret="test-secret-" * 4,
         photo_dir=tmp_path / "photos",
         telegram_api_id=0,
         telegram_api_hash="",

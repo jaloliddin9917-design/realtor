@@ -9,7 +9,7 @@ from fastapi import APIRouter, File, Form, UploadFile
 from pydantic import BaseModel
 
 from app.api.deps import CurrentUser, DedupeConfigDep, RegistryDep, SessionDep, SettingsDep
-from app.api.problems import ApiError
+from app.api.problems import PROBLEM_422, ApiError, problem_response
 from app.ingestion.adapters.base import AdapterBackoff, ListingGone, LoginRequired
 from app.ingestion.manual import HOST_KINDS, ManualListingForm, ingest_form, ingest_url
 from app.ingestion.pipeline import IngestResult
@@ -40,8 +40,9 @@ def _result(r: IngestResult) -> ManualResult:
     response_model=ManualResult,
     status_code=201,
     responses={
-        422: {"description": "unsupported or invalid url"},
-        503: {"description": "source unavailable"},
+        410: problem_response("the listing no longer exists at the source"),
+        **PROBLEM_422,
+        503: problem_response("the source is unavailable, blocked or misconfigured"),
     },
 )
 async def add_listing_by_url(
@@ -78,7 +79,9 @@ async def add_listing_by_url(
     return _result(result)
 
 
-@router.post("/listings/manual/form", response_model=ManualResult, status_code=201)
+@router.post(
+    "/listings/manual/form", response_model=ManualResult, status_code=201, responses=PROBLEM_422
+)
 async def add_listing_by_form(
     session: SessionDep,
     _: CurrentUser,

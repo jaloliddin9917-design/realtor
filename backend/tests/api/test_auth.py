@@ -1,17 +1,12 @@
 from datetime import UTC, datetime, timedelta
 
 import httpx
-import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth import create_token
 from app.core.settings import Settings
 from app.modules.identity.models import User
 from tests.api.conftest import PASSWORD, auth_headers
-
-# The short literal secret in the `settings` fixture is an intentional test fixture, not
-# a production value; PyJWT's InsecureKeyLengthWarning (HMAC key < 32 bytes) is expected noise.
-pytestmark = pytest.mark.filterwarnings("ignore::jwt.InsecureKeyLengthWarning")
 
 
 async def test_login_returns_a_pair_that_opens_me(client: httpx.AsyncClient, agent: User) -> None:

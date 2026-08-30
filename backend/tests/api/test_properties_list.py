@@ -21,10 +21,6 @@ from app.modules.properties.service import attach, set_status
 from tests.api.conftest import auth_headers
 from tests.fakes import NOW, FakeAdapter, payload
 
-# The short literal secret in the `settings` fixture is an intentional test fixture, not
-# a production value; PyJWT's InsecureKeyLengthWarning (HMAC key < 32 bytes) is expected noise.
-pytestmark = pytest.mark.filterwarnings("ignore::jwt.InsecureKeyLengthWarning")
-
 CFG = load_config(Settings(_env_file=None).dedupe_config_path)
 
 
