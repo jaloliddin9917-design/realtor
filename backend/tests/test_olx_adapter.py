@@ -1,4 +1,5 @@
 import json
+import uuid
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -225,18 +226,72 @@ async def test_all_promoted_walk_leaves_the_removal_window_open() -> None:
 
 async def test_failed_fetch_leaves_the_ad_unknown_so_it_is_retried() -> None:
     routes = _routes()
+    url = str(list_ads(extract_state(LIST_HTML))[1]["url"])
+    routes[url] = (500, b"boom")  # 65000002's fetch blows up this run
     adapter, _ = _adapter(routes)
     source = Source(kind="olx", name="olx", config={"url": BASE}, state={})
     refs = [r async for r in adapter.discover(source)]
     for ref in refs:
-        if ref.external_id != "65000002":  # 65000002's fetch blows up this run
+        if ref.external_id == "65000002":
+            with pytest.raises(RuntimeError):
+                await adapter.fetch(ref)
+        else:
             await adapter.fetch(ref)
     await adapter.seen_window(source)
     assert set(source.state["known"]) == {"65000001", "65000003"}
 
+    routes[url] = (200, DETAIL_HTML.encode())  # OLX recovers by the next run
     found, _ = await _run(adapter, source)
     assert found == ["65000002"]
     assert set(source.state["known"]) == {"65000001", "65000002", "65000003"}
+
+
+async def test_aborted_run_does_not_leak_a_stale_confirmation_into_the_next_run() -> None:
+    # A run that confirms an ad via `fetch` but never reaches `seen_window` (e.g. an
+    # `AdapterBackoff` from a later fetch, which `run_source` re-raises without calling
+    # `seen_window` at all) must not let that confirmation survive into the next run:
+    # if the ad's fetch then genuinely fails, it must stay out of `known`.
+    routes = _routes()
+    url = str(list_ads(extract_state(LIST_HTML))[0]["url"])  # 65000001
+    adapter, _ = _adapter(routes)
+    source = Source(kind="olx", name="olx", config={"url": BASE}, state={})
+
+    refs = [r async for r in adapter.discover(source)]
+    await adapter.fetch(next(r for r in refs if r.external_id == "65000001"))
+    # the run aborts here — no `seen_window` call, as if a later fetch had raised
+
+    routes[url] = (500, b"boom")  # this run, 65000001's fetch genuinely fails
+    refs = [r async for r in adapter.discover(source)]
+    for ref in refs:
+        if ref.external_id == "65000001":
+            with pytest.raises(RuntimeError):
+                await adapter.fetch(ref)
+        else:
+            await adapter.fetch(ref)
+    await adapter.seen_window(source)
+    assert "65000001" not in source.state["known"]
+
+
+async def test_confirmations_do_not_leak_between_sources_sharing_one_adapter() -> None:
+    # A worker registry may hand the same OlxAdapter instance to several Source rows;
+    # one source's in-flight confirmations must not be visible to, or consumable by,
+    # another source's `seen_window`.
+    adapter, _ = _adapter(_routes())
+    source_a = Source(kind="olx", name="a", config={"url": BASE}, state={}, id=uuid.uuid4())
+    source_b = Source(kind="olx", name="b", config={"url": BASE}, state={}, id=uuid.uuid4())
+
+    refs_a = [r async for r in adapter.discover(source_a)]
+    await adapter.fetch(next(r for r in refs_a if r.external_id == "65000001"))
+    # source A's run is still in flight (no seen_window yet) when source B runs and closes out
+
+    _ = [r async for r in adapter.discover(source_b)]
+    window_b = await adapter.seen_window(source_b)
+    assert window_b is not None
+    assert "65000001" not in source_b.state.get("known", {})
+
+    window_a = await adapter.seen_window(source_a)
+    assert window_a is not None
+    assert "65000001" in source_a.state["known"]
 
 
 async def test_listing_gone_counts_as_handled() -> None:

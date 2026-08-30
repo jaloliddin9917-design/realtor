@@ -69,7 +69,7 @@ class OlxAdapter:
             phone_lookup,
         )
         self._walks: dict[uuid.UUID, _Walk] = {}
-        self._confirmed: dict[str, str] = {}
+        self._confirmed: dict[str, dict[str, str]] = {}
 
     async def _get(self, url: str) -> HttpResponse:
         await self.limiter.wait()
@@ -88,6 +88,12 @@ class OlxAdapter:
         run_counter = int(source.state.get("run_counter", 0)) + 1
         walk = _Walk(full=run_counter == 1 or run_counter % self.full_walk_every == 0)
         self._walks[source.id] = walk
+        # a fresh confirmation set per pass: a worker registry may share one adapter
+        # instance across several sources, and a run that aborts before `seen_window`
+        # (an `AdapterBackoff` from a later fetch — `run_source` re-raises it without
+        # ever calling `seen_window`) must not let this source's stale confirmations
+        # from an earlier attempt survive into this one
+        self._confirmed[str(source.id)] = {}
         for page in range(1, self.max_pages + 1):
             url = page_url(base, page)
             response = await self._get(url)
@@ -122,7 +128,10 @@ class OlxAdapter:
                 if known.get(ext) != sig:
                     fresh += 1
                     yield RawRef(
-                        external_id=ext, url=ad.get("url"), posted_at=posted, meta={"sig": sig}
+                        external_id=ext,
+                        url=ad.get("url"),
+                        posted_at=posted,
+                        meta={"sig": sig, "source_id": str(source.id)},
                     )
             page_number, total_pages = list_pages(state)
             if page_number + 1 >= total_pages:
@@ -136,12 +145,15 @@ class OlxAdapter:
 
         Only a fetch that came back (or found the ad gone) counts: an ad whose fetch
         failed must stay out of `known` or the next `discover` would skip it until OLX
-        happens to change its signature. `fetch_by_url` carries no signature and so
-        never touches `known`.
+        happens to change its signature. `fetch_by_url` carries no signature or source
+        id and so never touches `known`. Confirmations are filed under the source the
+        ref came from (`discover` stashed it in `meta`) so that one adapter instance
+        serving several sources cannot mix them up, and `discover` resets each source's
+        set at the top of every pass so a stale confirmation can never outlive its run.
         """
-        sig = ref.meta.get("sig")
-        if sig is not None:
-            self._confirmed[ref.external_id] = str(sig)
+        sig, source_id = ref.meta.get("sig"), ref.meta.get("source_id")
+        if sig is not None and source_id is not None:
+            self._confirmed.setdefault(str(source_id), {})[ref.external_id] = str(sig)
 
     async def fetch(self, ref: RawRef) -> RawPayload:
         try:
@@ -195,7 +207,7 @@ class OlxAdapter:
         walk = self._walks.pop(source.id, None)
         if walk is None:
             return None
-        confirmed = {e: self._confirmed.pop(e) for e in list(self._confirmed) if e in walk.walked}
+        confirmed = self._confirmed.pop(str(source.id), {})
         known: dict[str, str] = dict(source.state.get("known", {}))
         if walk.full:
             # rebuilt from what is listed now, so delisted ads drop out — and so do ads
