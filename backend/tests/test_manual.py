@@ -1,5 +1,6 @@
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 import pytest
 from sqlalchemy import select
@@ -7,13 +8,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ingestion.adapters.base import RawPayload
 from app.ingestion.manual import (
+    ManualAdapter,
     ManualListingForm,
     ensure_manual_source,
+    form_payload,
     ingest_form,
     ingest_url,
     pick_source,
 )
 from app.ingestion.registry import AdapterRegistry
+from app.modules.contacts.service import contacts_for_listing
 from app.modules.dedupe.config import load_config
 from app.modules.listings.models import ListingPhoto, RawListing, Source
 from tests.fakes import FakeAdapter, payload
@@ -112,8 +116,6 @@ async def test_ingest_form_builds_listing_with_photos_and_phone(
     assert [p.phash is not None for p in photos] == [True, True]
     manual = await ensure_manual_source(db)
     assert listing.raw.source_id == manual.id and manual.enabled is False
-    from app.modules.contacts.service import contacts_for_listing
-
     assert [(c.kind, c.identifier) for c in await contacts_for_listing(db, listing.id)] == [
         ("phone", "+998977156002")
     ]
@@ -127,3 +129,72 @@ async def test_ensure_manual_source_is_idempotent(db: AsyncSession) -> None:
         and (await db.execute(select(Source).where(Source.kind == "manual"))).scalars().one().name
         == "manual"
     )
+
+
+async def test_ingest_url_rejects_telegram_me(db: AsyncSession, tmp_path: Path) -> None:
+    """`telegram.me` is a dead route: `TelegramAdapter.fetch_by_url` only ever accepts
+    `t.me` links, so it must be treated like any other unsupported host, not routed to
+    the telegram adapter at all. An empty registry is enough — a correct fix never
+    calls into it for this host.
+    """
+    registry = AdapterRegistry({})
+    with pytest.raises(ValueError, match="unsupported url"):
+        await ingest_url(
+            db, "https://telegram.me/x/5", registry, cfg=CFG, photo_dir=tmp_path, now=NOW
+        )
+
+
+async def test_manual_adapter_rebuild_payload_round_trips_stored_form(
+    db: AsyncSession, tmp_path: Path
+) -> None:
+    form = ManualListingForm(
+        title="Chilonzor",
+        description="2-xonali, 3/9 qavat",
+        price_amount_minor=45000,
+        price_currency="USD",
+        rooms=2,
+        floor=3,
+        total_floors=9,
+        area_sqm=54.0,
+        district="chilonzor",
+        phone="90 811 24 37",
+    )
+    photos = [make_jpeg(300, 200, 1), make_jpeg(300, 200, 2)]
+    result = await ingest_form(db, form, photos, cfg=CFG, photo_dir=tmp_path, now=NOW)
+    raw = (
+        await db.execute(select(RawListing).where(RawListing.id == result.listing.raw_listing_id))
+    ).scalar_one()
+    original = form_payload(raw.external_id, form, len(photos), NOW)
+    rebuilt = await ManualAdapter().rebuild_payload(raw)
+    assert rebuilt.external_id == original.external_id
+    assert rebuilt.text == original.text
+    assert rebuilt.structured == original.structured
+    assert rebuilt.contact_hints == original.contact_hints
+    assert rebuilt.photo_refs == original.photo_refs
+
+
+async def test_ingest_form_with_zero_photos_never_calls_download_photo(
+    db: AsyncSession, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls: list[Any] = []
+    real_download = ManualAdapter.download_photo
+
+    async def counting_download_photo(self: ManualAdapter, ref: Any) -> bytes:
+        calls.append(ref)
+        return await real_download(self, ref)
+
+    monkeypatch.setattr(ManualAdapter, "download_photo", counting_download_photo)
+    form = ManualListingForm(title="Sergeli", description="1-xonali kvartira")
+    result = await ingest_form(db, form, [], cfg=CFG, photo_dir=tmp_path, now=NOW)
+    assert result.created
+    assert calls == []
+    assert (await db.execute(select(ListingPhoto))).scalars().all() == []
+
+
+async def test_ingest_form_with_unnormalisable_phone_creates_no_contact(
+    db: AsyncSession, tmp_path: Path
+) -> None:
+    form = ManualListingForm(title="Sergeli", description="1-xonali kvartira", phone="12345")
+    assert form_payload("form:x", form, 0, NOW).contact_hints == []
+    result = await ingest_form(db, form, [], cfg=CFG, photo_dir=tmp_path, now=NOW)
+    assert await contacts_for_listing(db, result.listing.id) == []

@@ -50,6 +50,15 @@ log = structlog.get_logger()
 
 @dataclass
 class IngestResult:
+    """The outcome of ingesting one payload.
+
+    `listing.raw` is NOT loaded: `persist_parsed` sets `Listing.raw_listing_id` (the FK
+    column) but never assigns the `raw` relationship itself. A caller that touches
+    `listing.raw` synchronously must first `await session.refresh(listing, ["raw"])`
+    (or otherwise eager-load it), or SQLAlchemy raises `MissingGreenlet` under
+    `AsyncSession`.
+    """
+
     listing: Listing
     property: Property
     created: bool

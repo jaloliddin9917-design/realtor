@@ -21,7 +21,7 @@ from app.modules.listings.service import SeenWindow
 if TYPE_CHECKING:  # the registry imports this module; import it for typing only
     from app.ingestion.registry import AdapterRegistry
 
-HOST_KINDS = {"olx.uz": "olx", "www.olx.uz": "olx", "t.me": "telegram", "telegram.me": "telegram"}
+HOST_KINDS = {"olx.uz": "olx", "www.olx.uz": "olx", "t.me": "telegram"}
 
 
 class ManualAdapter:
@@ -45,7 +45,12 @@ class ManualAdapter:
 
     async def rebuild_payload(self, raw: RawListing) -> RawPayload:
         p = raw.payload
-        form = ManualListingForm.model_validate({k: v for k, v in p.items() if k != "photo_count"})
+        # Filter to the form's own fields explicitly, rather than naming the extra keys
+        # (`photo_count`, `posted_at`) to drop — the round trip must not depend on
+        # pydantic's default `extra="ignore"` silently swallowing whatever isn't listed.
+        form = ManualListingForm.model_validate(
+            {k: v for k, v in p.items() if k in ManualListingForm.model_fields}
+        )
         return form_payload(
             raw.external_id,
             form,
@@ -108,6 +113,18 @@ async def pick_source(session: AsyncSession, kind: str) -> Source | None:
     return (await session.execute(stmt)).scalar_one_or_none()
 
 
+async def _with_raw(session: AsyncSession, result: IngestResult) -> IngestResult:
+    """Load `result.listing.raw` before returning.
+
+    `ingest_payload` never populates it (see `IngestResult` in `pipeline.py`), and a
+    manual-ingest result is exactly the kind of one-off object a human (CLI output, a
+    UI response) inspects right away via plain attribute access — outside an `await`,
+    which would hit SQLAlchemy's `MissingGreenlet`. Load it now, while awaited.
+    """
+    await session.refresh(result.listing, ["raw"])
+    return result
+
+
 async def ingest_url(
     session: AsyncSession,
     url: str,
@@ -127,12 +144,7 @@ async def ingest_url(
     result = await ingest_payload(
         session, source, payload, adapter=adapter, cfg=cfg, photo_dir=photo_dir, now=now
     )
-    # ingest_payload never touches listing.raw, so it stays unloaded; a caller touching it
-    # later via plain attribute access (outside an `await`) would hit SQLAlchemy's
-    # MissingGreenlet, since a manual-ingest result is exactly the kind of one-off object a
-    # human (CLI output, a UI response) inspects right away. Load it now, while awaited.
-    await session.refresh(result.listing, ["raw"])
-    return result
+    return await _with_raw(session, result)
 
 
 async def ingest_form(
@@ -150,5 +162,4 @@ async def ingest_form(
     result = await ingest_payload(
         session, source, payload, adapter=adapter, cfg=cfg, photo_dir=photo_dir, now=now
     )
-    await session.refresh(result.listing, ["raw"])  # see ingest_url — .raw stays unloaded otherwise
-    return result
+    return await _with_raw(session, result)
