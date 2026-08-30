@@ -1,0 +1,1 @@
+export { PropertyPage } from "./ui";

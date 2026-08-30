@@ -1,0 +1,37 @@
+{
+  "app": { "name": "Realtor CRM", "tagline": "Toshkent · 4 agent", "loading": "Yuklanmoqda…", "retry": "Qayta urinish", "cancel": "Bekor qilish", "save": "Saqlash", "close": "Yopish", "empty": "Hech narsa topilmadi", "menu": "Menyu" },
+  "nav": { "properties": "Uylar", "sources": "Manbalar", "logout": "Chiqish", "role": { "admin": "admin", "agent": "agent" } },
+  "lang": { "uz": "UZ", "ru": "RU" },
+  "auth": { "title": "Kirish", "phone": "Telefon", "password": "Parol", "submit": "Kirish", "phonePlaceholder": "+998 90 123 45 67" },
+  "properties": {
+    "title": "Uylar", "count": "{{count}} ta uy", "addManual": "Qo'lda qo'shish", "prev": "Oldingi", "next": "Keyingi", "page": "{{page}} / {{pages}}",
+    "rooms": "{{count}}-xonali", "floor": "{{floor}}/{{total}} qavat", "area": "{{area}} m²", "removedBadge": "manbadan o'chirilgan", "needsRecheck": "Qayta tekshirish kerak",
+    "filters": { "district": "Tuman", "all": "hammasi", "rooms": "Xonalar", "roomsPlus": "4+", "price": "Narx, $", "priceMin": "dan", "priceMax": "gacha", "status": "Holat", "source": "Manba", "ownerOnly": "Faqat egasidan", "removed": "O'chirilganlarni ham", "search": "Manzil yoki tavsif bo'yicha qidirish", "clear": "Filtrlarni tozalash", "sort": "Saralash" },
+    "sort": { "last_seen": "Eng yangi", "first_seen": "Birinchi ko'rilgan", "price_asc": "Arzon → qimmat", "price_desc": "Qimmat → arzon" },
+    "columns": { "property": "Uy", "price": "Narx", "status": "Holat", "owner": "Ehtimoliy egasi", "listings": "E'lonlar", "lastEvent": "So'nggi o'zgarish", "seen": "So'nggi ko'rilgan" }
+  },
+  "property": {
+    "back": "Uylar", "photos": "{{count}} rasm", "noPhotos": "Rasm yo'q", "perMonth": "/ oy", "statusTitle": "Holat", "setActive": "Faol", "setInactive": "Nofaol", "note": "Izoh", "notePlaceholder": "Ixtiyoriy izoh", "statusChanged": "Holat yangilandi",
+    "owner": "Ehtimoliy egasi", "confidence": "ishonch {{value}}", "noOwner": "Egasi aniqlanmagan", "contacts": "Boshqa kontaktlar", "noContacts": "Kontaktlar yo'q",
+    "listings": "E'lonlar", "openSource": "Manbada ochish", "sourceRemoved": "manbadan o'chirilgan", "duplicate": "Ehtimoliy dublikat", "duplicateOf": "Bu uy boshqa uyga o'xshaydi (o'xshashlik {{score}})",
+    "timeline": "Tarix", "notFound": "Uy topilmadi", "attrs": { "rooms": "Xonalar", "floor": "Qavat", "area": "Maydon", "district": "Tuman" }
+  },
+  "status": { "new": "Yangi", "active": "Faol", "inactive": "Nofaol" },
+  "kind": { "olx": "OLX", "telegram": "Telegram", "manual": "Qo'lda" },
+  "classification": { "owner": "Egasi", "agent": "Rieltor", "unknown": "Noma'lum" },
+  "actor": { "crawler": "Tizim", "agent": "Agent", "admin": "Admin", "bot": "Bot" },
+  "district": { "bektemir": "Bektemir", "chilonzor": "Chilonzor", "mirobod": "Mirobod", "mirzo_ulugbek": "Mirzo Ulug'bek", "olmazor": "Olmazor", "sergeli": "Sergeli", "shayxontohur": "Shayxontohur", "uchtepa": "Uchtepa", "yakkasaroy": "Yakkasaroy", "yangihayot": "Yangihayot", "yashnobod": "Yashnobod", "yunusobod": "Yunusobod" },
+  "sources": {
+    "title": "Manbalar", "add": "Kanal qo'shish", "peer": "Kanal (@username yoki t.me havola)", "name": "Nom (ixtiyoriy)", "interval": "Tekshirish oralig'i, soniya", "added": "Kanal qo'shildi", "runs": "Yurishlar", "never": "hali yo'q", "enabled": "yoqilgan", "disabled": "o'chirilgan",
+    "columns": { "name": "Nom", "kind": "Tur", "enabled": "Yoqilgan", "status": "Holat", "lastRun": "So'nggi yurish", "nextRun": "Keyingi", "failures": "Xatolar", "error": "So'nggi xato", "found": "Topildi", "new": "Yangi" },
+    "status": { "ok": "OK", "failing": "Xato", "login_required": "Login kerak", "paused": "To'xtatilgan", "misconfigured": "Sozlanmagan" },
+    "fxStale": "Valyuta kursi {{days}} kundan eski — so'mdagi narxlar noaniq bo'lishi mumkin", "fxMissing": "Valyuta kursi hali yuklanmagan"
+  },
+  "manual": { "title": "E'lonni qo'lda qo'shish", "url": "OLX yoki Telegram havolasi", "urlPlaceholder": "https://www.olx.uz/d/obyavlenie/… yoki https://t.me/kanal/123", "submit": "Qo'shish", "added": "E'lon qo'shildi" },
+  "errors": {
+    "unknown": "Kutilmagan xato. Qayta urinib ko'ring.", "network": "Server bilan aloqa yo'q", "not_found": "Topilmadi", "method_not_allowed": "Ruxsat etilmagan amal", "validation_error": "Ma'lumotlar noto'g'ri to'ldirilgan", "internal_error": "Serverda xato",
+    "auth": { "missing_token": "Tizimga kiring", "token_expired": "Sessiya muddati tugadi — qayta kiring", "token_invalid": "Sessiya yaroqsiz — qayta kiring", "user_inactive": "Foydalanuvchi faol emas", "invalid_credentials": "Telefon yoki parol noto'g'ri", "forbidden": "Bu amal uchun admin huquqi kerak" },
+    "listing": { "unsupported_url": "Faqat olx.uz va t.me havolalari qo'llab-quvvatlanadi", "invalid_url": "Havola noto'g'ri", "gone": "E'lon manbada o'chirilgan" },
+    "source": { "misconfigured": "Manba sozlanmagan (Telegram kalitlari yo'q)", "unavailable": "Manba javob bermadi — keyinroq urinib ko'ring", "login_required": "Telegram akkauntiga kirish kerak (telegram-login)", "peer_unresolved": "Kanal topilmadi", "exists": "Bunday nomli manba allaqachon bor" }
+  }
+}

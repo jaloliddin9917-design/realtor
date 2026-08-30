@@ -17,14 +17,20 @@
     "check": "pnpm typecheck && pnpm lint:fsd && pnpm test && vite build"
   },
   "dependencies": {
+    "atomic-router": "0.12.0",
+    "atomic-router-react": "0.12.1",
     "effector": "23.4.4",
     "effector-react": "23.3.0",
+    "history": "5.3.0",
+    "i18next": "26.4.0",
+    "i18next-browser-languagedetector": "8.2.1",
     "next-themes": "0.4.6",
     "openapi-fetch": "0.17.0",
     "patronum": "2.3.0",
     "radix-ui": "1.6.7",
     "react": "19.2.8",
     "react-dom": "19.2.8",
+    "react-i18next": "17.0.12",
     "sonner": "2.0.8"
   },
   "devDependencies": {

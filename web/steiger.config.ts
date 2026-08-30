@@ -16,4 +16,25 @@ export default defineConfig([
       "fsd/insignificant-slice": "warn",
     },
   },
+  {
+    // The login form is a feature (it owns effector units and drives loginFx) but only one
+    // page can ever render it, so `insignificant-slice`'s "consider merging them" advice
+    // would mean moving a feature's model into pages/ — the wrong direction. "warn" rather
+    // than "off" for the same reason as above: it stays visible without failing the gate.
+    files: ["src/features/auth/login/**"],
+    rules: {
+      "fsd/insignificant-slice": "warn",
+    },
+  },
+  {
+    // `features/i18n/switch-language` (the UZ/RU toggle) sits next to the `shared/i18n`
+    // segment (the i18next instance and key helpers), which `ambiguous-slice-names` reads as
+    // a possible mix-up. They are deliberately named after the same concern at two layers,
+    // and `@/features/i18n/switch-language` is the import path the rest of M0-4 is written
+    // against, so the group keeps its name.
+    files: ["src/features/i18n/**"],
+    rules: {
+      "fsd/ambiguous-slice-names": "warn",
+    },
+  },
 ]);
