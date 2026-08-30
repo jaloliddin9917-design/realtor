@@ -1,0 +1,22 @@
+# deploy/Caddyfile — bind-mounted into the caddy service (see docker-compose.yml).
+# DOMAIN=localhost gives Caddy's internal CA for local smoke tests; a real domain gets
+# Let's Encrypt automatically. Photos live under /api/v1/photos, so the single /api/*
+# route below covers both the JSON API and photos.
+{$DOMAIN} {
+	encode gzip
+	request_body {
+		max_size 30MB
+	}
+	handle /api/* {
+		reverse_proxy api:8000
+	}
+	handle {
+		root * /srv
+		try_files {path} /index.html
+		file_server
+	}
+	log {
+		output stdout
+		format json
+	}
+}

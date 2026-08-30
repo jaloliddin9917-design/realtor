@@ -1,0 +1,70 @@
+name: realtor
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: realtor
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: realtor
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U realtor -d realtor"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  api:
+    build: ../backend
+    image: realtor-api
+    restart: unless-stopped
+    depends_on:
+      postgres: { condition: service_healthy }
+    env_file: ../.env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://realtor:${POSTGRES_PASSWORD}@postgres:5432/realtor
+      CORS_ORIGINS: https://${DOMAIN}
+    command: sh -c "alembic upgrade head && python -m app.api"
+    volumes:
+      - ./data/photos:/data/photos
+      - ./data/telegram:/data/telegram
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/openapi.json')"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+
+  worker:
+    image: realtor-api
+    restart: unless-stopped
+    depends_on:
+      api: { condition: service_healthy }
+    env_file: ../.env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://realtor:${POSTGRES_PASSWORD}@postgres:5432/realtor
+    command: python -m app.worker
+    volumes:
+      - ./data/photos:/data/photos
+      - ./data/telegram:/data/telegram
+
+  caddy:
+    build: ../web
+    image: realtor-web
+    restart: unless-stopped
+    depends_on:
+      api: { condition: service_healthy }
+    environment:
+      DOMAIN: ${DOMAIN:?set DOMAIN in .env}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:

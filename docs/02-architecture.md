@@ -645,6 +645,7 @@ Each module directory has the same shape: `models.py`, `schemas.py`, `service.py
 
 ## 14. Deployment
 
+- **M0 implementation:** `deploy/` (`docker-compose.yml`, `Caddyfile`, `backup.sh`, `restore-check.sh`) and `docs/README.md` § Deployment are the actual, run one-server setup for this milestone — `postgres`, `api`, `worker`, `caddy` (no `redis`/queues yet, see §16 roadmap for when those arrive).
 - **One VPS located in Uzbekistan** (data localisation — §15), 4 vCPU / 8 GB is ample. Docker Compose: `postgres`, `redis`, `api`, `worker`, `web` (static), `caddy` (TLS, reverse proxy).
 - Worker and API are the same image with different commands; scale the worker to two replicas if crawling starves outreach (job queues are separate: `crawl`, `dedupe`, `outreach`, `notify`).
 - Photos on a mounted volume under `/data/photos`; `backup.sh` runs nightly `pg_dump` + photo rsync to off-site object storage, 30-day retention; restore is rehearsed before go-live.

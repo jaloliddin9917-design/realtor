@@ -48,11 +48,20 @@ curl -s http://127.0.0.1:8000/api/v1/auth/login -H 'content-type: application/js
 
 Then `POST /api/v1/auth/refresh {"refresh": "…"}` and `GET /api/v1/me` for the session itself; `GET /api/v1/meta` for the district, status, source-kind and contact-classification values the filters offer; `GET /api/v1/properties?district=…&rooms=2&status=active&page=1`, `GET /api/v1/properties/{property_id}`, `POST /api/v1/properties/{property_id}/status {"status": "active"}`, `POST /api/v1/listings/manual {"url": "…"}` and `POST /api/v1/listings/manual/form` (multipart: the same fields plus up to 10 photos); and, for admins, `GET|POST /api/v1/sources`, `PATCH /api/v1/sources/{source_id}`, `GET /api/v1/sources/{source_id}/runs`. `GET /api/v1/healthz` returns 200 only when the database answers and the worker heartbeat is under 5 minutes old. Photos are served from `/api/v1/photos/<listing id>/<n>.jpg`.
 
-#### First deployment checklist
+## Deployment
 
-- **`JWT_SECRET`** — a real random secret, at least 32 bytes (`python -c 'import secrets;print(secrets.token_urlsafe(48))'`). The API refuses to start on the shipped placeholder or anything shorter; `ALLOW_INSECURE_JWT_SECRET=true` is for local development only.
-- **`PHOTO_DIR`** — an absolute path the API and the worker can both write to, on the volume the nightly backup covers.
-- **`CORS_ORIGINS`** — exactly the web panel's origin (comma-separated if there is more than one), not `*`.
-- **Reverse proxy** — one route for `/api` covers both the JSON API and the photos (`/api/v1/photos/…`), so there is nothing else to publish.
-- **Request-body size cap** at the proxy — `POST /api/v1/listings/manual/form` accepts up to 10 photos; the API itself does not bound the upload.
-- **`python -m app.cli telegram-login`** before enabling any Telegram source; without a session the worker parks them as `misconfigured`.
+One server (data stays in Uzbekistan, spec §11), Docker Compose:
+
+```
+git clone … /srv/realtor-app && cd /srv/realtor-app
+cp .env.example .env        # fill DOMAIN, POSTGRES_PASSWORD, JWT_SECRET (≥ 32 random bytes), TELEGRAM_API_ID/HASH
+make deploy-up              # builds realtor-api + realtor-web, runs migrations, starts postgres/api/worker/caddy
+docker compose -f deploy/docker-compose.yml --env-file .env exec api python -m app.cli create-user --phone +998… --name … --role admin
+docker compose -f deploy/docker-compose.yml --env-file .env exec -it api python -m app.cli telegram-login
+```
+
+Caddy serves the web app at `https://$DOMAIN` (automatic HTTPS) and proxies `/api/*` — JSON and photos — to the API. Photos live in `deploy/data/photos`, the Telegram session in `deploy/data/telegram`, PostgreSQL in the `pgdata` volume.
+
+**Backups:** `deploy/backup.sh` (cron nightly) writes a gzipped `pg_dump` and an rsync copy of the photos into `deploy/backups/` (30-day retention) and mirrors them to `BACKUP_TARGET` when set. **Rehearse the restore once before the team starts** (acceptance §14.9): `make restore-check dump=deploy/backups/realtor-<stamp>.sql.gz` restores into a scratch database, prints row counts and drops it.
+
+**First deployment checklist:** real `JWT_SECRET`; `POSTGRES_PASSWORD`; `DOMAIN` pointing at the server (ports 80/443 open); `TELEGRAM_API_ID/HASH` and `telegram-login` before enabling Telegram sources; `deploy/data/` writable by uid 1000; the 30 MB request-body cap is in the Caddyfile; `make deploy-logs` to watch the first crawl (`GET /api/v1/healthz` turns `ok` after the worker's first heartbeat).
