@@ -7,7 +7,7 @@ from fastapi import Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.problems import ApiError
+from app.api.problems import MISSING_TOKEN, ApiError
 from app.core.auth import AuthError, decode_token
 from app.core.settings import Settings
 from app.ingestion.registry import AdapterRegistry
@@ -53,7 +53,7 @@ async def current_user(
     settings: SettingsDep,
 ) -> User:
     if credentials is None:
-        raise ApiError(401, "auth.missing_token", "missing bearer token")
+        raise ApiError(401, MISSING_TOKEN, "missing bearer token")
     try:
         claims = decode_token(settings, credentials.credentials, expected_typ="access")
     except AuthError as exc:

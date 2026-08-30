@@ -34,13 +34,16 @@ def create_app(
             app.state.session_factory = make_session_factory(engine)
         else:
             app.state.session_factory = session_factory
-        app.state.registry = registry or build_registry(cfg)
-        app.state.dedupe_config = load_config(cfg.dedupe_config_path)
-        cfg.photo_dir.mkdir(parents=True, exist_ok=True)
+        active_registry: AdapterRegistry | None = None
         try:
+            active_registry = registry or build_registry(cfg)
+            app.state.registry = active_registry
+            app.state.dedupe_config = load_config(cfg.dedupe_config_path)
+            cfg.photo_dir.mkdir(parents=True, exist_ok=True)
             yield
         finally:
-            await app.state.registry.aclose()
+            if active_registry is not None:
+                await active_registry.aclose()
             if engine is not None:
                 await engine.dispose()
 
