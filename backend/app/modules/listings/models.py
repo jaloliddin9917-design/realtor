@@ -38,9 +38,8 @@ class Source(IdMixin, TimestampMixin, Base):
     last_run_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     consecutive_failures: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     paused_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    status: Mapped[str] = mapped_column(
-        String(20), nullable=False, default="ok"
-    )  # ok | failing | login_required | paused
+    # ok | failing | login_required | paused | misconfigured (adapter cannot be built)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="ok")
 
 
 class CrawlRun(IdMixin, Base):

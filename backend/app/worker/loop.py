@@ -4,7 +4,7 @@ import asyncio
 import signal
 import uuid
 from collections.abc import Callable
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -51,6 +51,7 @@ async def run_due_sources(
     cfg: DedupeConfig,
     photo_dir: Path,
     now: datetime,
+    should_stop: Callable[[], bool] | None = None,
 ) -> list[uuid.UUID]:
     """Run every due source, one session per source, and return the `CrawlRun` ids.
 
@@ -63,22 +64,37 @@ async def run_due_sources(
     The commit itself can also fail — e.g. when `run_source`'s own bookkeeping flush
     was already poisoned (its `run_bookkeeping_failed` log) — and that must not escape
     this loop either, or a single broken source stalls every other due source behind
-    it. `due` is a fixed snapshot taken once, up front: `stop` (in `main`) is only
-    checked between ticks, not between sources, so once a tick starts, every source
-    that was due when it started gets its turn before shutdown can take effect (M0
-    accepts this latency).
+    it. `due` is a fixed snapshot taken once, up front.
+
+    `should_stop` (the worker passes its shutdown event) is checked before each source,
+    so a SIGTERM during a tick costs at most one source run instead of the whole batch.
+    A run already under way is never cancelled midway.
     """
     async with session_factory() as session:
         due = [s.id for s in await due_sources(session, now)]
     run_ids: list[uuid.UUID] = []
-    for source_id in due:
+    for position, source_id in enumerate(due):
+        if should_stop is not None and should_stop():
+            log.info("run_due_sources_stopped", remaining=len(due) - position)
+            break
         async with session_factory() as session:
             source = await session.get(Source, source_id)
             if source is None:
                 continue
-            run_id: uuid.UUID | None = None
             try:
                 adapter = registry.for_source(source)
+            except ValueError as exc:
+                # Not a transient failure: an unregistered kind, or a lazy factory that
+                # cannot build (missing credentials). Retrying it every tick would log
+                # forever and never get anywhere, so park it — visible in `list-sources`
+                # and out of `due_sources` for an hour — without counting a run failure.
+                source.status = "misconfigured"
+                source.paused_until = now + timedelta(hours=1)
+                log.warning("source_misconfigured", source=source.name, error=str(exc))
+                await session.commit()
+                continue
+            run_id: uuid.UUID | None = None
+            try:
                 run = await run_source(
                     session, adapter, source, cfg=cfg, photo_dir=photo_dir, now=now
                 )
@@ -172,12 +188,20 @@ async def tick(
     cfg: DedupeConfig,
     http: httpx.AsyncClient,
     now: datetime,
+    should_stop: Callable[[], bool] | None = None,
 ) -> None:
     """One worker cycle: heartbeat, run due sources, then the daily jobs if they're due."""
     async with session_factory() as session:
         await heartbeat(session, "worker", now)
         await session.commit()
-    await run_due_sources(session_factory, registry, cfg=cfg, photo_dir=settings.photo_dir, now=now)
+    await run_due_sources(
+        session_factory,
+        registry,
+        cfg=cfg,
+        photo_dir=settings.photo_dir,
+        now=now,
+        should_stop=should_stop,
+    )
     async with session_factory() as session:
         last = await session.get(WorkerHeartbeat, "daily")
         if daily_due(
@@ -213,21 +237,20 @@ async def main() -> None:
                         cfg=cfg,
                         http=http,
                         now=datetime.now(UTC),
+                        should_stop=stop.is_set,
                     )
                 except Exception as exc:  # noqa: BLE001 — a tick must never kill the worker
                     log.error("tick_failed", error=str(exc))
-                # `stop` is only checked here, between ticks — never between the sources
-                # a tick runs (see `run_due_sources`) — so shutdown waits for the
-                # in-flight tick's sources to finish. M0 accepts this latency rather
-                # than cancelling a source run midway.
                 try:
                     await asyncio.wait_for(stop.wait(), timeout=settings.worker_tick_seconds)
                 except TimeoutError:
                     continue
     finally:
-        # dispose the engine (and drop the signal handlers) even if the httpx client
+        # release the adapters (the OLX HTTP client, the Telegram connection) and
+        # dispose the engine — and drop the signal handlers — even if the httpx client
         # block above raised, not only on a clean stop.
         for sig in (signal.SIGINT, signal.SIGTERM):
             loop.remove_signal_handler(sig)
+        await registry.aclose()
         await engine.dispose()
         log.info("worker_stop")

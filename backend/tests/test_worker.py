@@ -133,9 +133,13 @@ async def test_run_due_sources_recovers_when_a_source_commit_fails(
     assert first_runs == []  # rolled back: nothing persisted for the source whose commit failed
 
 
-async def test_run_due_sources_skips_a_source_with_no_registered_adapter(
+async def test_run_due_sources_marks_a_source_with_no_registered_adapter_misconfigured(
     db: AsyncSession, tmp_path: Path
 ) -> None:
+    """A source whose adapter cannot be built is not a transient failure: retrying it
+    every tick logs forever and never gets anywhere. It is parked as `misconfigured` for
+    an hour instead — visible in `list-sources`, and out of `due_sources` meanwhile —
+    without touching `consecutive_failures` (nothing actually failed to *run*)."""
     orphan = Source(kind="manual", name="orphan", config={})
     db.add(orphan)
     await db.flush()
@@ -145,17 +149,20 @@ async def test_run_due_sources_skips_a_source_with_no_registered_adapter(
     assert run_ids == []
     assert (await db.execute(select(CrawlRun))).scalars().all() == []
     await db.refresh(orphan)
-    assert orphan.consecutive_failures == 0 and orphan.status == "ok"
+    assert orphan.status == "misconfigured"
+    assert orphan.paused_until == NOW + timedelta(hours=1)
+    assert orphan.consecutive_failures == 0
+    assert await due_sources(db, NOW + timedelta(minutes=30)) == []
 
 
-async def test_run_due_sources_skips_a_telegram_source_missing_credentials(
+async def test_run_due_sources_parks_a_telegram_source_missing_credentials(
     db: AsyncSession, tmp_path: Path
 ) -> None:
     """`registry.for_source` can raise `ValueError` not only for an unregistered kind
     but also when a *registered* kind's lazy factory fails to build (e.g. a Telegram
     source when TELEGRAM_API_ID/TELEGRAM_API_HASH aren't configured — see
     `app.ingestion.registry.AdapterRegistry`). That must be treated exactly like an
-    unregistered kind: logged and skipped, never stopping the rest of the batch."""
+    unregistered kind: parked as `misconfigured`, never stopping the rest of the batch."""
 
     class Olx(FakeAdapter):
         kind = "olx"
@@ -177,10 +184,53 @@ async def test_run_due_sources_skips_a_telegram_source_missing_credentials(
     run_ids = await run_due_sources(factory, registry, cfg=CFG, photo_dir=tmp_path, now=NOW)
     runs = {r.source_id: r for r in (await db.execute(select(CrawlRun))).scalars().all()}
     assert run_ids == [runs[ok.id].id]
-    assert runs[ok.id].new == 1
+    assert runs[ok.id].new == 1  # the healthy source still ran
     assert broken.id not in runs
     await db.refresh(broken)
-    assert broken.consecutive_failures == 0 and broken.status == "ok"
+    assert broken.status == "misconfigured"
+    assert broken.paused_until == NOW + timedelta(hours=1)
+    assert broken.consecutive_failures == 0
+
+
+async def test_run_due_sources_stops_the_batch_between_sources_when_asked(
+    db: AsyncSession, tmp_path: Path
+) -> None:
+    """A tick that finds many due sources used to run every one of them before the
+    worker could react to SIGTERM. `should_stop` is checked before each source, so a
+    shutdown waits for at most one source run instead of the whole batch."""
+    first = Source(
+        kind="telegram",
+        name="first",
+        config={"peer": "@first"},
+        next_run_at=NOW - timedelta(minutes=2),
+    )
+    second = Source(
+        kind="telegram",
+        name="second",
+        config={"peer": "@second"},
+        next_run_at=NOW - timedelta(minutes=1),
+    )
+    db.add_all([first, second])
+    await db.flush()
+    registry = AdapterRegistry(
+        {"telegram": FakeAdapter([payload("1", OWNER)], SeenWindow({"1"}, NOW - timedelta(days=1)))}
+    )
+    factory = await savepoint_session_factory(db)
+    checks = 0
+
+    def should_stop() -> bool:
+        nonlocal checks
+        checks += 1
+        return checks > 1  # let the first source run, then stop
+
+    run_ids = await run_due_sources(
+        factory, registry, cfg=CFG, photo_dir=tmp_path, now=NOW, should_stop=should_stop
+    )
+    runs = (await db.execute(select(CrawlRun))).scalars().all()
+    assert [r.source_id for r in runs] == [first.id]
+    assert run_ids == [runs[0].id]
+    await db.refresh(second)
+    assert second.last_run_at is None  # never started
 
 
 def test_daily_due_uses_local_date_and_hour() -> None:

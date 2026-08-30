@@ -15,10 +15,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.db import make_engine, make_session_factory
 from app.core.logging import configure_logging
 from app.core.settings import get_settings
+from app.ingestion.adapters.base import SourceAdapter
 from app.ingestion.adapters.telegram.client import make_client
 from app.ingestion.manual import HOST_KINDS, ingest_url
 from app.ingestion.pipeline import process_raw, run_source
-from app.ingestion.registry import build_registry
+from app.ingestion.registry import AdapterRegistry, build_registry
 from app.modules.dedupe.config import load_config
 from app.modules.identity.models import User
 from app.modules.listings.models import RawListing, Source
@@ -61,6 +62,30 @@ async def _require_source(session: AsyncSession, name: str) -> Source:
         typer.echo(f"no source named {name}", err=True)
         raise typer.Exit(code=1)
     return source
+
+
+def _require_adapter(registry: AdapterRegistry, source: Source) -> SourceAdapter:
+    """Build the adapter for `source`, or print an error and exit 1.
+
+    `for_source` raises `ValueError` both for an unregistered kind and when a lazy
+    factory cannot build (a Telegram source with no TELEGRAM_API_ID/TELEGRAM_API_HASH —
+    the common case for an OLX-only deployment). Either way the operator wants the
+    reason on one line, not a traceback.
+    """
+    try:
+        return registry.for_source(source)
+    except ValueError as exc:
+        typer.echo(f"cannot build adapter for source {source.name}: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+
+
+def _require_adapter_of_kind(registry: AdapterRegistry, kind: str) -> Any:
+    """Same, for a kind resolved from a URL host rather than a stored source row."""
+    try:
+        return registry.get(kind)
+    except (KeyError, ValueError) as exc:
+        typer.echo(f"cannot build {kind} adapter: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
 
 
 @app.command("create-user")
@@ -156,16 +181,20 @@ def run_source_cmd(name: str) -> None:
         settings = get_settings()
         registry = build_registry(settings)
         try:
-            run = await run_source(
-                session,
-                registry.for_source(source),
-                source,
-                cfg=load_config(settings.dedupe_config_path),
-                photo_dir=settings.photo_dir,
-                now=datetime.now(UTC),
-            )
+            adapter = _require_adapter(registry, source)
+            try:
+                run = await run_source(
+                    session,
+                    adapter,
+                    source,
+                    cfg=load_config(settings.dedupe_config_path),
+                    photo_dir=settings.photo_dir,
+                    now=datetime.now(UTC),
+                )
+            finally:
+                await session.commit()  # bookkeeping survives even when run_source raised
         finally:
-            await session.commit()  # bookkeeping survives even when run_source raised
+            await registry.aclose()
         typer.echo(
             f"found={run.found} new={run.new} changed={run.changed} "
             f"failed={run.failed} removed={run.removed} error={run.error}"
@@ -196,39 +225,44 @@ def reparse(
         src = await _require_source(session, source)
         settings = get_settings()
         registry = build_registry(settings)
-        adapter = registry.for_source(src)
-        cfg = load_config(settings.dedupe_config_path)
-        stmt = (
-            select(RawListing).where(RawListing.source_id == src.id).order_by(RawListing.fetched_at)
-        )
-        raws = (
-            (await session.execute(stmt.limit(limit) if limit is not None else stmt))
-            .scalars()
-            .all()
-        )
-        done = failed = 0
-        for raw in raws:
-            try:
-                async with session.begin_nested():
-                    payload = await adapter.rebuild_payload(raw)
-                    await process_raw(
-                        session,
-                        src,
-                        raw,
-                        payload,
-                        created=False,
-                        changed=True,
-                        adapter=None,
-                        cfg=cfg,
-                        photo_dir=settings.photo_dir,
-                        now=datetime.now(UTC),
-                        max_photos=10,
-                        seen=False,
-                    )
-                    done += 1
-            except Exception as exc:  # noqa: BLE001 — one bad row must not stop the batch
-                failed += 1
-                raw.parse_error = f"{type(exc).__name__}: {exc}"[:1000]
+        try:
+            adapter = _require_adapter(registry, src)
+            cfg = load_config(settings.dedupe_config_path)
+            stmt = (
+                select(RawListing)
+                .where(RawListing.source_id == src.id)
+                .order_by(RawListing.fetched_at)
+            )
+            raws = (
+                (await session.execute(stmt.limit(limit) if limit is not None else stmt))
+                .scalars()
+                .all()
+            )
+            done = failed = 0
+            for raw in raws:
+                try:
+                    async with session.begin_nested():
+                        payload = await adapter.rebuild_payload(raw)
+                        await process_raw(
+                            session,
+                            src,
+                            raw,
+                            payload,
+                            created=False,
+                            changed=True,
+                            adapter=None,
+                            cfg=cfg,
+                            photo_dir=settings.photo_dir,
+                            now=datetime.now(UTC),
+                            max_photos=10,
+                            seen=False,
+                        )
+                        done += 1
+                except Exception as exc:  # noqa: BLE001 — one bad row must not stop the batch
+                    failed += 1
+                    raw.parse_error = f"{type(exc).__name__}: {exc}"[:1000]
+        finally:
+            await registry.aclose()
         typer.echo(f"reparsed {done} listings, {failed} failed")
 
     _run(go)
@@ -246,8 +280,13 @@ def telegram_login() -> None:
 
     async def go() -> None:
         client = make_client(settings)
-        await client.login_interactive()
-        typer.echo(f"session saved to {settings.telegram_session_path}")
+        try:
+            await client.login_interactive()
+            typer.echo(f"session saved to {settings.telegram_session_path}")
+        finally:
+            # `start()` leaves a live MTProto connection behind; without disconnecting,
+            # the command hangs on its reader task instead of returning to the shell.
+            await client.disconnect()
 
     asyncio.run(go())
 
@@ -259,29 +298,38 @@ def add_listing(url: str = typer.Option(..., "--url")) -> None:
     # TELEGRAM_API_ID/TELEGRAM_API_HASH configured) or an OLX HTTP client just to be
     # told "no" — `ingest_url` would otherwise raise this same ValueError, but only
     # after `build_registry` already ran.
-    if urlsplit(url).netloc.lower() not in HOST_KINDS:
-        typer.echo(f"unsupported url: {url}", err=True)
+    kind = HOST_KINDS.get(urlsplit(url).netloc.lower())
+    if kind is None:
+        typer.echo(f"error: unsupported url: {url}", err=True)
         raise typer.Exit(code=1)
 
     async def go(session: AsyncSession) -> None:
         settings = get_settings()
+        registry = build_registry(settings)
         try:
-            result = await ingest_url(
-                session,
-                url,
-                build_registry(settings),
-                cfg=load_config(settings.dedupe_config_path),
-                photo_dir=settings.photo_dir,
-                now=datetime.now(UTC),
-            )
-        except ValueError as e:
-            # The up-front HOST_KINDS check above only rejects an unrecognised host; a
-            # recognised one can still fail deeper, e.g. the Telegram adapter's
-            # `fetch_by_url` raises plain `ValueError` for a `t.me` channel link with no
-            # message id, or for a message that no longer exists. Both must become a
-            # clean CLI error, not an unhandled traceback.
-            typer.echo(f"unsupported url: {e}", err=True)
-            raise typer.Exit(code=1) from e
+            # Resolve the adapter up front so a credentials problem is reported as one
+            # ("cannot build telegram adapter: ..."), not as a URL problem. `ingest_url`
+            # then re-reads the same cached instance from the registry.
+            _require_adapter_of_kind(registry, kind)
+            try:
+                result = await ingest_url(
+                    session,
+                    url,
+                    registry,
+                    cfg=load_config(settings.dedupe_config_path),
+                    photo_dir=settings.photo_dir,
+                    now=datetime.now(UTC),
+                )
+            except ValueError as e:
+                # The host precheck above only rejects an unrecognised host; a recognised
+                # one can still fail deeper, e.g. the Telegram adapter's `fetch_by_url`
+                # raises plain `ValueError` for a `t.me` channel link with no message id,
+                # or for a message that no longer exists. Printed verbatim: prefixing it
+                # with "unsupported url:" doubled the phrase and named the wrong culprit.
+                typer.echo(f"error: {e}", err=True)
+                raise typer.Exit(code=1) from e
+        finally:
+            await registry.aclose()
         typer.echo(
             f"property {result.property.id} ({result.decision}); listing {result.listing.id}"
         )

@@ -199,13 +199,60 @@ def test_add_listing_rejects_telegram_link_without_message_id(
     that plain `ValueError` from `fetch_by_url` must become a clean CLI error, not an
     unhandled traceback. The fake client's every method raises `AssertionError` if
     called, proving the regex check happens before any client call.
+
+    The message is printed as-is: prefixing it with "unsupported url:" doubled up
+    ("unsupported url: not a t.me message link: ...") and blamed the wrong thing — the
+    host *is* supported, the link just has no message id. The registry is closed on the
+    way out, so the CLI never leaves an adapter's connection behind.
     """
-    registry = AdapterRegistry({"telegram": TelegramAdapter(FakeTelegramClient())})
+    client = FakeTelegramClient()
+    registry = AdapterRegistry({"telegram": TelegramAdapter(client)})
     monkeypatch.setattr(cli_module, "build_registry", lambda settings, **kw: registry)
 
     result = runner.invoke(cli_module.app, ["add-listing", "--url", "https://t.me/somechannel"])
     assert result.exit_code == 1
-    assert "not a t.me message link" in result.output
+    assert result.output.strip() == "error: not a t.me message link: https://t.me/somechannel"
+    assert client.disconnected
+
+
+def test_run_source_reports_an_adapter_that_cannot_be_built(
+    cli_env: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A Telegram source with no API credentials makes `registry.for_source` raise the
+    lazy factory's `ValueError`; `run-source` must report it, not traceback."""
+    from app.cli import app
+
+    assert runner.invoke(app, ["add-source", "telegram", CLI_TEST_TELEGRAM_SOURCE]).exit_code == 0
+    monkeypatch.setenv("TELEGRAM_API_ID", "0")
+    monkeypatch.setenv("TELEGRAM_API_HASH", "")
+    get_settings.cache_clear()
+    try:
+        result = runner.invoke(app, ["run-source", CLI_TEST_TELEGRAM_SOURCE])
+    finally:
+        get_settings.cache_clear()
+    assert result.exit_code == 1
+    assert f"cannot build adapter for source {CLI_TEST_TELEGRAM_SOURCE}" in result.output
+    assert "TELEGRAM_API_ID" in result.output
+    assert not isinstance(result.exception, ValueError)
+
+
+def test_reparse_reports_an_adapter_that_cannot_be_built(
+    cli_env: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Same for `reparse`, which builds the adapter only for `rebuild_payload`."""
+    from app.cli import app
+
+    assert runner.invoke(app, ["add-source", "telegram", CLI_TEST_TELEGRAM_SOURCE]).exit_code == 0
+    monkeypatch.setenv("TELEGRAM_API_ID", "0")
+    monkeypatch.setenv("TELEGRAM_API_HASH", "")
+    get_settings.cache_clear()
+    try:
+        result = runner.invoke(app, ["reparse", "--source", CLI_TEST_TELEGRAM_SOURCE])
+    finally:
+        get_settings.cache_clear()
+    assert result.exit_code == 1
+    assert f"cannot build adapter for source {CLI_TEST_TELEGRAM_SOURCE}" in result.output
+    assert not isinstance(result.exception, ValueError)
 
 
 def test_telegram_login_requires_api_credentials(monkeypatch: pytest.MonkeyPatch) -> None:
