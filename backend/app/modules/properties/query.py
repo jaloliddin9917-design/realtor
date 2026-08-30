@@ -6,7 +6,7 @@ from typing import Any
 
 from sqlalchemy import Select, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import aliased, selectinload
+from sqlalchemy.orm import aliased, defer, selectinload
 
 from app.modules.contacts.models import Contact
 from app.modules.contacts.service import contacts_for_listing
@@ -60,7 +60,7 @@ def _first_photo() -> Any:
         select(ListingPhoto.storage_key)
         .join(Listing, Listing.id == ListingPhoto.listing_id)
         .where(Listing.property_id == Property.id, ListingPhoto.storage_key.is_not(None))
-        .order_by(Listing.first_seen_at, ListingPhoto.position)
+        .order_by(Listing.first_seen_at, Listing.id, ListingPhoto.position)
         .limit(1)
         .correlate(Property)
         .scalar_subquery()
@@ -90,25 +90,36 @@ def select_rows(f: PropertyFilters, *, count: bool) -> Select[Any]:
         .group_by(PropertyStatusEvent.property_id)
         .subquery("last_event")
     )
+    # A property always has >=1 listing in M0 — a listing is attached to exactly one
+    # property, once (dedupe.service.assign short-circuits to the existing property for
+    # a listing that already has one), and is never deleted or moved afterwards — so the
+    # inner join to `stats` below can never drop a property row; that's by design.
     stmt: Select[Any]
     if count:
-        stmt = select(func.count(Property.id))
-    else:
-        stmt = select(
-            Property,
-            stats.c.listing_count,
-            stats.c.source_kinds,
-            Owner,
-            PropertyStatusEvent,
-            _first_photo().label("photo_key"),
+        stmt = (
+            select(func.count(Property.id))
+            .select_from(Property)
+            .join(stats, stats.c.pid == Property.id)
         )
-    stmt = (
-        stmt.select_from(Property)
-        .join(stats, stats.c.pid == Property.id)
-        .outerjoin(Owner, Owner.id == Property.probable_owner_contact_id)
-        .outerjoin(last_event, last_event.c.pid == Property.id)
-        .outerjoin(PropertyStatusEvent, PropertyStatusEvent.id == last_event.c.event_id)
-    )
+        if f.owner_only:
+            stmt = stmt.outerjoin(Owner, Owner.id == Property.probable_owner_contact_id)
+    else:
+        stmt = (
+            select(
+                Property,
+                stats.c.listing_count,
+                stats.c.source_kinds,
+                Owner,
+                PropertyStatusEvent,
+                _first_photo().label("photo_key"),
+            )
+            .options(defer(Property.search_vector))
+            .select_from(Property)
+            .join(stats, stats.c.pid == Property.id)
+            .outerjoin(Owner, Owner.id == Property.probable_owner_contact_id)
+            .outerjoin(last_event, last_event.c.pid == Property.id)
+            .outerjoin(PropertyStatusEvent, PropertyStatusEvent.id == last_event.c.event_id)
+        )
     if f.district:
         stmt = stmt.where(Property.district.in_(f.district))
     if f.rooms:
@@ -275,6 +286,7 @@ async def _duplicates(
     ).where(DedupeReview.listing_id.in_(listing_ids))
     theirs = (
         select(Listing.property_id.label("pid"), DedupeReview.score.label("score"))
+        .select_from(DedupeReview)
         .join(Listing, Listing.id == DedupeReview.listing_id)
         .where(DedupeReview.candidate_property_id == property_id, Listing.property_id.is_not(None))
     )

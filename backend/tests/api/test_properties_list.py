@@ -11,6 +11,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.settings import Settings
 from app.ingestion.pipeline import ingest_payload
+from app.modules.contacts.scoring import rescore_contact, update_probable_owner
+from app.modules.contacts.service import contacts_for_listing
 from app.modules.dedupe.config import load_config
 from app.modules.identity.models import User
 from app.modules.listings.models import Listing, Source
@@ -178,6 +180,7 @@ async def test_owner_only_and_removed(
     settings: Settings,
     agent: User,
     seeded: dict[str, Property],
+    sources: tuple[Source, Source],
     db: AsyncSession,
 ) -> None:
     h = auth_headers(settings, agent)
@@ -187,9 +190,35 @@ async def test_owner_only_and_removed(
     assert [row["id"] for row in r.json()["items"]] == [str(seeded["a"].id), str(seeded["b"].id)]
     r = await client.get("/api/v1/properties", params={"removed": "true"}, headers=h)
     assert r.json()["total"] == 3
-    r = await client.get("/api/v1/properties", params={"owner_only": "true"}, headers=h)
-    owners = {row["id"]: row["probable_owner"]["classification"] for row in r.json()["items"]}
-    assert owners and all(cls == "owner" for cls in owners.values())
+
+    # Every seeded contact is alone on its property, so it auto-classifies "owner" —
+    # `owner_only` would pass even as a no-op filter unless at least one property is
+    # NOT an owner. Demote "b"'s only contact by human override (as an operator would),
+    # then recompute the property's probable owner the same way
+    # `rescore_property_contacts` does after any listing edit.
+    tg, _ = sources
+    b_listing = await listing_of(db, seeded["b"])
+    b_contact = (await contacts_for_listing(db, b_listing.id))[0]
+    b_contact.human_decision = "agent"
+    await rescore_contact(db, b_contact, NOW)
+    assert b_contact.classification == "agent"
+    await update_probable_owner(db, seeded["b"])
+
+    # No phone or telegram username anywhere in the text: zero contacts, so this
+    # property has no probable owner at all.
+    d = await seed(db, settings, tg, "d", "Сдаётся квартира без мебели", {"district": "chilonzor"})
+
+    r = await client.get(
+        "/api/v1/properties", params={"owner_only": "true", "removed": "true"}, headers=h
+    )
+    body = r.json()
+    items = body["items"]
+    ids = {row["id"] for row in items}
+    # "b" (now an agent) and "d" (no probable owner) are excluded; "a" and "c" remain.
+    assert str(seeded["b"].id) not in ids and str(d.id) not in ids
+    assert ids == {str(seeded["a"].id), str(seeded["c"].id)}
+    assert body["total"] == 2
+    assert all(row["probable_owner"]["classification"] == "owner" for row in items)
 
 
 async def test_last_status_event_is_the_newest(
@@ -246,7 +275,11 @@ async def test_two_listings_collapse_to_one_row_with_the_first_photo(
     r = await client.get("/api/v1/properties", headers=auth_headers(settings, agent))
     assert r.status_code == 200, r.text
     page = r.json()
-    # the property the second listing left behind has no listings at all — it is not a row
+    # `attach()` is called directly above to reassign a listing that already has a
+    # property — the real pipeline never does that (dedupe.service.assign
+    # short-circuits to a listing's existing property instead of moving it), so
+    # `orphan` ending up with zero listings is a synthetic state, not one ingestion
+    # can reach on its own. It must still not be a row.
     assert page["total"] == 1
     row = page["items"][0]
     assert row["id"] == str(prop.id)
