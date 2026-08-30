@@ -7,7 +7,6 @@ from typing import Any
 from urllib.parse import urlsplit
 
 import typer
-from argon2 import PasswordHasher
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -22,6 +21,7 @@ from app.ingestion.pipeline import process_raw, run_source
 from app.ingestion.registry import AdapterRegistry, build_registry
 from app.modules.dedupe.config import load_config
 from app.modules.identity.models import User
+from app.modules.identity.service import create_user as create_user_service
 from app.modules.listings.models import RawListing, Source
 
 app = typer.Typer(help="Realtor CRM operator commands", no_args_is_help=True)
@@ -79,7 +79,7 @@ def _require_adapter(registry: AdapterRegistry, source: Source) -> SourceAdapter
         raise typer.Exit(code=1) from exc
 
 
-def _require_adapter_of_kind(registry: AdapterRegistry, kind: str) -> Any:
+def _require_adapter_of_kind(registry: AdapterRegistry, kind: str) -> SourceAdapter:
     """Same, for a kind resolved from a URL host rather than a stored source row."""
     try:
         return registry.get(kind)
@@ -104,17 +104,22 @@ def create_user(
         ).scalar_one_or_none():
             typer.echo(f"user {phone} already exists", err=True)
             raise typer.Exit(code=1)
-        session.add(
-            User(
-                phone_e164=phone,
-                name=name,
-                password_hash=PasswordHasher().hash(password),
-                role=role,
-            )
+        await create_user_service(
+            session, phone_e164=phone, name=name, password=password, role=role
         )
         typer.echo(f"created {name} ({role}) {phone}")
 
     _run(go)
+
+
+def _default_olx_name(url: str) -> str:
+    """The last two non-empty path segments, joined by `-`; `olx` if the path is empty.
+
+    E.g. `https://www.olx.uz/nedvizhimost/kvartiry/arenda-dolgosrochnaya/tashkent/` ->
+    `arenda-dolgosrochnaya-tashkent`.
+    """
+    parts = [p for p in urlsplit(url).path.split("/") if p]
+    return "-".join(parts[-2:]) if parts else "olx"
 
 
 @app.command("add-source")
@@ -127,7 +132,7 @@ def add_source(
     if kind not in ("telegram", "olx"):
         raise typer.BadParameter("kind must be telegram or olx")
     config = {"peer": target} if kind == "telegram" else {"url": target}
-    source_name = name or (target if kind == "telegram" else "olx")
+    source_name = name or (target if kind == "telegram" else _default_olx_name(target))
 
     async def go(session: AsyncSession) -> None:
         if (

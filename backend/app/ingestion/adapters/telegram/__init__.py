@@ -11,7 +11,16 @@ from app.ingestion.adapters.telegram.client import TelegramClientLike, TgMessage
 from app.modules.listings.models import RawListing, Source
 from app.modules.listings.service import SeenWindow
 
-_TME = re.compile(r"^https?://t\.me/([A-Za-z0-9_]{5,32})/(\d+)$")
+_TME = re.compile(r"^(?:https?://)?t\.me/(?:s/)?([A-Za-z0-9_]{5,32})/(\d+)(?:[?#].*)?$")
+
+
+def parse_message_link(url: str) -> tuple[str, int]:
+    """`t.me/<channel>/<id>` in the forms people paste: with or without scheme, `t.me/s/…`,
+    a trailing `?single` / `#`."""
+    m = _TME.match(url.strip())
+    if m is None:
+        raise ValueError(f"not a t.me message link: {url}")
+    return m.group(1), int(m.group(2))
 
 
 class TelegramAdapter:
@@ -40,6 +49,11 @@ class TelegramAdapter:
             self._ready = True
         if not await self.client.is_user_authorized():
             raise LoginRequired("telegram session is not authorized")
+
+    async def resolve_peer(self, peer: str | int) -> tuple[int, str | None]:
+        """Validate a peer (`@channel`, `t.me/channel`, id) the way `discover` will use it."""
+        await self._ensure_ready()
+        return await self.client.resolve_peer(peer)
 
     async def _resolve(self, source: Source) -> tuple[int, str | None]:
         chat_id, username = await self.client.resolve_peer(source.config["peer"])
@@ -152,12 +166,10 @@ class TelegramAdapter:
         )
 
     async def fetch_by_url(self, url: str) -> RawPayload:
-        match = _TME.match(url.strip())
-        if match is None:
-            raise ValueError(f"not a t.me message link: {url}")
+        username, message_id = parse_message_link(url)
         await self._ensure_ready()
-        chat_id, username = await self.client.resolve_peer("@" + match.group(1))
-        messages = await self.client.get_messages(chat_id, [int(match.group(2))])
+        chat_id, resolved_username = await self.client.resolve_peer("@" + username)
+        messages = await self.client.get_messages(chat_id, [message_id])
         if not messages:
             raise ValueError(f"message not found: {url}")
         anchor = messages[0]
@@ -169,7 +181,7 @@ class TelegramAdapter:
             group = sorted(
                 [m for m in siblings if m.grouped_id == anchor.grouped_id], key=lambda m: m.id
             )
-        return self._payload(chat_id, username, group)
+        return self._payload(chat_id, resolved_username, group)
 
     async def seen_window(self, source: Source) -> SeenWindow | None:
         return self._windows.pop(source.id, None)

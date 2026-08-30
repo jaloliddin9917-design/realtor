@@ -36,7 +36,13 @@ CLI_TEST_PHONE = "+998900000101"
 CLI_TEST_TELEGRAM_SOURCE = "@cli_test"
 CLI_TEST_OLX_SOURCE = "olx-cli"
 CLI_TEST_REPARSE_SOURCE = "cli-reparse-test"
-CLI_TEST_SOURCE_NAMES = [CLI_TEST_TELEGRAM_SOURCE, CLI_TEST_OLX_SOURCE, CLI_TEST_REPARSE_SOURCE]
+CLI_TEST_OLX_DEFAULT_NAME = "arenda-dolgosrochnaya-tashkent"
+CLI_TEST_SOURCE_NAMES = [
+    CLI_TEST_TELEGRAM_SOURCE,
+    CLI_TEST_OLX_SOURCE,
+    CLI_TEST_REPARSE_SOURCE,
+    CLI_TEST_OLX_DEFAULT_NAME,
+]
 
 
 async def _delete_cli_test_rows(engine: AsyncEngine) -> None:
@@ -114,6 +120,26 @@ def test_add_and_list_sources(cli_env: None) -> None:
     )
     dup = runner.invoke(app, ["add-source", "telegram", CLI_TEST_TELEGRAM_SOURCE])
     assert dup.exit_code != 0 and "exists" in dup.output
+
+
+def test_add_source_olx_default_name_comes_from_url(cli_env: None) -> None:
+    """With no `--name`, an OLX source's default name is the last two non-empty path
+    segments of its URL, joined by `-` — not the fixed literal "olx" every OLX source
+    used to collide on."""
+    from app.cli import app
+
+    result = runner.invoke(
+        app,
+        [
+            "add-source",
+            "olx",
+            "https://www.olx.uz/nedvizhimost/kvartiry/arenda-dolgosrochnaya/tashkent/",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert CLI_TEST_OLX_DEFAULT_NAME in result.output
+    listed = runner.invoke(app, ["list-sources"])
+    assert listed.exit_code == 0 and CLI_TEST_OLX_DEFAULT_NAME in listed.output
 
 
 def test_reparse_reports_counts_for_unknown_source(cli_env: None) -> None:

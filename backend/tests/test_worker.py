@@ -299,3 +299,28 @@ async def test_tick_heartbeats_and_runs_daily_once(db: AsyncSession, tmp_path: P
     await heartbeat(db, "worker", NOW + timedelta(minutes=2))
     await db.refresh(worker_row)
     assert worker_row.last_tick_at == NOW + timedelta(minutes=2)
+
+
+async def test_tick_skips_daily_jobs_when_stopped(db: AsyncSession, tmp_path: Path) -> None:
+    """A SIGTERM mid-batch (`should_stop` becomes true) must not be followed by the daily
+    jobs: the worker heartbeat still records the tick, but `daily` must wait for a tick
+    that runs to completion — NOW is past `daily_job_hour` in Tashkent, so without the
+    should_stop check the daily jobs would otherwise run on this same tick."""
+    factory = await savepoint_session_factory(db)
+    registry = AdapterRegistry({})
+    settings = Settings(_env_file=None, photo_dir=tmp_path)
+    async with _cbu_client() as client:
+        await tick(
+            factory,
+            registry,
+            settings=settings,
+            cfg=CFG,
+            http=client,
+            now=NOW,
+            should_stop=lambda: True,
+        )
+    beats = {
+        b.name: b.last_tick_at for b in (await db.execute(select(WorkerHeartbeat))).scalars().all()
+    }
+    assert beats == {"worker": NOW}
+    assert (await db.execute(select(FxRate))).scalars().all() == []

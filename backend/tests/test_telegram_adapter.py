@@ -213,3 +213,23 @@ def test_marked_chat_id_follows_telethon_conventions() -> None:
     megagroup = types.Channel(id=1234, title="mg", photo=photo, date=when, megagroup=True)
     broadcast = types.Channel(id=1234, title="ch", photo=photo, date=when, broadcast=True)
     assert marked_chat_id(megagroup) == marked_chat_id(broadcast) == -1000000001234
+
+
+def test_parse_message_link_accepts_pasted_forms() -> None:
+    """`parse_message_link` must accept the forms people actually paste: with or without
+    a scheme, the `t.me/s/...` preview-page form, and a trailing `?single` query — but
+    still reject a channel link with no message id, and a `telegram.me` host (a real
+    alias Telegram itself doesn't treat as equivalent to `t.me` for these links)."""
+    from app.ingestion.adapters.telegram import parse_message_link
+
+    for url in (
+        "https://t.me/chan_name/123",
+        "t.me/chan_name/123",
+        "https://t.me/s/chan_name/123",
+        "https://t.me/chan_name/123?single",
+    ):
+        assert parse_message_link(url) == ("chan_name", 123)
+    with pytest.raises(ValueError, match="not a t.me message link"):
+        parse_message_link("https://t.me/chan_name")
+    with pytest.raises(ValueError, match="not a t.me message link"):
+        parse_message_link("https://telegram.me/chan_name/123")

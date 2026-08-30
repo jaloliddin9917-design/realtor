@@ -202,6 +202,11 @@ async def tick(
         now=now,
         should_stop=should_stop,
     )
+    if should_stop is not None and should_stop():
+        # A SIGTERM mid-batch must not be followed by the daily jobs: the worker
+        # heartbeat above already recorded this tick, but `daily` should wait for a
+        # tick that runs to completion.
+        return
     async with session_factory() as session:
         last = await session.get(WorkerHeartbeat, "daily")
         if daily_due(

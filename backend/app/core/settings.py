@@ -23,6 +23,17 @@ class Settings(BaseSettings):
     dedupe_config_path: Path = BACKEND_DIR / "config" / "dedupe.yaml"
     tz: str = "Asia/Tashkent"
     log_level: str = "INFO"
+    api_host: str = "127.0.0.1"
+    api_port: int = 8000
+    # comma-separated; the Vite dev server by default
+    cors_origins: str = "http://localhost:5173"
+    jwt_access_minutes: int = 15
+    jwt_refresh_days: int = 30
+
+    @property
+    def cors_origin_list(self) -> list[str]:
+        return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
+
     http_user_agent: str = (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
         "(KHTML, like Gecko) Chrome/124.0 Safari/537.36"
