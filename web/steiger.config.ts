@@ -37,4 +37,30 @@ export default defineConfig([
       "fsd/ambiguous-slice-names": "warn",
     },
   },
+  {
+    // Same shape as `features/auth/login` above: each of these owns its own Effector model
+    // (request event, effect, error store) tightly coupled to one dialog/control, and
+    // `pages/admin-sources` is — by design — the only page that composes them. `toggle` and
+    // `add-telegram` stay features (not inlined into the page) so the page only wires
+    // behaviour together; `sources-table` stays a widget (not a feature) because it renders
+    // entity data plus a `renderToggle` render prop rather than owning a feature import
+    // itself — widgets never import features. "warn" rather than "off" for the same reason
+    // as the other overrides here: still visible, not a hard failure.
+    files: ["src/features/source/toggle/**", "src/features/source/add-telegram/**", "src/widgets/sources-table/**"],
+    rules: {
+      "fsd/insignificant-slice": "warn",
+    },
+  },
+  {
+    // `features/listing/add-manual` (the *Qo'lda qo'shish* dialog) is built and exported in
+    // full by Task 6, but wiring its button into `pages/properties` is deliberately left to
+    // Task 7 — that page is owned by a sibling M0-4 worktree (Tasks 4/5) and only gets
+    // merged, and wired, after both branches land. Until then the slice has zero consumers.
+    // "warn" rather than "off": once Task 7 wires it in, this override should be removed, and
+    // a still-orphaned slice at that point should fail the gate like any other orphan.
+    files: ["src/features/listing/add-manual/**"],
+    rules: {
+      "fsd/insignificant-slice": "warn",
+    },
+  },
 ]);

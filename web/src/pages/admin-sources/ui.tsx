@@ -1,9 +1,21 @@
+import { useUnit } from "effector-react";
 import { useTranslation } from "react-i18next";
-import { LanguageSwitch } from "@/features/i18n/switch-language";
 import { AppLayout } from "@/widgets/app-layout";
+import { SourcesTable } from "@/widgets/sources-table";
+import { SourceToggle } from "@/features/source/toggle";
+import { AddTelegramDialog } from "@/features/source/add-telegram";
+import { LanguageSwitch } from "@/features/i18n/switch-language";
+import { $fx, $sources, $sourcesPending } from "@/entities/source";
+import { Skeleton } from "@/shared/ui/skeleton";
 
-// Placeholder: Task 6 fills the sources table and the add-channel dialog in.
 export function AdminSourcesPage() {
   const { t } = useTranslation();
-  return <AppLayout title={t("sources.title")} actions={<LanguageSwitch />}>{null}</AppLayout>;
+  const [sources, fx, pending] = useUnit([$sources, $fx, $sourcesPending]);
+  const fxDays = fx ? Math.floor((Date.now() - new Date(fx.date).getTime()) / 86_400_000) : null;
+  return (
+    <AppLayout title={t("sources.title")} actions={<><AddTelegramDialog /><LanguageSwitch /></>}>
+      {(fx === null || fx.stale) && <div className="rounded-lg border border-warn-line bg-warn-bg px-3 py-2 text-[13px] text-warn">{fx === null ? t("sources.fxMissing") : t("sources.fxStale", { days: fxDays })}</div>}
+      {pending && sources.length === 0 ? <Skeleton className="h-40 w-full" /> : <SourcesTable sources={sources} renderToggle={(s) => <SourceToggle source={s} />} />}
+    </AppLayout>
+  );
 }

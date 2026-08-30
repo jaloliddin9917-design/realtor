@@ -2,6 +2,7 @@ import { chainRoute, redirect, type RouteInstance, type RouteParams, type RouteP
 import { createEvent, sample } from "effector";
 import { and, not } from "patronum";
 import { $isAdmin, $isAuthorized, $sessionChecked, loginFx, logout, restoreSessionFx, sessionRestored } from "@/entities/session";
+import { fetchSourcesFx } from "@/entities/source";
 import { router, routes } from "@/shared/router";
 
 export function chainAuthorized<P extends RouteParams>(route: RouteInstance<P>): RouteInstance<P> {
@@ -37,3 +38,6 @@ redirect({ clock: logout, route: routes.login, replace: true });
 redirect({ clock: sample({ clock: routes.login.opened, filter: $isAuthorized }), route: routes.properties, replace: true });
 // an unknown path lands on the list, with the address bar corrected (see shared/router)
 redirect({ clock: router.routeNotFound, route: routes.properties, replace: true });
+
+// load the admin sources list (and FX rate) whenever /admin/sources opens
+sample({ clock: authorized.adminSources.opened, target: fetchSourcesFx });
