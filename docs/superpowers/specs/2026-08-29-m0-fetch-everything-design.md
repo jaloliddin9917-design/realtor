@@ -154,7 +154,7 @@ All ids `uuid`, all timestamps `timestamptz`, money `bigint` minor units.
 | Table | Columns (beyond id / created_at / updated_at) |
 |---|---|
 | `users` | `phone_e164` UK, `name`, `password_hash` (argon2), `role` (`admin`/`agent`), `locale`, `active` |
-| `sources` | `kind`, `name`, `config` JSONB, `state` JSONB, `enabled`, `interval_seconds`, `next_run_at`, `last_run_at`, `consecutive_failures`, `paused_until`, `status` (`ok`/`failing`/`login_required`/`paused`) |
+| `sources` | `kind`, `name`, `config` JSONB, `state` JSONB, `enabled`, `interval_seconds`, `next_run_at`, `last_run_at`, `consecutive_failures`, `paused_until`, `status` (`ok`/`failing`/`login_required`/`paused`/`misconfigured` — the last when the adapter cannot be built, e.g. missing Telegram credentials; paused 1 h) |
 | `crawl_runs` | `source_id` FK, `started_at`, `finished_at`, `found`, `new`, `changed`, `failed`, `error` |
 | `raw_listings` | `source_id` FK, `external_id`, `url`, `payload` JSONB, `content_hash`, `fetched_at`, `parse_error`; UK `(source_id, external_id)` |
 | `listings` | `raw_listing_id` FK UK, `property_id` FK, `title`, `description`, `price_amount_minor`, `price_currency`, `price_usd_minor`, `rooms`, `area_sqm`, `floor`, `total_floors`, `district`, `address_text`, `posted_at`, `first_seen_at`, `last_seen_at`, `miss_count`, `source_removed`, `removed_at`, `owner_marker`, `agent_marker`, `parse_confidence` |
