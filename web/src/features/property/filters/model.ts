@@ -6,9 +6,13 @@
  * needs `useState` for anything another component also reads.
  */
 import { querySync } from "atomic-router";
-import { combine, createEvent, createStore, sample } from "effector";
+import { combine, createEffect, createEvent, createStore, sample } from "effector";
 import { debounce } from "patronum";
+import { toast } from "sonner";
 import { $total, fetchPropertiesFx, type PropertyQuery, type PropertyStatus, type SortKey } from "@/entities/property";
+import { $isAuthorized } from "@/entities/session";
+import { isApiProblem } from "@/shared/api";
+import { i18n, problemKey } from "@/shared/i18n";
 import { controls, routes } from "@/shared/router";
 
 const PAGE_SIZE = 20;
@@ -37,17 +41,23 @@ const toggle = (csv: string, key: string): string => {
   return [...set].join(",");
 };
 
-export const $district = createStore("").on(districtToggled, toggle).reset(filtersCleared);
-export const $rooms = createStore("").on(roomsToggled, toggle).reset(filtersCleared);
-export const $priceMin = createStore("").on(priceChanged, (_, p) => p.min).reset(filtersCleared);
-export const $priceMax = createStore("").on(priceChanged, (_, p) => p.max).reset(filtersCleared);
-export const $status = createStore("").on(statusChanged, toggle).reset(filtersCleared);
-export const $source = createStore("").on(sourceChanged, (_, s) => s).reset(filtersCleared);
-export const $ownerOnly = createStore("").on(ownerOnlyToggled, (v) => (v ? "" : "1")).reset(filtersCleared);
-export const $removed = createStore("").on(removedToggled, (v) => (v ? "" : "1")).reset(filtersCleared);
-export const $q = createStore("").on(searchChanged, (_, q) => q).reset(filtersCleared);
-export const $sort = createStore("").on(sortChanged, (_, s) => s).reset(filtersCleared);
-export const $page = createStore("").on(pageChanged, (_, p) => (p > 1 ? String(p) : "")).reset(filtersCleared);
+// Every store also resets when the list route closes — not only on `filtersCleared` — so
+// leaving the list (e.g. to a property page) never leaves a filter that silently re-applies
+// on return. `querySync`'s read direction alone cannot be relied on for this: it only fires
+// when the router's query actually changes, and closing to `/properties/p1` and back to a
+// bare `/properties` can leave that query shallow-equal to `{}` throughout the round trip
+// (see the "clears the filter stores…" test for the exact repro).
+export const $district = createStore("").on(districtToggled, toggle).reset([filtersCleared, routes.properties.closed]);
+export const $rooms = createStore("").on(roomsToggled, toggle).reset([filtersCleared, routes.properties.closed]);
+export const $priceMin = createStore("").on(priceChanged, (_, p) => p.min).reset([filtersCleared, routes.properties.closed]);
+export const $priceMax = createStore("").on(priceChanged, (_, p) => p.max).reset([filtersCleared, routes.properties.closed]);
+export const $status = createStore("").on(statusChanged, toggle).reset([filtersCleared, routes.properties.closed]);
+export const $source = createStore("").on(sourceChanged, (_, s) => s).reset([filtersCleared, routes.properties.closed]);
+export const $ownerOnly = createStore("").on(ownerOnlyToggled, (v) => (v ? "" : "1")).reset([filtersCleared, routes.properties.closed]);
+export const $removed = createStore("").on(removedToggled, (v) => (v ? "" : "1")).reset([filtersCleared, routes.properties.closed]);
+export const $q = createStore("").on(searchChanged, (_, q) => q).reset([filtersCleared, routes.properties.closed]);
+export const $sort = createStore("").on(sortChanged, (_, s) => s).reset([filtersCleared, routes.properties.closed]);
+export const $page = createStore("").on(pageChanged, (_, p) => (p > 1 ? String(p) : "")).reset([filtersCleared, routes.properties.closed]);
 
 // any filter change returns to page 1 — page 7 of the old result set means nothing in the new one
 sample({
@@ -56,25 +66,53 @@ sample({
   target: pageChanged,
 });
 
-const num = (s: string): number | undefined => {
+/**
+ * A room-count token from the URL: "4" is the UI's "4+" and expands to a range; anything
+ * that is not a plain non-negative integer (a stray "abc", an empty token from "2,,3") is
+ * dropped rather than reaching the API as `NaN`.
+ */
+const roomTokens = (r: string): number[] => {
+  if (r === "4") return ROOMS_PLUS;
+  const n = Number(r);
+  return r !== "" && Number.isInteger(n) ? [n] : [];
+};
+
+/**
+ * A non-negative integer for a price bound; anything else — negative, fractional, empty,
+ * garbage — is "no bound" rather than a value the API would reject or misread. `Math.trunc`
+ * rounds a fractional value down instead of dropping the filter outright.
+ */
+const uint = (s: string): number | undefined => {
+  const n = Math.trunc(Number(s));
+  return s !== "" && Number.isFinite(n) && n >= 0 ? n : undefined;
+};
+
+/**
+ * A page number: below 1 or non-integer both fall back to the first page. (`num(s) ?? 1`
+ * used to let "0" and "-1" straight through unchanged, since `??` only catches
+ * `null`/`undefined`, and 0 is neither.)
+ */
+const pageNum = (s: string): number => {
   const n = Number(s);
-  return s !== "" && Number.isFinite(n) ? n : undefined;
+  return Number.isInteger(n) && n >= 1 ? n : 1;
 };
 
 export const $query = combine(
   { district: $district, rooms: $rooms, priceMin: $priceMin, priceMax: $priceMax, status: $status, source: $source, ownerOnly: $ownerOnly, removed: $removed, q: $q, sort: $sort, page: $page },
   (f): PropertyQuery => ({
     district: f.district ? f.district.split(",") : [],
-    rooms: (f.rooms ? f.rooms.split(",") : []).flatMap((r) => (r === "4" ? ROOMS_PLUS : [Number(r)])),
-    price_min: num(f.priceMin),
-    price_max: num(f.priceMax),
+    rooms: (f.rooms ? f.rooms.split(",") : []).flatMap(roomTokens),
+    price_min: uint(f.priceMin),
+    price_max: uint(f.priceMax),
     status: (f.status ? f.status.split(",") : []).filter((s): s is PropertyStatus => (STATUSES as string[]).includes(s)),
     source: (SOURCES as readonly string[]).includes(f.source) ? (f.source as SourceKind) : undefined,
     owner_only: f.ownerOnly === "1",
     removed: f.removed === "1",
-    q: f.q || undefined,
+    // trimmed and capped at 200 chars — belt-and-braces with the input's own `maxLength`,
+    // since a URL or a shared link can carry whatever the address bar allows
+    q: f.q.trim().slice(0, 200) || undefined,
     sort: (SORTS as string[]).includes(f.sort) ? (f.sort as SortKey) : "last_seen",
-    page: num(f.page) ?? 1,
+    page: pageNum(f.page),
     page_size: PAGE_SIZE,
   }),
 );
@@ -101,7 +139,10 @@ querySync({
  * Fetch when the list opens and once the filters settle. `$lastQuery` drops the duplicate
  * that `opened` and the settle would otherwise both fire when the URL already carries
  * filters (the URL is read into the stores, which counts as a change); it is cleared when
- * the list closes, so coming back to the page always refetches.
+ * the list closes, so coming back to the page always refetches. `isAuthorized` keeps an
+ * anonymous visit to `/properties` from firing a doomed request before the auth guard (wired
+ * on the *chained* route in `app/router.ts`) redirects to `/login` — the raw `routes.properties`
+ * this feature reads opens on a URL match alone, regardless of the guard's outcome.
  */
 const $lastQuery = createStore<string | null>(null)
   .on(fetchPropertiesFx, (_, q) => JSON.stringify(q))
@@ -111,10 +152,19 @@ const $lastQuery = createStore<string | null>(null)
 
 sample({
   clock: [routes.properties.opened, filtersSettled],
-  source: { query: $query, last: $lastQuery, opened: routes.properties.$isOpened },
-  filter: ({ query, last, opened }) => opened && JSON.stringify(query) !== last,
+  source: { query: $query, last: $lastQuery, opened: routes.properties.$isOpened, isAuthorized: $isAuthorized },
+  filter: ({ query, last, opened, isAuthorized }) => isAuthorized && opened && JSON.stringify(query) !== last,
   fn: ({ query }) => query,
   target: fetchPropertiesFx,
 });
+
+/**
+ * A failed list request has no retry UI (out of scope for this task — the user changes a
+ * filter to try again), but it must not fail silently.
+ */
+export const toastErrorFx = createEffect((e: unknown) => {
+  toast.error(i18n.t(isApiProblem(e) ? problemKey(e.code) : "errors.network"));
+});
+sample({ clock: fetchPropertiesFx.failData, target: toastErrorFx });
 
 export const $pageCount = combine($total, (t) => Math.max(1, Math.ceil(t / PAGE_SIZE)));

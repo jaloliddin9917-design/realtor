@@ -1,9 +1,13 @@
 import { allSettled, fork, scopeBind } from "effector";
 import { createMemoryHistory } from "history";
-import { router, routes } from "@/shared/router";
+import { toast } from "sonner";
 import { $tokens, sessionRestored } from "@/entities/session";
 import { fetchPropertiesFx } from "@/entities/property";
-import { $pageCount, $query, districtToggled, filtersCleared, pageChanged, roomsToggled, searchChanged } from "./model";
+import { i18n, i18nReady } from "@/shared/i18n";
+import { controls, router, routes } from "@/shared/router";
+import { $district, $pageCount, $query, $rooms, districtToggled, filtersCleared, pageChanged, roomsToggled, searchChanged } from "./model";
+
+vi.mock("sonner", () => ({ toast: { error: vi.fn() } }));
 
 async function openList(scope: ReturnType<typeof fork>, url = "/properties") {
   const history = createMemoryHistory({ initialEntries: [url] });
@@ -13,6 +17,8 @@ async function openList(scope: ReturnType<typeof fork>, url = "/properties") {
 }
 
 describe("filters ↔ URL", () => {
+  beforeAll(() => i18nReady);
+
   it("requests the list exactly once for a URL that already carries filters", async () => {
     const scope = fork({ values: [[$tokens, { access: "a", refresh: "r" }]] });
     const calls: string[] = [];
@@ -78,5 +84,68 @@ describe("filters ↔ URL", () => {
     expect(scope.getState($pageCount)).toBe(1);
     await allSettled(fetchPropertiesFx, { scope, params: { district: [], rooms: [], status: [], owner_only: false, removed: false, sort: "last_seen", page: 1, page_size: 20 } });
     expect(scope.getState($pageCount)).toBe(3);
+  });
+
+  it("clears the filter stores when the list route closes, so revisiting the bare list is not filtered by stale state", async () => {
+    const scope = fork({ values: [[$tokens, { access: "a", refresh: "r" }]] });
+    const calls: string[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (req: Request) => {
+      if (req.url.includes("/api/v1/properties")) calls.push(req.url);
+      return new Response(JSON.stringify({ items: [], total: 0, page: 1, page_size: 20 }), { status: 200, headers: { "content-type": "application/json" } });
+    }));
+    const history = await openList(scope, "/properties?district=chilonzor");
+    expect(scope.getState($district)).toBe("chilonzor");
+    await allSettled(routes.property.navigate, { scope, params: { params: { id: "p1" }, query: {} } });
+    calls.length = 0; // count only what the re-open costs
+    await allSettled(routes.properties.navigate, { scope, params: { params: {}, query: {} } });
+    expect(scope.getState($district)).toBe("");
+    expect(history.location.search).toBe("");
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).not.toContain("district");
+  });
+
+  it("restores the filter stores from the URL when the back button returns to a filtered list", async () => {
+    const scope = fork({ values: [[$tokens, { access: "a", refresh: "r" }]] });
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ items: [], total: 0, page: 1, page_size: 20 }), { status: 200, headers: { "content-type": "application/json" } })));
+    await openList(scope, "/properties?district=chilonzor&rooms=2");
+    await allSettled(routes.property.navigate, { scope, params: { params: { id: "p1" }, query: {} } });
+    expect(scope.getState($district)).toBe(""); // reset when the list closed
+    await allSettled(controls.back, { scope });
+    expect(scope.getState($district)).toBe("chilonzor");
+    expect(scope.getState($rooms)).toBe("2");
+  });
+
+  it("sanitises malformed URL input before it reaches the API", async () => {
+    const scope = fork({ values: [[$tokens, { access: "a", refresh: "r" }]] });
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ items: [], total: 0, page: 1, page_size: 20 }), { status: 200, headers: { "content-type": "application/json" } })));
+    await openList(scope, "/properties?rooms=abc,2&page=0&price_min=-5&price_max=300.5");
+    const query = scope.getState($query);
+    expect(query.rooms).toEqual([2]);
+    expect(query.page).toBe(1);
+    expect(query.price_min).toBeUndefined();
+    expect(query.price_max).toBe(300);
+  });
+
+  it("toasts a translated error when the list request fails", async () => {
+    const scope = fork({ values: [[$tokens, { access: "a", refresh: "r" }]] });
+    vi.mocked(toast.error).mockClear();
+    vi.stubGlobal("fetch", vi.fn(async () =>
+      new Response(JSON.stringify({ title: "Server Error", status: 500, detail: "boom", code: "internal_error", type: "about:blank" }), { status: 500, headers: { "content-type": "application/problem+json" } }),
+    ));
+    await openList(scope);
+    expect(toast.error).toHaveBeenCalledWith(i18n.t("errors.internal_error"));
+  });
+
+  it("does not fetch for an anonymous visitor before the auth guard redirects", async () => {
+    const scope = fork({ values: [[$tokens, null]] });
+    const calls: string[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (req: Request) => {
+      if (req.url.includes("/api/v1/properties")) calls.push(req.url);
+      return new Response(JSON.stringify({ items: [], total: 0, page: 1, page_size: 20 }), { status: 200, headers: { "content-type": "application/json" } });
+    }));
+    const history = createMemoryHistory({ initialEntries: ["/properties"] });
+    await allSettled(router.setHistory, { scope, params: history });
+    await allSettled(sessionRestored, { scope, params: null });
+    expect(calls).toHaveLength(0);
   });
 });

@@ -21,7 +21,7 @@ export function FilterBar() {
   const [onDistrict, onRooms, onPrice, onStatus, onSource, onOwner, onRemoved, onSearch, onClear] = useUnit([districtToggled, roomsToggled, priceChanged, statusChanged, sourceChanged, ownerOnlyToggled, removedToggled, searchChanged, filtersCleared]);
   return (
     <div className="flex flex-wrap items-center gap-2 rounded-card border border-line bg-surface p-3">
-      <Input className="w-full lg:w-80" placeholder={t("properties.filters.search")} value={q} onChange={(e) => onSearch(e.target.value)} aria-label={t("properties.filters.search")} />
+      <Input className="w-full lg:w-80" placeholder={t("properties.filters.search")} value={q} onChange={(e) => onSearch(e.target.value)} aria-label={t("properties.filters.search")} maxLength={200} />
       <div className="flex flex-wrap gap-1.5" role="group" aria-label={t("properties.filters.district")}>
         {districts.map((d) => (
           <button key={d} type="button" className={chip(has(district, d))} aria-pressed={has(district, d)} onClick={() => onDistrict(d)}>{t(districtKey(d))}</button>

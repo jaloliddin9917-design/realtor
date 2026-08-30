@@ -14,7 +14,7 @@ export function PropertyCardList({ rows }: { rows: PropertyRow[] }) {
         <Link key={row.id} to={routes.property} params={{ id: row.id }} className="flex gap-3 rounded-card border border-line bg-surface p-3 text-ink">
           {row.photo_url
             ? <img src={row.photo_url} alt="" className="size-16 flex-none rounded-lg object-cover" />
-            : <div className="size-16 flex-none rounded-lg bg-[#d8e2df]" />}
+            : <div className="size-16 flex-none rounded-lg bg-line" />}
           <div className="flex min-w-0 flex-1 flex-col gap-1">
             <div className="flex items-start justify-between gap-2">
               <PropertyTitle row={row} />
