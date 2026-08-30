@@ -634,8 +634,10 @@ realtor-app/
 ├── web/                       # React + TS admin panel (Vite)
 ├── deploy/
 │   ├── docker-compose.yml
+│   ├── docker-compose.dev.yml
 │   ├── Caddyfile
-│   └── backup.sh
+│   ├── backup.sh
+│   └── restore-check.sh
 └── Makefile                   # venv, up, down, test, lint, migrate
 ```
 

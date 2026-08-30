@@ -1,4 +1,4 @@
-.PHONY: venv up down migrate revision check-migrations test lint typecheck worker api cli openapi web-install web web-check web-build deploy-up deploy-down deploy-logs backup restore-check
+.PHONY: venv up down migrate revision check-migrations test lint typecheck worker api cli openapi web-install web web-check web-build deploy-init deploy-up deploy-down deploy-logs backup restore-check
 
 COMPOSE := docker compose -f deploy/docker-compose.dev.yml
 COMPOSE_PROD := docker compose -f deploy/docker-compose.yml --env-file .env
@@ -53,6 +53,9 @@ web-check:
 
 web-build:
 	pnpm --dir web build
+
+deploy-init:
+	mkdir -p deploy/data/photos deploy/data/telegram && sudo chown -R 1000:1000 deploy/data
 
 deploy-up:
 	$(COMPOSE_PROD) up -d --build --wait

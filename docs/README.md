@@ -55,13 +55,14 @@ One server (data stays in Uzbekistan, spec §11), Docker Compose:
 ```
 git clone … /srv/realtor-app && cd /srv/realtor-app
 cp .env.example .env        # fill DOMAIN, POSTGRES_PASSWORD, JWT_SECRET (≥ 32 random bytes), TELEGRAM_API_ID/HASH
+make deploy-init            # first clone only: deploy/data/{photos,telegram} owned by uid 1000 (the container's user)
 make deploy-up              # builds realtor-api + realtor-web, runs migrations, starts postgres/api/worker/caddy
 docker compose -f deploy/docker-compose.yml --env-file .env exec api python -m app.cli create-user --phone +998… --name … --role admin
 docker compose -f deploy/docker-compose.yml --env-file .env exec -it api python -m app.cli telegram-login
 ```
 
-Caddy serves the web app at `https://$DOMAIN` (automatic HTTPS) and proxies `/api/*` — JSON and photos — to the API. Photos live in `deploy/data/photos`, the Telegram session in `deploy/data/telegram`, PostgreSQL in the `pgdata` volume.
+Caddy serves the web app at `https://$DOMAIN` (automatic HTTPS) and proxies `/api/*` — JSON and photos — to the API. Photos live in `deploy/data/photos`, the Telegram session in `deploy/data/telegram`, PostgreSQL in the `pgdata` volume. `/api/v1/photos/*` is served without authentication in M0 — its URLs are unguessable rather than access-controlled, so treat them as effectively public.
 
-**Backups:** `deploy/backup.sh` (cron nightly) writes a gzipped `pg_dump` and an rsync copy of the photos into `deploy/backups/` (30-day retention) and mirrors them to `BACKUP_TARGET` when set. **Rehearse the restore once before the team starts** (acceptance §14.9): `make restore-check dump=deploy/backups/realtor-<stamp>.sql.gz` restores into a scratch database, prints row counts and drops it.
+**Backups:** `deploy/backup.sh` (cron nightly) writes a gzipped `pg_dump` (30-day local retention) and an accumulating rsync copy of the photos into `deploy/backups/`, and copies both to `BACKUP_TARGET` when set — never deleting there, so retention on that target is its own policy. **Rehearse the restore once before the team starts** (acceptance §14.9): `make restore-check dump=deploy/backups/realtor-<stamp>.sql.gz` restores into a scratch database, prints row counts and drops it.
 
-**First deployment checklist:** real `JWT_SECRET`; `POSTGRES_PASSWORD`; `DOMAIN` pointing at the server (ports 80/443 open); `TELEGRAM_API_ID/HASH` and `telegram-login` before enabling Telegram sources; `deploy/data/` writable by uid 1000; the 30 MB request-body cap is in the Caddyfile; `make deploy-logs` to watch the first crawl (`GET /api/v1/healthz` turns `ok` after the worker's first heartbeat).
+**First deployment checklist:** real `JWT_SECRET`; `POSTGRES_PASSWORD`; `DOMAIN` pointing at the server (ports 80/443 open); `TELEGRAM_API_ID/HASH` and `telegram-login` before enabling Telegram sources; `make deploy-init` before the first `make deploy-up` (otherwise Docker creates `deploy/data/` root-owned and photo writes fail silently); the 30 MB request-body cap is in the Caddyfile; `make deploy-logs` to watch the first crawl (`GET /api/v1/healthz` turns `ok` after the worker's first heartbeat); keep a copy of `.env` and the Telegram session (`deploy/data/telegram`) outside the server.
