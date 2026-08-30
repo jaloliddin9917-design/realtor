@@ -15,7 +15,8 @@
     "skipLibCheck": true,
     "noEmit": true,
     "types": ["vitest/globals", "@testing-library/jest-dom"],
-    "paths": { "@/*": ["./src/*"] }
+    "baseUrl": ".",
+    "paths": { "@/*": ["src/*"] }
   },
   "include": ["src", "vitest.setup.ts", "vite.config.ts"]
 }

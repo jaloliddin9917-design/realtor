@@ -14,4 +14,9 @@ describe("formatMoney", () => {
     expect(formatUsdFromMinor(null)).toBe("—");
     expect(formatUsdFromMinor(30000)).toBe("$300");
   });
+  it("returns a dash for non-finite amounts", () => {
+    expect(formatMoney(NaN, "USD", "uz")).toBe("—");
+    expect(formatMoney(Infinity, "USD", "uz")).toBe("—");
+    expect(formatMoney(-Infinity, "UZS", "uz")).toBe("—");
+  });
 });
