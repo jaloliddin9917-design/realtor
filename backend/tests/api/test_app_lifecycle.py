@@ -34,3 +34,25 @@ async def test_engine_is_disposed_when_startup_fails_after_it_is_created(
             pass  # startup fails (missing dedupe config) before this is ever reached
 
     assert fake_engine.disposed is True
+
+
+async def test_engine_is_disposed_when_session_factory_creation_fails(
+    monkeypatch: pytest.MonkeyPatch,
+    settings: Settings,
+    registry: AdapterRegistry,
+) -> None:
+    fake_engine = _FakeEngine()
+    monkeypatch.setattr(app_module, "make_engine", lambda _url: fake_engine)
+
+    def _boom(_engine: object) -> None:
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(app_module, "make_session_factory", _boom)
+
+    app = app_module.create_app(settings, registry=registry)
+
+    with pytest.raises(RuntimeError, match="boom"):
+        async with app.router.lifespan_context(app):
+            pass  # startup fails while building the session factory itself
+
+    assert fake_engine.disposed is True

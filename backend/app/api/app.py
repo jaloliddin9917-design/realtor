@@ -29,13 +29,13 @@ def create_app(
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         engine = None
-        if session_factory is None:
-            engine = make_engine(cfg.database_url)
-            app.state.session_factory = make_session_factory(engine)
-        else:
-            app.state.session_factory = session_factory
         active_registry: AdapterRegistry | None = None
         try:
+            if session_factory is None:
+                engine = make_engine(cfg.database_url)
+                app.state.session_factory = make_session_factory(engine)
+            else:
+                app.state.session_factory = session_factory
             active_registry = registry or build_registry(cfg)
             app.state.registry = active_registry
             app.state.dedupe_config = load_config(cfg.dedupe_config_path)
