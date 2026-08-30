@@ -1,0 +1,260 @@
+"""Operator commands: python -m app.cli <command>."""
+
+import asyncio
+from collections.abc import Awaitable, Callable
+from datetime import UTC, datetime
+from typing import Any
+from urllib.parse import urlsplit
+
+import typer
+from argon2 import PasswordHasher
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.db import make_engine, make_session_factory
+from app.core.logging import configure_logging
+from app.core.settings import get_settings
+from app.ingestion.adapters.telegram.client import make_client
+from app.ingestion.manual import HOST_KINDS, ingest_url
+from app.ingestion.pipeline import process_raw, run_source
+from app.ingestion.registry import build_registry
+from app.modules.dedupe.config import load_config
+from app.modules.identity.models import User
+from app.modules.listings.models import RawListing, Source
+
+app = typer.Typer(help="Realtor CRM operator commands", no_args_is_help=True)
+
+
+def _run(fn: Callable[[AsyncSession], Awaitable[Any]]) -> Any:
+    """Run `fn` against a fresh engine/session, built from the current settings.
+
+    Reads `get_settings()` at call time (not at import time) so tests can point
+    `DATABASE_URL` at the test database and `get_settings.cache_clear()` before
+    invoking a command.
+    """
+    settings = get_settings()
+    configure_logging(settings.log_level)
+
+    async def go() -> Any:
+        engine = make_engine(settings.database_url)
+        factory = make_session_factory(engine)
+        try:
+            async with factory() as session:
+                result = await fn(session)
+                await session.commit()
+                return result
+        finally:
+            await engine.dispose()
+
+    return asyncio.run(go())
+
+
+@app.command("create-user")
+def create_user(
+    phone: str = typer.Option(...),
+    name: str = typer.Option(...),
+    password: str = typer.Option(..., prompt=True, hide_input=True),
+    role: str = typer.Option("agent"),
+) -> None:
+    if role not in ("admin", "agent"):
+        raise typer.BadParameter("role must be admin or agent")
+
+    async def go(session: AsyncSession) -> None:
+        if (
+            await session.execute(select(User).where(User.phone_e164 == phone))
+        ).scalar_one_or_none():
+            typer.echo(f"user {phone} already exists", err=True)
+            raise typer.Exit(code=1)
+        session.add(
+            User(
+                phone_e164=phone,
+                name=name,
+                password_hash=PasswordHasher().hash(password),
+                role=role,
+            )
+        )
+        typer.echo(f"created {name} ({role}) {phone}")
+
+    _run(go)
+
+
+@app.command("add-source")
+def add_source(
+    kind: str = typer.Argument(..., help="telegram | olx"),
+    target: str = typer.Argument(..., help="@peer or category url"),
+    name: str | None = typer.Option(None),
+    interval: int = typer.Option(900),
+) -> None:
+    if kind not in ("telegram", "olx"):
+        raise typer.BadParameter("kind must be telegram or olx")
+    config = {"peer": target} if kind == "telegram" else {"url": target}
+    source_name = name or (target if kind == "telegram" else "olx")
+
+    async def go(session: AsyncSession) -> None:
+        if (
+            await session.execute(select(Source).where(Source.name == source_name))
+        ).scalar_one_or_none():
+            typer.echo(f"source {source_name} already exists", err=True)
+            raise typer.Exit(code=1)
+        session.add(
+            Source(
+                kind=kind, name=source_name, config=config, interval_seconds=interval, enabled=True
+            )
+        )
+        typer.echo(f"added {kind} source {source_name} (every {interval}s)")
+
+    _run(go)
+
+
+@app.command("list-sources")
+def list_sources() -> None:
+    async def go(session: AsyncSession) -> None:
+        rows = (await session.execute(select(Source).order_by(Source.created_at))).scalars().all()
+        typer.echo(
+            f"{'name':24} {'kind':9} {'on':3} {'status':15} {'interval':8} "
+            f"{'last run':20} {'next run':20} fails"
+        )
+        for s in rows:
+            last_run = str(s.last_run_at)[:19]
+            next_run = str(s.next_run_at)[:19]
+            typer.echo(
+                f"{s.name:24} {s.kind:9} {'yes' if s.enabled else 'no':3} {s.status:15} "
+                f"{s.interval_seconds:<8} {last_run:20} {next_run:20} {s.consecutive_failures}"
+            )
+
+    _run(go)
+
+
+@app.command("run-source")
+def run_source_cmd(name: str) -> None:
+    async def go(session: AsyncSession) -> None:
+        source = (
+            await session.execute(select(Source).where(Source.name == name))
+        ).scalar_one_or_none()
+        if source is None:
+            typer.echo(f"no source named {name}", err=True)
+            raise typer.Exit(code=1)
+        settings = get_settings()
+        registry = build_registry(settings)
+        try:
+            run = await run_source(
+                session,
+                registry.for_source(source),
+                source,
+                cfg=load_config(settings.dedupe_config_path),
+                photo_dir=settings.photo_dir,
+                now=datetime.now(UTC),
+            )
+        finally:
+            await session.commit()  # bookkeeping survives even when run_source raised
+        typer.echo(
+            f"found={run.found} new={run.new} changed={run.changed} "
+            f"failed={run.failed} removed={run.removed} error={run.error}"
+        )
+
+    _run(go)
+
+
+@app.command("reparse")
+def reparse(
+    source: str = typer.Option(..., "--source"), limit: int | None = typer.Option(None)
+) -> None:
+    """Reparse a source's already-stored raw listings without touching the network.
+
+    `process_raw` accepts `adapter: SourceAdapter | None`; passing `None` here (rather
+    than the registry's real adapter) skips the photo-download branch entirely, which
+    is exactly what a network-free reparse needs — only `adapter.rebuild_payload`
+    (documented as never touching the network) is used, to turn the stored raw payload
+    back into a `RawPayload`.
+    """
+
+    async def go(session: AsyncSession) -> None:
+        src = (
+            await session.execute(select(Source).where(Source.name == source))
+        ).scalar_one_or_none()
+        if src is None:
+            typer.echo(f"no source named {source}", err=True)
+            raise typer.Exit(code=1)
+        settings = get_settings()
+        registry = build_registry(settings)
+        adapter = registry.for_source(src)
+        cfg = load_config(settings.dedupe_config_path)
+        stmt = (
+            select(RawListing).where(RawListing.source_id == src.id).order_by(RawListing.fetched_at)
+        )
+        raws = (await session.execute(stmt.limit(limit) if limit else stmt)).scalars().all()
+        done = failed = 0
+        for raw in raws:
+            try:
+                async with session.begin_nested():
+                    payload = await adapter.rebuild_payload(raw)
+                    await process_raw(
+                        session,
+                        src,
+                        raw,
+                        payload,
+                        created=False,
+                        changed=True,
+                        adapter=None,
+                        cfg=cfg,
+                        photo_dir=settings.photo_dir,
+                        now=datetime.now(UTC),
+                        max_photos=10,
+                    )
+                    done += 1
+            except Exception as exc:  # noqa: BLE001 — one bad row must not stop the batch
+                failed += 1
+                raw.parse_error = f"{type(exc).__name__}: {exc}"[:1000]
+        typer.echo(f"reparsed {done} listings, {failed} failed")
+
+    _run(go)
+
+
+@app.command("telegram-login")
+def telegram_login() -> None:
+    settings = get_settings()
+    if not settings.telegram_api_id or not settings.telegram_api_hash:
+        typer.echo(
+            "set TELEGRAM_API_ID and TELEGRAM_API_HASH (my.telegram.org) in backend/.env first",
+            err=True,
+        )
+        raise typer.Exit(code=1)
+
+    async def go() -> None:
+        client = make_client(settings)
+        await client.login_interactive()
+        typer.echo(f"session saved to {settings.telegram_session_path}")
+
+    asyncio.run(go())
+
+
+@app.command("add-listing")
+def add_listing(url: str = typer.Option(..., "--url")) -> None:
+    # Rejecting an unrecognised host here, before `_run`/`build_registry` ever runs,
+    # means a bad URL never pays for constructing a Telegram client (which needs
+    # TELEGRAM_API_ID/TELEGRAM_API_HASH configured) or an OLX HTTP client just to be
+    # told "no" — `ingest_url` would otherwise raise this same ValueError, but only
+    # after `build_registry` already ran.
+    if urlsplit(url).netloc.lower() not in HOST_KINDS:
+        typer.echo(f"unsupported url: {url}", err=True)
+        raise typer.Exit(code=1)
+
+    async def go(session: AsyncSession) -> None:
+        settings = get_settings()
+        result = await ingest_url(
+            session,
+            url,
+            build_registry(settings),
+            cfg=load_config(settings.dedupe_config_path),
+            photo_dir=settings.photo_dir,
+            now=datetime.now(UTC),
+        )
+        typer.echo(
+            f"property {result.property.id} ({result.decision}); listing {result.listing.id}"
+        )
+
+    _run(go)
+
+
+if __name__ == "__main__":
+    app()

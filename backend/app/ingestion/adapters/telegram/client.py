@@ -134,6 +134,9 @@ class TelethonClient:
         except Exception as exc:  # noqa: BLE001
             raise _translate(exc) from exc
 
+    async def login_interactive(self) -> None:
+        await self._client.start()  # prompts for phone, code and 2FA password on the terminal
+
 
 def _translate(exc: Exception) -> Exception:
     from telethon import errors
