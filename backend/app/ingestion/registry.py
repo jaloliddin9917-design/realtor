@@ -1,6 +1,7 @@
 """Build and look up the adapters the worker and the CLI drive."""
 
 from collections.abc import Callable
+from typing import Protocol, runtime_checkable
 
 from app.core.settings import Settings
 from app.ingestion.adapters.base import SourceAdapter
@@ -10,6 +11,18 @@ from app.ingestion.adapters.telegram.client import TelegramClientLike, make_clie
 from app.ingestion.http import HttpClient, HttpxClient, RateLimiter
 from app.ingestion.manual import ManualAdapter
 from app.modules.listings.models import Source
+
+
+@runtime_checkable
+class Closable(Protocol):
+    """An adapter holding something worth releasing (an HTTP client, a Telegram session).
+
+    Deliberately *not* part of `SourceAdapter`: releasing resources is the owner's
+    concern (the worker, the CLI), not something the pipeline drives, and adapters like
+    `ManualAdapter` hold nothing at all.
+    """
+
+    async def aclose(self) -> None: ...
 
 
 class AdapterRegistry:
@@ -50,6 +63,16 @@ class AdapterRegistry:
     def kinds(self) -> list[str]:
         return sorted(set(self._adapters) | set(self._factories))
 
+    async def aclose(self) -> None:
+        """Release every *built* adapter that holds something.
+
+        Only built ones: a deferred factory has nothing open, and calling it here just
+        to close it could raise (missing credentials) in the middle of a shutdown.
+        """
+        for adapter in self._adapters.values():
+            if isinstance(adapter, Closable):
+                await adapter.aclose()
+
 
 def build_registry(
     settings: Settings,
@@ -59,7 +82,10 @@ def build_registry(
 ) -> AdapterRegistry:
     http = http or HttpxClient(user_agent=settings.http_user_agent, proxy=settings.olx_proxy_url)
     olx = OlxAdapter(
-        http, RateLimiter(settings.olx_request_interval), max_pages=settings.olx_max_pages
+        http,
+        RateLimiter(settings.olx_request_interval),
+        photo_limiter=RateLimiter(settings.olx_photo_interval),
+        max_pages=settings.olx_max_pages,
     )
     adapters: dict[str, SourceAdapter] = {"olx": olx, "manual": ManualAdapter()}
     factories: dict[str, Callable[[], SourceAdapter]] = {}

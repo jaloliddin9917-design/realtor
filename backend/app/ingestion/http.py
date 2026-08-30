@@ -90,7 +90,10 @@ class RateLimiter:
 
 
 def backoff_delay(level: int) -> timedelta:
-    return timedelta(minutes=min(32, 2**level))
+    # Clamp the exponent, not just the result: `min(32, 2 ** level)` builds the whole
+    # power before throwing it away, and a source blocked for days reaches four-digit
+    # levels (the level only ever grows — `reset_backoff` clears it on a clean run).
+    return timedelta(minutes=min(32, 2 ** min(level, 5)))
 
 
 def bump_backoff(source: Source) -> tuple[int, timedelta]:

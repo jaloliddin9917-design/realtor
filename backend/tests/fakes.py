@@ -26,10 +26,19 @@ class FakeTelegramClient:
 
     Used wherever a test needs to prove that some code path (registry construction, a
     URL a regex already rejected, ...) never actually reaches out to Telegram.
+
+    `disconnect` is the one exception: releasing a connection that was never opened is
+    exactly what shutdown does to this client, so it records the call instead of failing.
     """
+
+    def __init__(self) -> None:
+        self.disconnected = False
 
     async def connect(self) -> None:
         raise AssertionError("telegram client method called unexpectedly")
+
+    async def disconnect(self) -> None:
+        self.disconnected = True
 
     async def is_user_authorized(self) -> bool:
         raise AssertionError("telegram client method called unexpectedly")

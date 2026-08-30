@@ -42,6 +42,9 @@ class FakeClient:
     async def connect(self) -> None:
         self.connected = True
 
+    async def disconnect(self) -> None:
+        self.connected = False
+
     async def is_user_authorized(self) -> bool:
         return self.authorized
 
@@ -177,11 +180,36 @@ async def test_rebuild_payload_and_fetch_by_url() -> None:
     assert by_url.external_id == "-1001234:103" and "Yunusobod" in by_url.text
 
 
+async def test_aclose_disconnects_the_client() -> None:
+    """The worker and the CLI close the registry on shutdown; a Telegram adapter that
+    connected during a run must let go of its MTProto connection."""
+    client = FakeClient(_messages())
+    adapter = TelegramAdapter(client, now=lambda: NOW)  # type: ignore[arg-type]
+    _ = [r async for r in adapter.discover(_source())]
+    assert client.connected
+    await adapter.aclose()
+    assert client.connected is False
+
+
 def test_marked_chat_id_follows_telethon_conventions() -> None:
+    """Asserted on the entity types `resolve_peer` actually passes in — `get_entity`
+    returns `User`/`Chat`/`Channel` objects, never the `Peer*` wrappers — because only
+    those distinguish a megagroup from a broadcast channel (both marked the same way)."""
+    from datetime import datetime as dt
+
     from telethon.tl import types
 
     from app.ingestion.adapters.telegram.client import marked_chat_id
 
-    assert marked_chat_id(types.PeerUser(user_id=5)) == 5
-    assert marked_chat_id(types.PeerChat(chat_id=77)) == -77
-    assert marked_chat_id(types.PeerChannel(channel_id=1234)) == -1000000001234
+    when = dt(2026, 8, 30, tzinfo=UTC)
+    photo = types.ChatPhotoEmpty()
+    assert marked_chat_id(types.User(id=5)) == 5
+    assert (
+        marked_chat_id(
+            types.Chat(id=77, title="g", photo=photo, participants_count=2, date=when, version=1)
+        )
+        == -77
+    )
+    megagroup = types.Channel(id=1234, title="mg", photo=photo, date=when, megagroup=True)
+    broadcast = types.Channel(id=1234, title="ch", photo=photo, date=when, broadcast=True)
+    assert marked_chat_id(megagroup) == marked_chat_id(broadcast) == -1000000001234

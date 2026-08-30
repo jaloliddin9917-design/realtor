@@ -47,6 +47,10 @@ def test_backoff_delay_doubles_and_caps() -> None:
     assert backoff_delay(0) == timedelta(minutes=1)
     assert backoff_delay(3) == timedelta(minutes=8)
     assert backoff_delay(9) == timedelta(minutes=32)
+    # the exponent is clamped, not just the result: a source blocked for days keeps
+    # bumping its level, and 2**level would be a multi-thousand-digit integer built
+    # and discarded on every call
+    assert backoff_delay(100_000) == timedelta(minutes=32)
 
 
 def test_bump_and_reset_backoff_reassign_state() -> None:

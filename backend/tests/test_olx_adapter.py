@@ -30,6 +30,7 @@ class FakeHttp:
     def __init__(self, routes: dict[str, tuple[int, bytes]]) -> None:
         self.routes = routes
         self.calls: list[str] = []
+        self.closed = False
 
     async def get(self, url: str, *, headers: dict[str, str] | None = None) -> HttpResponse:
         self.calls.append(url)
@@ -37,11 +38,23 @@ class FakeHttp:
         return HttpResponse(status=status, url=url, content=body)
 
     async def aclose(self) -> None:
-        return None
+        self.closed = True
 
 
 async def _no_sleep(_: float) -> None:
     return None
+
+
+class _CountingLimiter(RateLimiter):
+    """A real limiter (zero interval, no sleeping) that records how often it was used."""
+
+    def __init__(self) -> None:
+        super().__init__(0, jitter=0, sleep=_no_sleep)
+        self.waits = 0
+
+    async def wait(self) -> None:
+        self.waits += 1
+        await super().wait()
 
 
 def _adapter(routes: dict[str, tuple[int, bytes]], **kw: object) -> tuple[OlxAdapter, FakeHttp]:
@@ -368,6 +381,66 @@ async def test_fetch_without_phone_endpoint_still_works() -> None:
         all(kind != "phone" for kind, _ in p.contact_hints)
         and ("olx_user", "100000001") in p.contact_hints
     )
+
+
+async def test_a_blocked_phone_endpoint_never_aborts_the_run() -> None:
+    """403/429 from `limited-phones/` must not raise: it is a best-effort extra (spec
+    §3.3) called once per ad, so re-raising `AdapterBackoff` from it aborted the whole
+    source at the very first ad. Instead the lookup is switched off for the rest of the
+    run — one warning, no phones — and the walk carries on.
+    """
+    phones_url = "https://www.olx.uz/api/v1/offers/65000001/limited-phones/"
+    routes = _routes()
+    routes[phones_url] = (429, b"slow down")
+    adapter, http = _adapter(routes)
+    source = Source(kind="olx", name="olx", config={"url": BASE}, state={}, id=uuid.uuid4())
+
+    fetched: list[str] = []
+    payloads = []
+    async for ref in adapter.discover(source):
+        fetched.append(ref.external_id)
+        payloads.append(await adapter.fetch(ref))
+    await adapter.seen_window(source)
+    assert fetched == ["65000001", "65000002", "65000003"]  # the whole walk, not one ad
+    assert all(kind != "phone" for p in payloads for kind, _ in p.contact_hints)
+    # tried once, then skipped for every later ad of the same run
+    assert [c for c in http.calls if c.endswith("/limited-phones/")] == [phones_url]
+
+    # the next run tries again: the block is per run, not for the life of the adapter
+    routes[phones_url] = (200, PHONES_JSON.encode())
+    source.state = {**source.state, "known": {}}
+    calls = len(http.calls)
+    payloads = [await adapter.fetch(ref) async for ref in adapter.discover(source)]
+    assert ("phone", "+998931793333") in payloads[0].contact_hints
+    assert len([c for c in http.calls[calls:] if c.endswith("/limited-phones/")]) == 3
+
+
+async def test_photo_downloads_use_the_photo_limiter() -> None:
+    """CDN photo fetches must not spend the 2 s OLX page budget: a first full walk is
+    ~15k photos, which at 2 s apiece is nine hours of downloads alone."""
+    photo_url = "https://frankfurt.apollo.olxcdn.com:443/v1/files/fixture-1-0-UZ/image;s=1280x960"
+    http = FakeHttp(_routes())
+    pages, photos = _CountingLimiter(), _CountingLimiter()
+    adapter = OlxAdapter(http, pages, photo_limiter=photos)  # type: ignore[arg-type]
+    assert await adapter.download_photo(photo_url) == b"\xff\xd8jpegbytes"
+    assert (pages.waits, photos.waits) == (0, 1)
+    await adapter.fetch(
+        RawRef(
+            external_id="65000001", url=list_ads(extract_state(LIST_HTML))[0]["url"], posted_at=None
+        )
+    )
+    assert photos.waits == 1 and pages.waits == 2  # detail page + phone endpoint
+
+    only_one = _CountingLimiter()
+    fallback = OlxAdapter(FakeHttp(_routes()), only_one)  # type: ignore[arg-type]
+    await fallback.download_photo(photo_url)
+    assert only_one.waits == 1  # no photo limiter configured → the page limiter
+
+
+async def test_aclose_closes_the_http_client() -> None:
+    adapter, http = _adapter(_routes())
+    await adapter.aclose()
+    assert http.closed
 
 
 async def test_fetch_404_and_inactive_raise_listing_gone() -> None:

@@ -24,6 +24,8 @@ class TgMessage:
 class TelegramClientLike(Protocol):
     async def connect(self) -> None: ...
 
+    async def disconnect(self) -> None: ...
+
     async def is_user_authorized(self) -> bool: ...
 
     async def resolve_peer(self, peer: str | int) -> tuple[int, str | None]: ...
@@ -77,6 +79,14 @@ class TelethonClient:
 
     async def connect(self) -> None:
         await self._client.connect()
+
+    async def disconnect(self) -> None:
+        """Close the MTProto connection (a no-op when never connected).
+
+        Telethon's `disconnect()` returns a coroutine while the loop runs; without
+        awaiting it the worker leaves its reader task and socket behind on shutdown.
+        """
+        await self._client.disconnect()
 
     async def is_user_authorized(self) -> bool:
         """Probe authorization via `get_me()` rather than `is_user_authorized()`.

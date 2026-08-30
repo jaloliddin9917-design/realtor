@@ -29,6 +29,9 @@ class Settings(BaseSettings):
     )
     olx_proxy_url: str | None = None
     olx_request_interval: float = 2.0
+    # photos come from *.olxcdn.com, not olx.uz: a separate, much smaller interval, or a
+    # first full walk (~15k photo requests) would take ~9 h at the page rate alone
+    olx_photo_interval: float = 0.3
     olx_max_pages: int = 25
     telegram_backfill_days: int = 14
     telegram_rescan_limit: int = 200

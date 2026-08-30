@@ -177,6 +177,10 @@ class TelegramAdapter:
     async def download_photo(self, ref: Any) -> bytes:
         return await self.client.download_photo(int(ref["chat_id"]), int(ref["message_id"]))
 
+    async def aclose(self) -> None:
+        await self.client.disconnect()
+        self._ready = False
+
     async def rebuild_payload(self, raw: RawListing) -> RawPayload:
         p = raw.payload
         photo_ids = set(p.get("photo_message_ids", []))

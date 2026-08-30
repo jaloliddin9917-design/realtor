@@ -36,15 +36,42 @@ def test_for_source_returns_the_adapter_registered_under_the_sources_kind() -> N
 
 
 def test_build_registry_wires_adapters_from_settings_without_touching_network_or_db() -> None:
-    settings = Settings(_env_file=None, olx_request_interval=1.5, olx_max_pages=7)
+    settings = Settings(
+        _env_file=None, olx_request_interval=1.5, olx_max_pages=7, olx_photo_interval=0.25
+    )
     registry = build_registry(settings, telegram_client=FakeTelegramClient())
     assert registry.kinds == ["manual", "olx", "telegram"]
     olx = registry.get("olx")
     assert isinstance(olx, OlxAdapter)
     assert olx.limiter.min_interval == settings.olx_request_interval
     assert olx.max_pages == settings.olx_max_pages
+    # photos come from the CDN, on their own (much faster) budget — not the page one
+    assert olx.photo_limiter is not olx.limiter
+    assert olx.photo_limiter.min_interval == settings.olx_photo_interval
     assert isinstance(registry.get("telegram"), TelegramAdapter)
     assert isinstance(registry.get("manual"), ManualAdapter)
+
+
+async def test_aclose_closes_built_adapters_and_never_builds_a_deferred_one() -> None:
+    """The worker and the CLI own the registry's lifetime: closing it must release the
+    OLX HTTP client and the Telegram connection. It must not *build* an adapter to close
+    it — asking a lazy Telegram factory for a client at shutdown could raise (missing
+    credentials) instead of shutting down."""
+    closed: list[str] = []
+
+    class Closes(ManualAdapter):
+        async def aclose(self) -> None:
+            closed.append("built")
+
+    def never() -> ManualAdapter:
+        raise AssertionError("aclose must not build a deferred adapter")
+
+    registry = AdapterRegistry(
+        {"olx": Closes(), "manual": ManualAdapter()},  # ManualAdapter has no aclose at all
+        factories={"telegram": never},
+    )
+    await registry.aclose()
+    assert closed == ["built"]
 
 
 def test_build_registry_defers_telegram_construction_until_first_use() -> None:

@@ -1,7 +1,6 @@
 """OLX.uz adapter — list pages for discovery, detail pages for the canonical payload."""
 
 import json
-import uuid
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -58,21 +57,28 @@ class OlxAdapter:
         http: HttpClient,
         limiter: RateLimiter,
         *,
+        photo_limiter: RateLimiter | None = None,
         max_pages: int = 25,
         full_walk_every: int = 4,
         phone_lookup: bool = True,
     ) -> None:
         self.http, self.limiter = http, limiter
+        # Photos come from the CDN (*.olxcdn.com), not from olx.uz, and there are ~10
+        # per ad: spending the 2 s page budget on them would make a first full walk
+        # (~15k requests) take about nine hours. They get their own, faster limiter.
+        self.photo_limiter = photo_limiter or limiter
         self.max_pages, self.full_walk_every, self.phone_lookup = (
             max_pages,
             full_walk_every,
             phone_lookup,
         )
-        self._walks: dict[uuid.UUID, _Walk] = {}
+        self._walks: dict[str, _Walk] = {}
         self._confirmed: dict[str, dict[str, str]] = {}
+        # source ids whose `limited-phones/` endpoint answered 403/429 this run
+        self._phones_blocked: set[str] = set()
 
-    async def _get(self, url: str) -> HttpResponse:
-        await self.limiter.wait()
+    async def _get(self, url: str, limiter: RateLimiter | None = None) -> HttpResponse:
+        await (limiter or self.limiter).wait()
         response = await self.http.get(url)
         if response.status in (403, 429):
             # the shortest sane pause; escalating it across runs is the pipeline's job,
@@ -87,13 +93,15 @@ class OlxAdapter:
         known: dict[str, str] = dict(source.state.get("known", {}))
         run_counter = int(source.state.get("run_counter", 0)) + 1
         walk = _Walk(full=run_counter == 1 or run_counter % self.full_walk_every == 0)
-        self._walks[source.id] = walk
+        self._walks[str(source.id)] = walk
         # a fresh confirmation set per pass: a worker registry may share one adapter
         # instance across several sources, and a run that aborts before `seen_window`
         # (an `AdapterBackoff` from a later fetch — `run_source` re-raises it without
         # ever calling `seen_window`) must not let this source's stale confirmations
         # from an earlier attempt survive into this one
         self._confirmed[str(source.id)] = {}
+        # and a fresh phone budget: a block is a property of one run, not of the adapter
+        self._phones_blocked.discard(str(source.id))
         for page in range(1, self.max_pages + 1):
             url = page_url(base, page)
             response = await self._get(url)
@@ -175,15 +183,30 @@ class OlxAdapter:
         ad = detail_ad(extract_state(response.text))
         if ad.get("isActive") is False or ad.get("status") not in (None, "active"):
             raise ListingGone(ref.external_id)
-        return ad_to_payload(ad, await self._phones(int(ad["id"])))
+        source_id = ref.meta.get("source_id")
+        return ad_to_payload(
+            ad, await self._phones(int(ad["id"]), None if source_id is None else str(source_id))
+        )
 
-    async def _phones(self, ad_id: int) -> list[str]:
-        if not self.phone_lookup:
+    async def _phones(self, ad_id: int, source_id: str | None) -> list[str]:
+        """Best-effort phone reveal (spec §3.3): never raises, whatever goes wrong.
+
+        This endpoint is hit once per ad, so it is the first thing OLX rate-limits. A
+        403/429 here used to escape as `AdapterBackoff` and abort the source at its very
+        first ad — with `store_raw` never reached, an entire run produced nothing. A
+        block now only switches the lookup off for the rest of this source's run (one
+        warning); `discover` clears it next run. Page-level 403/429 in `_get`, for list
+        and detail pages, still raise `AdapterBackoff` — those really do mean stop.
+        """
+        if not self.phone_lookup or (source_id is not None and source_id in self._phones_blocked):
             return []
         try:
             response = await self._get(PHONES_URL.format(id=ad_id))
-        except AdapterBackoff:
-            raise
+        except AdapterBackoff as backoff:
+            if source_id is not None:
+                self._phones_blocked.add(source_id)
+            log.warning("olx_phones_blocked", ad_id=ad_id, reason=backoff.reason)
+            return []
         except Exception as exc:  # noqa: BLE001 — best-effort by design (spec §3.3)
             log.warning("olx_phones_failed", ad_id=ad_id, error=str(exc))
             return []
@@ -204,7 +227,7 @@ class OlxAdapter:
         Called by `run_source` after the fetch loop, which is the first moment we know
         which of the walked ads were actually handled.
         """
-        walk = self._walks.pop(source.id, None)
+        walk = self._walks.pop(str(source.id), None)
         if walk is None:
             return None
         confirmed = self._confirmed.pop(str(source.id), {})
@@ -224,10 +247,13 @@ class OlxAdapter:
         )
 
     async def download_photo(self, ref: Any) -> bytes:
-        response = await self._get(str(ref))
+        response = await self._get(str(ref), self.photo_limiter)
         if response.status != 200:
             raise RuntimeError(f"photo {ref}: http {response.status}")
         return response.content
 
     async def rebuild_payload(self, raw: RawListing) -> RawPayload:
         return ad_to_payload(raw.payload["ad"], list(raw.payload.get("phones", [])))
+
+    async def aclose(self) -> None:
+        await self.http.aclose()
