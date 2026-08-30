@@ -1,0 +1,262 @@
+"""GET /properties — seeded through the real pipeline so rows carry listings and contacts."""
+
+import uuid
+from datetime import timedelta
+from typing import Any
+
+import httpx
+import pytest
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.settings import Settings
+from app.ingestion.pipeline import ingest_payload
+from app.modules.dedupe.config import load_config
+from app.modules.identity.models import User
+from app.modules.listings.models import Listing, Source
+from app.modules.properties.models import Property
+from app.modules.properties.service import attach, set_status
+from tests.api.conftest import auth_headers
+from tests.fakes import NOW, FakeAdapter, payload
+
+# The short literal secret in the `settings` fixture is an intentional test fixture, not
+# a production value; PyJWT's InsecureKeyLengthWarning (HMAC key < 32 bytes) is expected noise.
+pytestmark = pytest.mark.filterwarnings("ignore::jwt.InsecureKeyLengthWarning")
+
+CFG = load_config(Settings(_env_file=None).dedupe_config_path)
+
+
+async def seed(
+    db: AsyncSession,
+    settings: Settings,
+    source: Source,
+    ext: str,
+    text: str,
+    structured: dict[str, Any],
+    *,
+    posted: Any = NOW,
+    photos: list[Any] | None = None,
+) -> Property:
+    result = await ingest_payload(
+        db,
+        source,
+        payload(ext, text, posted=posted, structured=structured, photos=photos),
+        adapter=FakeAdapter([], None),
+        cfg=CFG,
+        photo_dir=settings.photo_dir,
+        now=posted,
+    )
+    return result.property
+
+
+async def listing_of(db: AsyncSession, prop: Property) -> Listing:
+    return (await db.execute(select(Listing).where(Listing.property_id == prop.id))).scalar_one()
+
+
+@pytest.fixture
+async def sources(db: AsyncSession) -> tuple[Source, Source]:
+    tg = Source(kind="telegram", name="@chan", config={"peer": "@chan"})
+    olx = Source(kind="olx", name="olx-tashkent", config={"url": "https://www.olx.uz/x/"})
+    db.add_all([tg, olx])
+    await db.flush()
+    return tg, olx
+
+
+@pytest.fixture
+async def seeded(
+    db: AsyncSession, settings: Settings, sources: tuple[Source, Source]
+) -> dict[str, Property]:
+    tg, olx = sources
+    a = await seed(
+        db,
+        settings,
+        tg,
+        "a",
+        "Сдаётся квартира, хозяин, +998901110001",
+        {
+            "rooms": 2,
+            "district": "chilonzor",
+            "price_amount_minor": 40000,
+            "price_currency": "USD",
+        },
+    )
+    b = await seed(
+        db,
+        settings,
+        olx,
+        "b",
+        "Сдаётся квартира +998901110002",
+        {
+            "rooms": 3,
+            "district": "yunusobod",
+            "price_amount_minor": 70000,
+            "price_currency": "USD",
+        },
+        posted=NOW - timedelta(days=1),
+    )
+    c = await seed(
+        db,
+        settings,
+        tg,
+        "c",
+        "Квартира на длительный срок +998901110003",
+        {
+            "rooms": 1,
+            "district": "chilonzor",
+            "price_amount_minor": 25000,
+            "price_currency": "USD",
+        },
+        posted=NOW - timedelta(days=2),
+    )
+    return {"a": a, "b": b, "c": c}
+
+
+async def test_list_requires_auth(client: httpx.AsyncClient) -> None:
+    r = await client.get("/api/v1/properties")
+    assert r.status_code == 401 and r.json()["code"] == "auth.missing_token"
+
+
+async def test_rows_carry_counts_sources_owner_and_paging(
+    client: httpx.AsyncClient, settings: Settings, agent: User, seeded: dict[str, Property]
+) -> None:
+    r = await client.get("/api/v1/properties", headers=auth_headers(settings, agent))
+    assert r.status_code == 200, r.text
+    page = r.json()
+    assert page["total"] == 3 and page["page"] == 1 and page["page_size"] == 20
+    assert [row["id"] for row in page["items"]] == [
+        str(seeded["a"].id),
+        str(seeded["b"].id),
+        str(seeded["c"].id),
+    ]
+    a = page["items"][0]
+    assert a["listing_count"] == 1 and a["source_kinds"] == ["telegram"]
+    assert a["price_usd_min_minor"] == 40000 and a["rooms"] == 2 and a["status"] == "new"
+    assert a["probable_owner"]["identifier"] == "+998901110001"
+    assert a["probable_owner"]["kind"] == "phone"
+    assert a["photo_url"] is None and a["source_removed"] is False
+    # every property is born with a crawler "new" event (properties.service.create_from_listing)
+    assert a["last_status_event"]["to_status"] == "new"
+    assert a["last_status_event"]["actor_type"] == "crawler"
+    assert a["last_status_event"]["from_status"] is None
+
+
+async def test_filters(
+    client: httpx.AsyncClient,
+    settings: Settings,
+    agent: User,
+    seeded: dict[str, Property],
+    db: AsyncSession,
+) -> None:
+    h = auth_headers(settings, agent)
+
+    async def ids(**params: Any) -> list[str]:
+        r = await client.get("/api/v1/properties", params=params, headers=h)
+        assert r.status_code == 200, r.text
+        return [row["id"] for row in r.json()["items"]]
+
+    a, b, c = (str(seeded[k].id) for k in "abc")
+    district = seeded["a"].district
+    assert district is not None
+    assert await ids(district=district) == [a, c]
+    assert await ids(rooms=[1, 3]) == [b, c]
+    assert await ids(price_min=300, price_max=500) == [a]
+    assert await ids(source="olx") == [b]
+    assert await ids(q="длительный") == [c]
+    assert await ids(sort="first_seen") == [a, b, c]
+    assert await ids(sort="price_asc") == [c, a, b]
+    assert await ids(sort="price_desc") == [b, a, c]
+    assert await ids(page=2, page_size=2) == [c]
+    await set_status(db, seeded["b"], "active", actor_type="agent")
+    assert await ids(status=["active"]) == [b]
+    assert await ids(status=["new"]) == [a, c]
+    r = await client.get("/api/v1/properties", params={"status": "sold"}, headers=h)
+    assert r.status_code == 422 and r.json()["code"] == "validation_error"
+
+
+async def test_owner_only_and_removed(
+    client: httpx.AsyncClient,
+    settings: Settings,
+    agent: User,
+    seeded: dict[str, Property],
+    db: AsyncSession,
+) -> None:
+    h = auth_headers(settings, agent)
+    seeded["c"].source_removed = True
+    await db.flush()
+    r = await client.get("/api/v1/properties", headers=h)
+    assert [row["id"] for row in r.json()["items"]] == [str(seeded["a"].id), str(seeded["b"].id)]
+    r = await client.get("/api/v1/properties", params={"removed": "true"}, headers=h)
+    assert r.json()["total"] == 3
+    r = await client.get("/api/v1/properties", params={"owner_only": "true"}, headers=h)
+    owners = {row["id"]: row["probable_owner"]["classification"] for row in r.json()["items"]}
+    assert owners and all(cls == "owner" for cls in owners.values())
+
+
+async def test_last_status_event_is_the_newest(
+    client: httpx.AsyncClient,
+    settings: Settings,
+    agent: User,
+    seeded: dict[str, Property],
+    db: AsyncSession,
+) -> None:
+    await set_status(db, seeded["a"], "active", actor_type="agent", actor_id=agent.id)
+    await set_status(
+        db, seeded["a"], "inactive", actor_type="agent", actor_id=agent.id, note="rented"
+    )
+    r = await client.get("/api/v1/properties", headers=auth_headers(settings, agent))
+    row = next(x for x in r.json()["items"] if x["id"] == str(seeded["a"].id))
+    ev = row["last_status_event"]
+    assert ev["to_status"] == "inactive" and ev["from_status"] == "active"
+    assert (
+        ev["actor_type"] == "agent" and ev["actor_id"] == str(agent.id) and ev["note"] == "rented"
+    )
+    assert row["status"] == "inactive"
+
+
+async def test_two_listings_collapse_to_one_row_with_the_first_photo(
+    client: httpx.AsyncClient,
+    settings: Settings,
+    agent: User,
+    sources: tuple[Source, Source],
+    db: AsyncSession,
+) -> None:
+    """Two listings on one property, both telegram: one row, one source kind, one photo."""
+    tg, _ = sources
+    structured = {"district": "chilonzor", "price_currency": "USD"}
+    prop = await seed(
+        db,
+        settings,
+        tg,
+        "p1",
+        "Сдаётся квартира +998901110004",
+        {**structured, "rooms": 2, "price_amount_minor": 40000},
+        photos=["1"],
+    )
+    with_photo = await listing_of(db, prop)
+    orphan = await seed(
+        db,
+        settings,
+        tg,
+        "p2",
+        "Та же квартира, другой пост +998901110005",
+        {**structured, "rooms": 4, "price_amount_minor": 90000},
+    )
+    await attach(db, prop, await listing_of(db, orphan), NOW)
+
+    r = await client.get("/api/v1/properties", headers=auth_headers(settings, agent))
+    assert r.status_code == 200, r.text
+    page = r.json()
+    # the property the second listing left behind has no listings at all — it is not a row
+    assert page["total"] == 1
+    row = page["items"][0]
+    assert row["id"] == str(prop.id)
+    assert row["listing_count"] == 2 and row["source_kinds"] == ["telegram"]
+    assert row["photo_url"] == f"/photos/{with_photo.id}/0.jpg"
+
+
+async def test_unknown_uuid_filters_do_not_crash(
+    client: httpx.AsyncClient, settings: Settings, agent: User
+) -> None:
+    params = {"q": str(uuid.uuid4())}
+    r = await client.get("/api/v1/properties", params=params, headers=auth_headers(settings, agent))
+    assert r.status_code == 200 and r.json()["total"] == 0
