@@ -604,6 +604,8 @@ REST under `/api/v1`, JSON, JWT bearer auth. Summary:
 
 All list endpoints are paged; all writes are idempotent where a retry is plausible (`Idempotency-Key` on call logging and outreach webhooks).
 
+Contract: `backend/openapi.json`, regenerated with `make openapi`; the web client is generated from it.
+
 ---
 
 ## 13. Repository layout

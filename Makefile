@@ -1,4 +1,4 @@
-.PHONY: venv up down migrate revision check-migrations test lint typecheck worker api cli
+.PHONY: venv up down migrate revision check-migrations test lint typecheck worker api cli openapi
 
 COMPOSE := docker compose -f deploy/docker-compose.dev.yml
 
@@ -37,3 +37,6 @@ api:
 
 cli:
 	cd backend && .venv/bin/python -m app.cli $(args)
+
+openapi:
+	cd backend && .venv/bin/python -m app.api openapi > openapi.json
