@@ -74,7 +74,13 @@ async def add_listing_by_url(
 ) -> ManualResult:
     kind = HOST_KINDS.get(urlsplit(body.url).netloc.lower())
     if kind is None:
-        raise ApiError(422, "listing.unsupported_url", f"unsupported url: {body.url}")
+        detail = f"unsupported url: {body.url}"
+        raise ApiError(
+            422,
+            "listing.unsupported_url",
+            detail,
+            extra={"errors": [{"loc": ["body", "url"], "msg": detail, "type": "value_error"}]},
+        )
     try:
         registry.get(kind)
     except (KeyError, ValueError) as exc:
@@ -101,7 +107,13 @@ async def add_listing_by_url(
     except InvalidListingUrl as exc:
         # Narrow on purpose: any other ValueError is a bug in our own parsing, and must
         # reach the catch-all 500 rather than be reported to the user as a bad link.
-        raise ApiError(422, "listing.invalid_url", str(exc)) from exc
+        detail = str(exc)
+        raise ApiError(
+            422,
+            "listing.invalid_url",
+            detail,
+            extra={"errors": [{"loc": ["body", "url"], "msg": detail, "type": "value_error"}]},
+        ) from exc
     except LoginRequired as exc:
         raise ApiError(503, "source.login_required", str(exc)) from exc
     except AdapterBackoff as exc:

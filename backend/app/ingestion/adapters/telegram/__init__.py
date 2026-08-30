@@ -6,7 +6,13 @@ from collections.abc import AsyncIterator, Callable
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from app.ingestion.adapters.base import InvalidListingUrl, LoginRequired, RawPayload, RawRef
+from app.ingestion.adapters.base import (
+    InvalidListingUrl,
+    ListingGone,
+    LoginRequired,
+    RawPayload,
+    RawRef,
+)
 from app.ingestion.adapters.telegram.client import TelegramClientLike, TgMessage
 from app.modules.listings.models import RawListing, Source
 from app.modules.listings.service import SeenWindow
@@ -171,9 +177,10 @@ class TelegramAdapter:
         chat_id, resolved_username = await self.client.resolve_peer("@" + username)
         messages = await self.client.get_messages(chat_id, [message_id])
         if not messages:
-            # Same class as a malformed link, so the API keeps answering 422 for it:
-            # from the caller's side both mean "this link leads nowhere".
-            raise InvalidListingUrl(f"message not found: {url}")
+            # A well-formed link whose message has been deleted — the same situation as
+            # a delisted OLX ad (`OlxAdapter.fetch` raises `ListingGone` too), so the API
+            # answers 410 for it, not 422: the link was fine, the content just is gone.
+            raise ListingGone(f"message not found: {url}")
         anchor = messages[0]
         group = [anchor]
         if anchor.grouped_id is not None:

@@ -502,3 +502,13 @@ async def test_fetch_by_url_rejects_a_url_with_no_ad_id() -> None:
         with pytest.raises(InvalidListingUrl, match="not an olx ad url"):
             await adapter.fetch_by_url(url)
     assert http.calls == []
+
+
+async def test_fetch_by_url_accepts_a_genuine_ad_url() -> None:
+    """The mirror of the rejection test above: a real `-ID<slug>.html` ad url passes the
+    guard and reaches the network, unlike a category or malformed url."""
+    adapter, http = _adapter(_routes())
+    url = str(list_ads(extract_state(LIST_HTML))[0]["url"])
+    p = await adapter.fetch_by_url(url)
+    assert p.external_id == "65000001"
+    assert http.calls == [url, "https://www.olx.uz/api/v1/offers/65000001/limited-phones/"]

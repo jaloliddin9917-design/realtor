@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.problems import PROBLEM_401, PROBLEM_403, install_problem_handlers
+from app.api.problems import PROBLEM_401, PROBLEM_403, PROBLEM_500, install_problem_handlers
 from app.api.routers import auth, health, listings, meta, properties, sources
 from app.core.db import make_engine, make_session_factory
 from app.core.settings import API_PREFIX, PHOTO_URL_PREFIX, Settings, get_settings
@@ -74,12 +74,18 @@ def create_app(
     )
     install_problem_handlers(app)
     # health is open; the auth router's login/refresh document their own 401 and `/me`
-    # declares one on the route, so only the fully authenticated routers get it here.
-    app.include_router(health.router, prefix=API_PREFIX)
-    app.include_router(auth.router, prefix=API_PREFIX)
+    # declares one on the route, so only the fully authenticated routers get PROBLEM_401
+    # here. 500 can happen on any route (the catch-all handler), so every router gets
+    # PROBLEM_500, health included.
+    app.include_router(health.router, prefix=API_PREFIX, responses=PROBLEM_500)
+    app.include_router(auth.router, prefix=API_PREFIX, responses=PROBLEM_500)
     for router in (meta.router, properties.router, listings.router):
-        app.include_router(router, prefix=API_PREFIX, responses=PROBLEM_401)
-    app.include_router(sources.router, prefix=API_PREFIX, responses={**PROBLEM_401, **PROBLEM_403})
+        app.include_router(router, prefix=API_PREFIX, responses={**PROBLEM_401, **PROBLEM_500})
+    app.include_router(
+        sources.router,
+        prefix=API_PREFIX,
+        responses={**PROBLEM_401, **PROBLEM_403, **PROBLEM_500},
+    )
     # photos are keyed <listing uuid>/<position>.jpg — unguessable, so no auth in M0
     app.mount(
         PHOTO_URL_PREFIX,

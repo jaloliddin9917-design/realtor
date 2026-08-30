@@ -1688,6 +1688,16 @@
               }
             },
             "description": "request validation failed"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "unexpected error"
           }
         },
         "summary": "Login",
@@ -1739,6 +1749,16 @@
               }
             },
             "description": "request validation failed"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "unexpected error"
           }
         },
         "summary": "Refresh",
@@ -1758,6 +1778,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "unexpected error"
           },
           "503": {
             "description": "database unreachable or worker stale"
@@ -1822,6 +1852,16 @@
               }
             },
             "description": "request validation failed"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "unexpected error"
           },
           "503": {
             "content": {
@@ -1888,6 +1928,16 @@
               }
             },
             "description": "request validation failed"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "unexpected error"
           }
         },
         "security": [
@@ -1924,6 +1974,16 @@
               }
             },
             "description": "missing, invalid or expired token; or inactive user"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "unexpected error"
           }
         },
         "security": [
@@ -1960,6 +2020,16 @@
               }
             },
             "description": "missing, invalid or expired token; or inactive user"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "unexpected error"
           }
         },
         "security": [
@@ -2207,6 +2277,16 @@
               }
             },
             "description": "request validation failed"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "unexpected error"
           }
         },
         "security": [
@@ -2275,6 +2355,16 @@
               }
             },
             "description": "request validation failed"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "unexpected error"
           }
         },
         "security": [
@@ -2353,6 +2443,16 @@
               }
             },
             "description": "request validation failed"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "unexpected error"
           }
         },
         "security": [
@@ -2399,6 +2499,16 @@
               }
             },
             "description": "admin role required"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "unexpected error"
           }
         },
         "security": [
@@ -2473,6 +2583,16 @@
               }
             },
             "description": "request validation failed"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "unexpected error"
           },
           "503": {
             "content": {
@@ -2571,6 +2691,16 @@
               }
             },
             "description": "request validation failed"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "unexpected error"
           }
         },
         "security": [
@@ -2653,6 +2783,16 @@
               }
             },
             "description": "request validation failed"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "unexpected error"
           }
         },
         "security": [

@@ -23,6 +23,7 @@ from typer.testing import CliRunner
 from app import cli as cli_module
 from app.core.settings import get_settings
 from app.ingestion.adapters.telegram import TelegramAdapter
+from app.ingestion.adapters.telegram.client import TgMessage
 from app.ingestion.registry import AdapterRegistry
 from app.modules.identity.models import User
 from app.modules.listings.models import RawListing, Source
@@ -208,8 +209,8 @@ def test_run_source_reports_missing_source(cli_env: None) -> None:
 
 
 def test_add_listing_rejects_unsupported_url(cli_env: None) -> None:
-    """`ingest_url` raises `ValueError` for a host it doesn't recognise, before any
-    adapter or the database is touched; the CLI must turn that into a clean error
+    """`ingest_url` raises `InvalidListingUrl` for a host it doesn't recognise, before
+    any adapter or the database is touched; the CLI must turn that into a clean error
     instead of an unhandled traceback."""
     from app.cli import app
 
@@ -222,7 +223,7 @@ def test_add_listing_rejects_telegram_link_without_message_id(
 ) -> None:
     """A `t.me` URL passes the `HOST_KINDS` host precheck (the host is recognised), but
     the Telegram adapter's own `_TME` regex rejects a channel link with no message id —
-    that plain `ValueError` from `fetch_by_url` must become a clean CLI error, not an
+    that `InvalidListingUrl` from `fetch_by_url` must become a clean CLI error, not an
     unhandled traceback. The fake client's every method raises `AssertionError` if
     called, proving the regex check happens before any client call.
 
@@ -238,6 +239,40 @@ def test_add_listing_rejects_telegram_link_without_message_id(
     result = runner.invoke(cli_module.app, ["add-listing", "--url", "https://t.me/somechannel"])
     assert result.exit_code == 1
     assert result.output.strip() == "error: not a t.me message link: https://t.me/somechannel"
+    assert client.disconnected
+
+
+class _ChannelWithNoSuchMessage(FakeTelegramClient):
+    """Like `FakeTelegramClient`, but `connect`/`is_user_authorized`/`resolve_peer`
+    succeed and `get_messages` reports no such message — enough to drive `fetch_by_url`
+    into `ListingGone` without ever touching a real Telegram session."""
+
+    async def connect(self) -> None:
+        pass
+
+    async def is_user_authorized(self) -> bool:
+        return True
+
+    async def resolve_peer(self, peer: str | int) -> tuple[int, str | None]:
+        return (-1001234, "somechannel")
+
+    async def get_messages(self, chat_id: int, ids: list[int]) -> list[TgMessage]:
+        return []
+
+
+def test_add_listing_reports_a_deleted_telegram_message_as_gone(
+    cli_env: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A well-formed `t.me/<channel>/<id>` link whose message has been deleted raises
+    `ListingGone`, not a `ValueError` — it needs its own handler in `add_listing`, or
+    this prints an unhandled traceback instead of a clean one-line error."""
+    client = _ChannelWithNoSuchMessage()
+    registry = AdapterRegistry({"telegram": TelegramAdapter(client)})
+    monkeypatch.setattr(cli_module, "build_registry", lambda settings, **kw: registry)
+
+    result = runner.invoke(cli_module.app, ["add-listing", "--url", "https://t.me/somechannel/42"])
+    assert result.exit_code == 1
+    assert result.output.strip() == "error: message not found: https://t.me/somechannel/42"
     assert client.disconnected
 
 

@@ -104,8 +104,12 @@ async def create_source(
         # The 422 tells the admin their peer is wrong; only this line tells us whether it
         # really was, or whether Telethon failed for a reason we should have handled.
         log.warning("peer_unresolved", peer=body.peer, error=f"{type(exc).__name__}: {exc}")
+        detail = f"cannot resolve {body.peer!r}: {exc}"
         raise ApiError(
-            422, "source.peer_unresolved", f"cannot resolve {body.peer!r}: {exc}"
+            422,
+            "source.peer_unresolved",
+            detail,
+            extra={"errors": [{"loc": ["body", "peer"], "msg": detail, "type": "value_error"}]},
         ) from exc
     name = body.name or (f"@{username}" if username else body.peer)
     source = Source(

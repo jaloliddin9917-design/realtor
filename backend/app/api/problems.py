@@ -72,6 +72,9 @@ PROBLEM_403: dict[int | str, dict[str, Any]] = {403: problem_response("admin rol
 PROBLEM_422: dict[int | str, dict[str, Any]] = {
     422: {"model": ValidationProblem, "description": "request validation failed"}
 }
+# Applied to every router at `include_router` in app.py: any route can hit the
+# catch-all `Exception` handler below.
+PROBLEM_500: dict[int | str, dict[str, Any]] = {500: problem_response("unexpected error")}
 
 
 class ApiError(Exception):

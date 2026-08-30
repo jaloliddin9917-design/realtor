@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.db import make_engine, make_session_factory
 from app.core.logging import configure_logging
 from app.core.settings import get_settings
-from app.ingestion.adapters.base import SourceAdapter
+from app.ingestion.adapters.base import AdapterBackoff, ListingGone, LoginRequired, SourceAdapter
 from app.ingestion.adapters.telegram.client import make_client
 from app.ingestion.manual import HOST_KINDS, ingest_url
 from app.ingestion.pipeline import process_raw, run_source
@@ -325,12 +325,20 @@ def add_listing(url: str = typer.Option(..., "--url")) -> None:
                     photo_dir=settings.photo_dir,
                     now=datetime.now(UTC),
                 )
+            except (ListingGone, AdapterBackoff, LoginRequired) as e:
+                # A recognised host and a well-formed link, but the adapter cannot serve
+                # it right now: the listing is gone, the source is asking us to back off,
+                # or the Telegram session needs a human to log in again. None of these
+                # three is a `ValueError`, so they need their own clause — same clean
+                # one-line report as the branch below, not a traceback.
+                typer.echo(f"error: {e}", err=True)
+                raise typer.Exit(code=1) from e
             except ValueError as e:
                 # The host precheck above only rejects an unrecognised host; a recognised
                 # one can still fail deeper, e.g. the Telegram adapter's `fetch_by_url`
-                # raises `InvalidListingUrl` for a `t.me` channel link with no message id,
-                # or for a message that no longer exists. Printed verbatim: prefixing it
-                # with "unsupported url:" doubled the phrase and named the wrong culprit.
+                # raises `InvalidListingUrl` for a `t.me` channel link with no message id.
+                # Printed verbatim: prefixing it with "unsupported url:" doubled the
+                # phrase and named the wrong culprit.
                 typer.echo(f"error: {e}", err=True)
                 raise typer.Exit(code=1) from e
         finally:

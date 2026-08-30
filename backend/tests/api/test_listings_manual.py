@@ -40,7 +40,7 @@ def registry() -> AdapterRegistry:
 
 class _SlowFake(UrlFake):
     async def fetch_by_url(self, url: str) -> RawPayload:
-        await asyncio.sleep(0.5)
+        await asyncio.sleep(3)
         return await super().fetch_by_url(url)
 
 
@@ -92,6 +92,7 @@ async def test_add_by_url_errors(
         "/api/v1/listings/manual", json={"url": "https://example.com/flat/1"}, headers=h
     )
     assert r.status_code == 422 and r.json()["code"] == "listing.unsupported_url"
+    assert r.json()["errors"][0]["loc"] == ["body", "url"]
     r = await client.post(
         "/api/v1/listings/manual", json={"url": "https://t.me/somechannel/5"}, headers=h
     )
@@ -161,15 +162,18 @@ async def test_form_validation_and_photo_limit(
 async def test_a_source_that_does_not_answer_in_time_is_503(
     api: tuple[FastAPI, httpx.AsyncClient], settings: Settings, agent: User
 ) -> None:
-    """Spec §2: a pasted link calls the adapter synchronously, with a timeout."""
+    """Spec §2: a pasted link calls the adapter synchronously, with a timeout — and it is
+    the *configured* number of seconds that fires, not just some timeout: a small
+    positive value with a longer sleep proves the setting is actually threaded through."""
     app, client = api
     app.state.registry = AdapterRegistry({"olx": _SlowFake("olx", AD)})  # type: ignore[dict-item]
-    settings.manual_fetch_timeout_seconds = 0
+    settings.manual_fetch_timeout_seconds = 1
     r = await client.post(
         "/api/v1/listings/manual", json={"url": OLX_URL}, headers=auth_headers(settings, agent)
     )
     assert r.status_code == 503, r.text
     assert r.json()["code"] == "source.unavailable"
+    assert r.json()["detail"] == "the source did not answer within 1 s"
 
 
 @pytest.mark.parametrize(
@@ -196,6 +200,8 @@ async def test_adapter_failures_map_to_their_own_codes(
     )
     assert r.status_code == status, r.text
     assert r.json()["code"] == code
+    if code == "listing.invalid_url":
+        assert r.json()["errors"][0]["loc"] == ["body", "url"]
 
 
 async def test_a_value_error_from_deeper_in_the_pipeline_is_not_a_url_problem(

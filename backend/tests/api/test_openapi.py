@@ -47,6 +47,7 @@ def test_error_bodies_are_part_of_the_contract() -> None:
     properties_get = paths["/api/v1/properties"]["get"]["responses"]
     assert _model_of(properties_get["401"]) == "Problem"
     assert _model_of(properties_get["422"]) == "ValidationProblem"
+    assert _model_of(properties_get["500"]) == "Problem"
     assert _model_of(paths["/api/v1/listings/manual"]["post"]["responses"]["410"]) == "Problem"
     assert _model_of(paths["/api/v1/sources"]["get"]["responses"]["403"]) == "Problem"
     # our own 422 replaces FastAPI's auto-generated one everywhere

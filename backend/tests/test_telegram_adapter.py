@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from app.ingestion.adapters.base import InvalidListingUrl, LoginRequired
+from app.ingestion.adapters.base import InvalidListingUrl, ListingGone, LoginRequired
 from app.ingestion.adapters.telegram import TelegramAdapter
 from app.ingestion.adapters.telegram.client import TgMessage
 from app.modules.listings.models import RawListing, Source
@@ -178,6 +178,16 @@ async def test_rebuild_payload_and_fetch_by_url() -> None:
     assert await adapter.rebuild_payload(raw) == p
     by_url = await adapter.fetch_by_url("https://t.me/toshkent_ijara/103")
     assert by_url.external_id == "-1001234:103" and "Yunusobod" in by_url.text
+
+
+async def test_fetch_by_url_raises_listing_gone_when_the_message_no_longer_exists() -> None:
+    """A well-formed `t.me/<channel>/<id>` link whose message has been deleted is the
+    same situation as a delisted OLX ad — `ListingGone`, not `InvalidListingUrl`: the
+    link itself was fine, the content just isn't there any more."""
+    client = FakeClient(_messages())
+    adapter = TelegramAdapter(client, now=lambda: NOW)  # type: ignore[arg-type]
+    with pytest.raises(ListingGone):
+        await adapter.fetch_by_url("https://t.me/toshkent_ijara/999999")
 
 
 async def test_aclose_disconnects_the_client() -> None:

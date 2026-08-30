@@ -151,6 +151,7 @@ async def test_add_source_error_paths(
     telegram.outcome = ValueError("No user has 'nope' as username")
     r = await client.post("/api/v1/sources", json={"peer": "@nope"}, headers=h)
     assert r.status_code == 422 and r.json()["code"] == "source.peer_unresolved"
+    assert r.json()["errors"][0]["loc"] == ["body", "peer"]
     telegram.outcome = LoginRequired("session revoked")
     r = await client.post("/api/v1/sources", json={"peer": "@x_y_z"}, headers=h)
     assert r.status_code == 503 and r.json()["code"] == "source.login_required"
