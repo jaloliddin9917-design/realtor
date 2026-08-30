@@ -2096,6 +2096,13 @@ git commit -m "feat(ingestion): manual ingestion by link or form; adapter regist
 
 ---
 
+#### Post-review amendments (Task 6, 2026-08-30)
+
+- `ingest_url` routes `olx.uz`/`www.olx.uz` → OLX and `t.me` → Telegram only; `telegram.me` is **not** an alias (the Telegram adapter's `fetch_by_url` parses `t.me` links only) and raises `ValueError("unsupported url")` like any other host.
+- `persist_parsed` never populates the `Listing.raw` relationship, so a synchronous `result.listing.raw` access after `ingest_payload` raises `MissingGreenlet` under `AsyncSession`. `IngestResult` documents this; `manual.py` wraps both entry points in one `_with_raw(session, result)` helper that does `await session.refresh(result.listing, ["raw"])`. API callers (M0-3) must eager-load or refresh the same way.
+- `ManualAdapter.rebuild_payload` builds the form from the stored payload filtered to `ManualListingForm.model_fields` (so `photo_count`, `posted_at` and any future extra key are dropped explicitly rather than by pydantic's default `extra="ignore"`).
+- Tests added beyond the sample: `tests/test_registry.py` (`get` KeyError, `kinds`, `for_source`, `build_registry` wiring from settings without network/DB), a committed `rebuild_payload` round-trip, `telegram.me` rejection, zero-photo and non-normalising-phone forms.
+
 ### Task 7: Worker loop and daily jobs
 
 **Files:**
