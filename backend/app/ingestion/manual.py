@@ -141,8 +141,18 @@ async def ingest_url(
     adapter: Any = registry.get(kind)
     payload = await adapter.fetch_by_url(url)
     source = await pick_source(session, kind) or await ensure_manual_source(session)
+    # Attributed to the crawled source (so a later crawl of the same ad updates this row
+    # instead of storing a duplicate) but marked `manual`: the crawler never walked it,
+    # so the removal sweep must not count it as missed until a crawl actually reaches it.
     result = await ingest_payload(
-        session, source, payload, adapter=adapter, cfg=cfg, photo_dir=photo_dir, now=now
+        session,
+        source,
+        payload,
+        adapter=adapter,
+        cfg=cfg,
+        photo_dir=photo_dir,
+        now=now,
+        ingested_via="manual",
     )
     return await _with_raw(session, result)
 
@@ -160,6 +170,13 @@ async def ingest_form(
     payload = form_payload("form:" + uuid.uuid4().hex, form, len(photos), now)
     adapter = ManualAdapter({str(i): data for i, data in enumerate(photos)})
     result = await ingest_payload(
-        session, source, payload, adapter=adapter, cfg=cfg, photo_dir=photo_dir, now=now
+        session,
+        source,
+        payload,
+        adapter=adapter,
+        cfg=cfg,
+        photo_dir=photo_dir,
+        now=now,
+        ingested_via="manual",
     )
     return await _with_raw(session, result)

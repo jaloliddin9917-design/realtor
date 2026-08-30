@@ -67,7 +67,11 @@ class IngestResult:
 
 
 async def store_raw(
-    session: AsyncSession, source: Source, payload: RawPayload, now: datetime
+    session: AsyncSession,
+    source: Source,
+    payload: RawPayload,
+    now: datetime,
+    ingested_via: str = "crawl",
 ) -> tuple[RawListing, bool, bool]:
     """Upsert the raw payload only; does not parse or touch listings/properties.
 
@@ -75,9 +79,19 @@ async def store_raw(
     successfully parsed from this raw row yet (so a previous parse failure also counts
     as `created`, i.e. still eligible for a fresh photo download on retry); `changed` is
     upsert_raw's content-hash comparison against the previously stored payload.
+
+    `ingested_via` is written on insert AND on update: a crawl that finally reaches an
+    ad someone had added by hand takes the row over, so from then on the removal sweep
+    (`apply_misses`) treats it like any other crawled ad.
     """
     raw, changed = await upsert_raw(
-        session, source.id, payload.external_id, payload.url, payload.payload, now
+        session,
+        source.id,
+        payload.external_id,
+        payload.url,
+        payload.payload,
+        now,
+        ingested_via=ingested_via,
     )
     existing = (
         await session.execute(select(Listing).where(Listing.raw_listing_id == raw.id))
@@ -99,7 +113,14 @@ async def process_raw(
     photo_dir: Path,
     now: datetime,
     max_photos: int = 10,
+    seen: bool = True,
 ) -> IngestResult:
+    """Parse → persist → photos → dedupe one already-stored raw payload.
+
+    `seen` is threaded straight to `persist_parsed`: True when the payload was just
+    observed at the source (a crawl, a pasted link), False for a network-free reparse of
+    stored rows, which observes nothing and so must not touch the sighting fields.
+    """
     day = (payload.posted_at or now).date()
     rate = await rate_for(session, day)
     parsed = parse_text(
@@ -113,6 +134,7 @@ async def process_raw(
         now=now,
         usd_rate=rate,
         contacts=payload.contact_hints,
+        seen=seen,
     )
 
     if adapter is not None:
@@ -177,8 +199,9 @@ async def ingest_payload(
     photo_dir: Path,
     now: datetime,
     max_photos: int = 10,
+    ingested_via: str = "crawl",
 ) -> IngestResult:
-    raw, created, changed = await store_raw(session, source, payload, now)
+    raw, created, changed = await store_raw(session, source, payload, now, ingested_via)
     return await process_raw(
         session,
         source,
@@ -286,6 +309,14 @@ async def run_source(
             # but not re-fetched (e.g. it's within the source's window without having
             # changed) never goes through process_raw/recompute, so the owning
             # property's last_seen_at would otherwise go stale. Propagate directly.
+            #
+            # The source filter picks *which* properties this run may have changed; the
+            # aggregate itself must span every listing of those properties, whatever
+            # source each came from — `properties.source_removed` is "all of this
+            # property's listings are gone" (spec §3.5), not "all of the ones this
+            # source happens to own". Aggregating per source instead makes a property
+            # merged from OLX + Telegram and delisted on OLX only flip to removed on
+            # every OLX run and back on every Telegram run.
             await session.execute(
                 text(
                     "UPDATE properties p "
@@ -293,8 +324,11 @@ async def run_source(
                     "    source_removed = sub.all_removed "
                     "FROM (SELECT l.property_id, max(l.last_seen_at) AS max_seen, "
                     "      bool_and(l.source_removed) AS all_removed "
-                    "FROM listings l JOIN raw_listings r ON r.id = l.raw_listing_id "
-                    "WHERE r.source_id = :source_id AND l.property_id IS NOT NULL "
+                    "FROM listings l "
+                    "WHERE l.property_id IN ("
+                    "  SELECT l2.property_id FROM listings l2 "
+                    "  JOIN raw_listings r ON r.id = l2.raw_listing_id "
+                    "  WHERE r.source_id = :source_id AND l2.property_id IS NOT NULL) "
                     "GROUP BY l.property_id) sub "
                     "WHERE p.id = sub.property_id "
                     "AND (p.last_seen_at < sub.max_seen OR p.source_removed <> sub.all_removed)"
@@ -355,8 +389,11 @@ async def run_source(
         source.next_run_at = now + timedelta(seconds=source.interval_seconds)
         try:
             await session.flush()
-        except Exception:  # noqa: BLE001 — never let bookkeeping mask the real failure
-            log.warning("run_bookkeeping_failed", source=source.name, error=str(exc))
+        except Exception as flush_exc:  # noqa: BLE001 — never let bookkeeping mask the real failure
+            # `flush_exc`, not `exc`: the run's own failure is re-raised below and logged
+            # by the caller, whereas this flush error is the only record that the
+            # circuit-breaker bookkeeping never made it to the database.
+            log.warning("run_bookkeeping_failed", source=source.name, error=str(flush_exc))
         raise
     run.finished_at = now
     source.last_run_at = now

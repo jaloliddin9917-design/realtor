@@ -5,10 +5,10 @@ import pytest
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.ingestion.pipeline import run_source
+from app.ingestion.pipeline import process_raw, run_source
 from app.modules.contacts.models import Contact
 from app.modules.dedupe.config import load_config
-from app.modules.listings.models import Listing, ListingPhoto, Source
+from app.modules.listings.models import Listing, ListingPhoto, RawListing, Source
 from app.modules.listings.service import SeenWindow, age_out
 from app.modules.properties.models import Property
 from app.modules.properties.service import recompute_many
@@ -165,6 +165,58 @@ async def test_attach_rescores_every_contact_of_the_property(
         await db.execute(select(Contact).where(Contact.identifier == "+998934021855"))
     ).scalar_one()
     assert other.agency_score == pytest.approx(0.0)  # cheapest of two, clamped at 0
+
+
+async def test_reparse_observes_nothing_and_never_resurrects_a_removed_listing(
+    db: AsyncSession, tmp_path: Path
+) -> None:
+    """`process_raw(..., seen=False)` — what `cli reparse` does — must not count as a
+    sighting (spec §3.5 resurrection is for a listing *seen again* at the source).
+
+    A reparse touches no network: it cannot observe whether the ad is still there. If
+    it refreshed `last_seen_at`/`miss_count`/`source_removed`/`removed_at` anyway, one
+    run would un-remove every removed listing of the source and reset the 30-day
+    age-out clock for all of them.
+    """
+    s = await _source(db)
+    seen = SeenWindow(ids={"1"}, oldest_posted_at=NOW - timedelta(days=1))
+    await run_source(
+        db, FakeAdapter([payload("1", OWNER)], seen), s, cfg=CFG, photo_dir=tmp_path, now=NOW
+    )
+    missing = SeenWindow(ids=set(), oldest_posted_at=NOW - timedelta(days=1))
+    for run in range(1, 4):  # three consecutive runs without the ad → source_removed
+        await run_source(
+            db,
+            FakeAdapter([], missing),
+            s,
+            cfg=CFG,
+            photo_dir=tmp_path,
+            now=NOW + timedelta(hours=run),
+        )
+    listing = (await db.execute(select(Listing))).scalar_one()
+    prop = (await db.execute(select(Property))).scalar_one()
+    assert (listing.source_removed, listing.miss_count) == (True, 3) and prop.source_removed
+    before = (listing.removed_at, listing.last_seen_at, listing.miss_count)
+
+    raw = (await db.execute(select(RawListing))).scalar_one()
+    adapter = FakeAdapter([], None)
+    await process_raw(
+        db,
+        s,
+        raw,
+        await adapter.rebuild_payload(raw),
+        created=False,
+        changed=True,
+        adapter=None,
+        cfg=CFG,
+        photo_dir=tmp_path,
+        now=NOW + timedelta(days=2),
+        seen=False,
+    )
+    await db.refresh(listing)
+    await db.refresh(prop)
+    assert listing.source_removed and prop.source_removed
+    assert (listing.removed_at, listing.last_seen_at, listing.miss_count) == before
 
 
 async def test_age_out_returns_affected_properties(db: AsyncSession, tmp_path: Path) -> None:

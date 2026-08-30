@@ -185,6 +185,11 @@ def reparse(
     is exactly what a network-free reparse needs — only `adapter.rebuild_payload`
     (documented as never touching the network) is used, to turn the stored raw payload
     back into a `RawPayload`.
+
+    `seen=False` for the same reason: a reparse observes nothing at the source, so it
+    must not refresh `last_seen_at`/`miss_count`/`source_removed`/`removed_at` (spec
+    §3.5 resurrection is for a listing genuinely *seen again*). Without it, one reparse
+    would un-remove every delisted listing of the source and reset its age-out clock.
     """
 
     async def go(session: AsyncSession) -> None:
@@ -218,6 +223,7 @@ def reparse(
                         photo_dir=settings.photo_dir,
                         now=datetime.now(UTC),
                         max_photos=10,
+                        seen=False,
                     )
                     done += 1
             except Exception as exc:  # noqa: BLE001 — one bad row must not stop the batch

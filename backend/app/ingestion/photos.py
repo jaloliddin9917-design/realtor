@@ -45,15 +45,23 @@ def store_photo(
     photo_dir: Path, listing_id: uuid.UUID, position: int, data: bytes, max_side: int = 1280
 ) -> StoredPhoto:
     with Image.open(io.BytesIO(data)) as opened:
-        img = ImageOps.exif_transpose(opened) or opened
-        img = img.convert("RGB")
-        img.thumbnail((max_side, max_side), Image.Resampling.LANCZOS)
-        key = f"{listing_id}/{position}.jpg"
-        target = photo_dir / key
-        target.parent.mkdir(parents=True, exist_ok=True)
-        img.save(target, format="JPEG", quality=85, optimize=True)
-        hashed = phash_to_signed(str(imagehash.phash(img)))
-        width, height = img.width, img.height
+        # `exif_transpose` returns a *new* image when the EXIF orientation is not 1, and
+        # `convert` another one on top of it; without closing the intermediate, every
+        # rotated photo leaks a decoded buffer for the rest of the run.
+        transposed = ImageOps.exif_transpose(opened) or opened
+        try:
+            img = transposed.convert("RGB")
+        finally:
+            if transposed is not opened:
+                transposed.close()
+        with img:
+            img.thumbnail((max_side, max_side), Image.Resampling.LANCZOS)
+            key = f"{listing_id}/{position}.jpg"
+            target = photo_dir / key
+            target.parent.mkdir(parents=True, exist_ok=True)
+            img.save(target, format="JPEG", quality=85, optimize=True)
+            hashed = phash_to_signed(str(imagehash.phash(img)))
+            width, height = img.width, img.height
     return StoredPhoto(
         storage_key=key,
         sha256=hashlib.sha256(data).hexdigest(),

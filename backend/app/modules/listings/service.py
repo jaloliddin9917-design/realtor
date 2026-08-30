@@ -35,6 +35,7 @@ async def upsert_raw(
     url: str | None,
     payload: dict[str, Any],
     fetched_at: datetime,
+    ingested_via: str = "crawl",
 ) -> tuple[RawListing, bool]:
     digest = content_hash(payload)
     stmt = select(RawListing).where(
@@ -49,12 +50,16 @@ async def upsert_raw(
             payload=payload,
             content_hash=digest,
             fetched_at=fetched_at,
+            ingested_via=ingested_via,
         )
         session.add(raw)
         await session.flush()
         return raw, True
     changed = raw.content_hash != digest
     raw.fetched_at = fetched_at
+    # on update too: once a crawl reaches an ad that was added by hand, the row is a
+    # crawled one from then on and `apply_misses` may sweep it like any other.
+    raw.ingested_via = ingested_via
     if changed:
         raw.payload, raw.content_hash, raw.url = payload, digest, url or raw.url
     await session.flush()
@@ -70,7 +75,16 @@ async def persist_parsed(
     now: datetime,
     usd_rate: Decimal | None,
     contacts: list[tuple[str, str]] | None = None,
+    seen: bool = True,
 ) -> Listing:
+    """Parse-and-store one listing; `seen` says whether this call *observed* the ad.
+
+    `seen=True` (a crawl fetched the ad, or a human pasted its link) applies spec §3.5
+    resurrection: refresh `last_seen_at`, clear `miss_count`/`source_removed`/
+    `removed_at`. `seen=False` (a reparse of stored raw rows — no network, nothing
+    observed) rewrites only the parsed fields and leaves those four alone, so a reparse
+    can never un-remove a delisted ad or reset its 30-day age-out clock.
+    """
     extra = contacts or []
     listing = (
         await session.execute(select(Listing).where(Listing.raw_listing_id == raw.id))
@@ -92,10 +106,11 @@ async def persist_parsed(
     )
     listing.area_sqm, listing.district = parsed.area_sqm, parsed.district
     listing.posted_at = posted_at
-    listing.last_seen_at = now
-    listing.miss_count = 0
-    listing.source_removed = False
-    listing.removed_at = None
+    if seen:
+        listing.last_seen_at = now
+        listing.miss_count = 0
+        listing.source_removed = False
+        listing.removed_at = None
     listing.owner_marker, listing.agent_marker = parsed.owner_marker, parsed.agent_marker
     listing.parse_confidence = parsed.parse_confidence
     raw.parse_error = None
@@ -141,6 +156,11 @@ async def apply_misses(
         .join(RawListing, RawListing.id == Listing.raw_listing_id)
         .where(
             RawListing.source_id == source_id,
+            # Crawled rows only: a hand-added listing (a pasted link) is attributed to
+            # the crawled source, but the crawler may never walk it — another category,
+            # or past the page budget — so it would otherwise be flagged removed after
+            # three runs while being perfectly live.
+            RawListing.ingested_via == "crawl",
             Listing.source_removed.is_(False),
             Listing.posted_at >= window.oldest_posted_at,
             RawListing.external_id.not_in(window.ids),

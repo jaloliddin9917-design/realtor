@@ -72,6 +72,12 @@ class RawListing(IdMixin, TimestampMixin, Base):
     content_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     parse_error: Mapped[str | None] = mapped_column(Text)
+    # crawl | manual — a crawler walked this ad, or a human pasted its link. Only
+    # crawled rows are swept by `apply_misses` (a crawler cannot "miss" what it never
+    # walks); a crawl that later reaches a manually-added ad takes the row over.
+    ingested_via: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="crawl", server_default="crawl"
+    )
 
     source: Mapped[Source] = relationship()
 

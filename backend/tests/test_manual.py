@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -16,10 +16,12 @@ from app.ingestion.manual import (
     ingest_url,
     pick_source,
 )
+from app.ingestion.pipeline import run_source, store_raw
 from app.ingestion.registry import AdapterRegistry
 from app.modules.contacts.service import contacts_for_listing
 from app.modules.dedupe.config import load_config
 from app.modules.listings.models import ListingPhoto, RawListing, Source
+from app.modules.listings.service import SeenWindow
 from tests.fakes import FakeAdapter, payload
 from tests.helpers import make_jpeg
 
@@ -75,6 +77,62 @@ async def test_ingest_url_routes_by_host_and_prefers_the_enabled_source(
         await ingest_url(
             db, "https://example.com/flat", registry, cfg=CFG, photo_dir=tmp_path, now=NOW
         )
+
+
+async def test_manually_added_listing_is_not_missed_by_the_crawlers_removal_sweep(
+    db: AsyncSession, tmp_path: Path
+) -> None:
+    """A pasted link is attributed to the crawled source of that kind (so a later crawl
+    of the same ad updates that row instead of duplicating it) — but the crawler never
+    walked it: it may be in another category, or past `olx_max_pages`. Counting it as
+    missed would flag a perfectly live ad `source_removed` after three runs, so
+    `apply_misses` only sweeps rows the crawler itself brought in (`ingested_via`).
+
+    Once a crawl *does* reach the ad, the row becomes a crawled one and is swept
+    normally from then on.
+    """
+    crawled = Source(kind="olx", name="olx-crawled", config={"url": "x"}, enabled=True)
+    db.add(crawled)
+    await db.flush()
+    ad = payload("65000042", "Chilonzor 2-xonali 3/9 qavat 54 m² 450$ tel 90 811 24 37")
+    registry = AdapterRegistry({"olx": UrlFake("olx", ad)})  # type: ignore[dict-item]
+    result = await ingest_url(
+        db,
+        "https://www.olx.uz/d/obyavlenie/x-ID42.html",
+        registry,
+        cfg=CFG,
+        photo_dir=tmp_path,
+        now=NOW,
+    )
+    listing = result.listing
+    assert listing.raw.source_id == crawled.id and listing.raw.ingested_via == "manual"
+
+    nothing = SeenWindow(ids=set(), oldest_posted_at=NOW - timedelta(days=1))
+    for run in range(1, 4):
+        await run_source(
+            db,
+            FakeAdapter([], nothing),
+            crawled,
+            cfg=CFG,
+            photo_dir=tmp_path,
+            now=NOW + timedelta(hours=run),
+        )
+    await db.refresh(listing)
+    assert (listing.miss_count, listing.source_removed) == (0, False)
+
+    raw, _, _ = await store_raw(db, crawled, ad, NOW + timedelta(hours=4))
+    assert raw.ingested_via == "crawl"  # the crawl took the row over
+    for run in range(5, 8):
+        await run_source(
+            db,
+            FakeAdapter([], nothing),
+            crawled,
+            cfg=CFG,
+            photo_dir=tmp_path,
+            now=NOW + timedelta(hours=run),
+        )
+    await db.refresh(listing)
+    assert (listing.miss_count, listing.source_removed) == (3, True)
 
 
 async def test_ingest_form_builds_listing_with_photos_and_phone(
