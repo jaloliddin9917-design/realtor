@@ -11,7 +11,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.ingestion.adapters.base import RawPayload, RawRef
+from app.ingestion.adapters.base import InvalidListingUrl, RawPayload, RawRef
 from app.ingestion.parse import normalize_phone
 from app.ingestion.pipeline import IngestResult, ingest_payload
 from app.modules.dedupe.config import DedupeConfig
@@ -137,7 +137,7 @@ async def ingest_url(
     host = urlsplit(url).netloc.lower()
     kind = HOST_KINDS.get(host)
     if kind is None:
-        raise ValueError(f"unsupported url: {url}")
+        raise InvalidListingUrl(f"unsupported url: {url}")
     adapter: Any = registry.get(kind)
     payload = await adapter.fetch_by_url(url)
     source = await pick_source(session, kind) or await ensure_manual_source(session)

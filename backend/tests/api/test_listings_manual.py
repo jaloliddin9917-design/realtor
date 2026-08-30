@@ -1,12 +1,24 @@
+import asyncio
 import uuid
+from datetime import timedelta
 
 import httpx
 import pytest
+from fastapi import FastAPI
+from pydantic import field_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.routers import listings as listings_router
 from app.core.settings import Settings
-from app.ingestion.manual import ManualAdapter
+from app.ingestion.adapters.base import (
+    AdapterBackoff,
+    InvalidListingUrl,
+    ListingGone,
+    LoginRequired,
+    RawPayload,
+)
+from app.ingestion.manual import ManualAdapter, ManualListingForm
 from app.ingestion.registry import AdapterRegistry
 from app.modules.contacts.service import contacts_for_listing
 from app.modules.identity.models import User
@@ -17,12 +29,28 @@ from tests.fakes import UrlFake, payload
 from tests.helpers import make_jpeg
 
 AD = payload("77", "Сдаётся 2-комн, Чиланзар, 400$ +998901110009", structured={"rooms": 2})
+OLX_URL = "https://www.olx.uz/d/obyavlenie/x-ID77.html"
 
 
 @pytest.fixture
 def registry() -> AdapterRegistry:
     # `olx` answers URL fetches; no `telegram` adapter at all — exercises the misconfigured path
     return AdapterRegistry({"manual": ManualAdapter(), "olx": UrlFake("olx", AD)})  # type: ignore[dict-item]
+
+
+class _SlowFake(UrlFake):
+    async def fetch_by_url(self, url: str) -> RawPayload:
+        await asyncio.sleep(0.5)
+        return await super().fetch_by_url(url)
+
+
+class _FailingFake(UrlFake):
+    def __init__(self, kind: str, p: RawPayload, error: Exception) -> None:
+        super().__init__(kind, p)
+        self.error = error
+
+    async def fetch_by_url(self, url: str) -> RawPayload:
+        raise self.error
 
 
 async def test_add_by_url_creates_a_property(
@@ -128,3 +156,95 @@ async def test_form_validation_and_photo_limit(
         "/api/v1/listings/manual/form", data={"title": "x"}, files=files, headers=h
     )
     assert r.status_code == 422 and r.json()["code"] == "validation_error"
+
+
+async def test_a_source_that_does_not_answer_in_time_is_503(
+    api: tuple[FastAPI, httpx.AsyncClient], settings: Settings, agent: User
+) -> None:
+    """Spec §2: a pasted link calls the adapter synchronously, with a timeout."""
+    app, client = api
+    app.state.registry = AdapterRegistry({"olx": _SlowFake("olx", AD)})  # type: ignore[dict-item]
+    settings.manual_fetch_timeout_seconds = 0
+    r = await client.post(
+        "/api/v1/listings/manual", json={"url": OLX_URL}, headers=auth_headers(settings, agent)
+    )
+    assert r.status_code == 503, r.text
+    assert r.json()["code"] == "source.unavailable"
+
+
+@pytest.mark.parametrize(
+    ("error", "status", "code"),
+    [
+        (LoginRequired("session revoked"), 503, "source.login_required"),
+        (AdapterBackoff(timedelta(minutes=5), "http 429"), 503, "source.unavailable"),
+        (ListingGone("77"), 410, "listing.gone"),
+        (InvalidListingUrl("no ad id in https://www.olx.uz/x"), 422, "listing.invalid_url"),
+    ],
+)
+async def test_adapter_failures_map_to_their_own_codes(
+    api: tuple[FastAPI, httpx.AsyncClient],
+    settings: Settings,
+    agent: User,
+    error: Exception,
+    status: int,
+    code: str,
+) -> None:
+    app, client = api
+    app.state.registry = AdapterRegistry({"olx": _FailingFake("olx", AD, error)})  # type: ignore[dict-item]
+    r = await client.post(
+        "/api/v1/listings/manual", json={"url": OLX_URL}, headers=auth_headers(settings, agent)
+    )
+    assert r.status_code == status, r.text
+    assert r.json()["code"] == code
+
+
+async def test_a_value_error_from_deeper_in_the_pipeline_is_not_a_url_problem(
+    api: tuple[FastAPI, httpx.AsyncClient],
+    settings: Settings,
+    agent: User,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Only `InvalidListingUrl` means "bad link"; any other ValueError is our bug — a 500."""
+    app, _ = api
+
+    async def boom(*args: object, **kwargs: object) -> None:
+        raise ValueError("boom")
+
+    monkeypatch.setattr(listings_router, "ingest_url", boom)
+    # Starlette re-raises after the handler answers, so this client must not raise.
+    transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as local:
+        r = await local.post(
+            "/api/v1/listings/manual", json={"url": OLX_URL}, headers=auth_headers(settings, agent)
+        )
+    assert r.status_code == 500
+    assert r.json()["code"] == "internal_error" and "boom" not in r.text
+
+
+async def test_a_rejected_form_model_is_a_validation_problem(
+    client: httpx.AsyncClient,
+    settings: Settings,
+    agent: User,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`ManualListingForm(...)` is built by hand from the multipart fields, so its own
+    pydantic errors never reached FastAPI's validation handler."""
+
+    class Picky(ManualListingForm):
+        @field_validator("title")
+        @classmethod
+        def _reject(cls, value: str) -> str:
+            if value == "reject-me":
+                raise ValueError("title is not allowed")
+            return value
+
+    monkeypatch.setattr(listings_router, "ManualListingForm", Picky)
+    r = await client.post(
+        "/api/v1/listings/manual/form",
+        data={"title": "reject-me"},
+        headers=auth_headers(settings, agent),
+    )
+    assert r.status_code == 422, r.text
+    body = r.json()
+    assert body["code"] == "validation_error"
+    assert body["errors"][0]["loc"] == ["body", "title"]

@@ -1,6 +1,7 @@
 """OLX.uz adapter — list pages for discovery, detail pages for the canonical payload."""
 
 import json
+import re
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -9,7 +10,13 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 import structlog
 
-from app.ingestion.adapters.base import AdapterBackoff, ListingGone, RawPayload, RawRef
+from app.ingestion.adapters.base import (
+    AdapterBackoff,
+    InvalidListingUrl,
+    ListingGone,
+    RawPayload,
+    RawRef,
+)
 from app.ingestion.adapters.olx.state import (
     ad_signature,
     ad_time,
@@ -25,6 +32,8 @@ from app.modules.listings.service import SeenWindow
 
 log = structlog.get_logger()
 PHONES_URL = "https://www.olx.uz/api/v1/offers/{id}/limited-phones/"
+# every olx.uz ad page ends in "-ID<slug>.html"; a category or search URL does not
+_AD_URL = re.compile(r"-ID[0-9A-Za-z]+\.html$", re.IGNORECASE)
 
 
 def page_url(base: str, page: int) -> str:
@@ -219,6 +228,10 @@ class OlxAdapter:
         return [str(p) for p in phones]
 
     async def fetch_by_url(self, url: str) -> RawPayload:
+        """Fetch one pasted ad URL. Rejects anything that is not an ad page, before
+        spending a request on it — a category or search URL has no ad id to parse."""
+        if _AD_URL.search(urlsplit(url).path) is None:
+            raise InvalidListingUrl(f"not an olx ad url: {url}")
         return await self.fetch(RawRef(external_id="", url=url, posted_at=None))
 
     async def seen_window(self, source: Source) -> SeenWindow | None:

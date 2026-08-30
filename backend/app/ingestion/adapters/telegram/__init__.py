@@ -6,7 +6,7 @@ from collections.abc import AsyncIterator, Callable
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from app.ingestion.adapters.base import LoginRequired, RawPayload, RawRef
+from app.ingestion.adapters.base import InvalidListingUrl, LoginRequired, RawPayload, RawRef
 from app.ingestion.adapters.telegram.client import TelegramClientLike, TgMessage
 from app.modules.listings.models import RawListing, Source
 from app.modules.listings.service import SeenWindow
@@ -19,7 +19,7 @@ def parse_message_link(url: str) -> tuple[str, int]:
     a trailing `?single` / `#`."""
     m = _TME.match(url.strip())
     if m is None:
-        raise ValueError(f"not a t.me message link: {url}")
+        raise InvalidListingUrl(f"not a t.me message link: {url}")
     return m.group(1), int(m.group(2))
 
 
@@ -171,7 +171,9 @@ class TelegramAdapter:
         chat_id, resolved_username = await self.client.resolve_peer("@" + username)
         messages = await self.client.get_messages(chat_id, [message_id])
         if not messages:
-            raise ValueError(f"message not found: {url}")
+            # Same class as a malformed link, so the API keeps answering 422 for it:
+            # from the caller's side both mean "this link leads nowhere".
+            raise InvalidListingUrl(f"message not found: {url}")
         anchor = messages[0]
         group = [anchor]
         if anchor.grouped_id is not None:

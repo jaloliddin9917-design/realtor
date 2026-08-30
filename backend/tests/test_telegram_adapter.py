@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from app.ingestion.adapters.base import LoginRequired
+from app.ingestion.adapters.base import InvalidListingUrl, LoginRequired
 from app.ingestion.adapters.telegram import TelegramAdapter
 from app.ingestion.adapters.telegram.client import TgMessage
 from app.modules.listings.models import RawListing, Source
@@ -229,7 +229,9 @@ def test_parse_message_link_accepts_pasted_forms() -> None:
         "https://t.me/chan_name/123?single",
     ):
         assert parse_message_link(url) == ("chan_name", 123)
-    with pytest.raises(ValueError, match="not a t.me message link"):
+    # InvalidListingUrl, not a bare ValueError: the API answers 422 for this and 500
+    # for any other ValueError escaping the adapter.
+    with pytest.raises(InvalidListingUrl, match="not a t.me message link"):
         parse_message_link("https://t.me/chan_name")
-    with pytest.raises(ValueError, match="not a t.me message link"):
+    with pytest.raises(InvalidListingUrl, match="not a t.me message link"):
         parse_message_link("https://telegram.me/chan_name/123")

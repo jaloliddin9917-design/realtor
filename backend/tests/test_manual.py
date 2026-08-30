@@ -6,6 +6,7 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.ingestion.adapters.base import InvalidListingUrl
 from app.ingestion.manual import (
     ManualAdapter,
     ManualListingForm,
@@ -61,7 +62,7 @@ async def test_ingest_url_routes_by_host_and_prefers_the_enabled_source(
     assert (
         result2.listing.raw.source_id == manual.id
     )  # no enabled telegram source → the manual source
-    with pytest.raises(ValueError):
+    with pytest.raises(InvalidListingUrl):
         await ingest_url(
             db, "https://example.com/flat", registry, cfg=CFG, photo_dir=tmp_path, now=NOW
         )
@@ -184,7 +185,7 @@ async def test_ingest_url_rejects_telegram_me(db: AsyncSession, tmp_path: Path) 
     calls into it for this host.
     """
     registry = AdapterRegistry({})
-    with pytest.raises(ValueError, match="unsupported url"):
+    with pytest.raises(InvalidListingUrl, match="unsupported url"):
         await ingest_url(
             db, "https://telegram.me/x/5", registry, cfg=CFG, photo_dir=tmp_path, now=NOW
         )

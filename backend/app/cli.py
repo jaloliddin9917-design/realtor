@@ -328,7 +328,7 @@ def add_listing(url: str = typer.Option(..., "--url")) -> None:
             except ValueError as e:
                 # The host precheck above only rejects an unrecognised host; a recognised
                 # one can still fail deeper, e.g. the Telegram adapter's `fetch_by_url`
-                # raises plain `ValueError` for a `t.me` channel link with no message id,
+                # raises `InvalidListingUrl` for a `t.me` channel link with no message id,
                 # or for a message that no longer exists. Printed verbatim: prefixing it
                 # with "unsupported url:" doubled the phrase and named the wrong culprit.
                 typer.echo(f"error: {e}", err=True)

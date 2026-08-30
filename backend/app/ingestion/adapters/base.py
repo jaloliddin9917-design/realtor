@@ -64,6 +64,15 @@ class ListingGone(Exception):  # noqa: N818 — name is a fixed public contract,
     """`fetch` found that the listing no longer exists at the source (404, deactivated)."""
 
 
+class InvalidListingUrl(ValueError):  # noqa: N818 — named for the value it rejects, as above
+    """A pasted URL no adapter can turn into a listing: wrong host, or no ad id in it.
+
+    A `ValueError` subclass so existing callers (the CLI, `ingest_url`'s own tests)
+    keep catching it as one; the API needs the narrower type to tell "your link is
+    wrong" (422) apart from any other `ValueError`, which is a bug and a 500.
+    """
+
+
 class SourceAdapter(Protocol):
     """A source-specific integration (Telegram, OLX, ...) the ingestion pipeline drives.
 
@@ -112,6 +121,7 @@ class SourceAdapter(Protocol):
 
 __all__ = [
     "AdapterBackoff",
+    "InvalidListingUrl",
     "ListingGone",
     "LoginRequired",
     "RawPayload",

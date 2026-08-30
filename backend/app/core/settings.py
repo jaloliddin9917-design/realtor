@@ -33,6 +33,9 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:5173"
     jwt_access_minutes: int = 15
     jwt_refresh_days: int = 30
+    # POST /listings/manual is the one request that touches the network (spec §2): a
+    # pasted link is fetched synchronously, so it needs a hard ceiling of its own.
+    manual_fetch_timeout_seconds: int = 20
 
     @property
     def cors_origin_list(self) -> list[str]:

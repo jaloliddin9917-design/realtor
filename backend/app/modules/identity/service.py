@@ -1,7 +1,14 @@
-"""Users: argon2 password hashing and phone/password authentication."""
+"""Users: argon2 password hashing and phone/password authentication.
+
+`hash_password`/`verify_password` stay synchronous for the CLI, which has no event
+loop to protect; the async callers here run them in a worker thread, because argon2 is
+deliberately slow (tens of milliseconds of CPU) and would otherwise stall every other
+request in flight.
+"""
 
 import uuid
 
+import anyio.to_thread
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHashError, VerificationError, VerifyMismatchError
 from sqlalchemy import select
@@ -47,7 +54,7 @@ async def create_user(
     user = User(
         phone_e164=phone_e164,
         name=name,
-        password_hash=hash_password(password),
+        password_hash=await anyio.to_thread.run_sync(hash_password, password),
         role=role,
         locale=locale,
     )
@@ -58,6 +65,8 @@ async def create_user(
 
 async def authenticate(session: AsyncSession, phone_e164: str, password: str) -> User | None:
     user = await get_user_by_phone(session, phone_e164)
-    if user is None or not user.active or not verify_password(user.password_hash, password):
+    if user is None or not user.active:
+        return None
+    if not await anyio.to_thread.run_sync(verify_password, user.password_hash, password):
         return None
     return user

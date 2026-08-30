@@ -5,7 +5,12 @@ from pathlib import Path
 
 import pytest
 
-from app.ingestion.adapters.base import AdapterBackoff, ListingGone, RawRef
+from app.ingestion.adapters.base import (
+    AdapterBackoff,
+    InvalidListingUrl,
+    ListingGone,
+    RawRef,
+)
 from app.ingestion.adapters.olx import OlxAdapter
 from app.ingestion.adapters.olx.state import (
     ad_to_payload,
@@ -488,3 +493,12 @@ async def test_rebuild_payload_round_trips_and_photo_download() -> None:
     p = await adapter.rebuild_payload(raw)
     assert p == ad_to_payload(ad, ["+998931793333"])
     assert await adapter.download_photo(ad["photos"][0]) == b"\xff\xd8jpegbytes"
+
+
+async def test_fetch_by_url_rejects_a_url_with_no_ad_id() -> None:
+    """A category or search URL is not an ad: say so instead of spending a request on it."""
+    adapter, http = _adapter({})
+    for url in (BASE, "https://www.olx.uz/d/obyavlenie/x.html", "https://www.olx.uz/"):
+        with pytest.raises(InvalidListingUrl, match="not an olx ad url"):
+            await adapter.fetch_by_url(url)
+    assert http.calls == []

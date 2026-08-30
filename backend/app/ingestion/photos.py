@@ -4,6 +4,7 @@ import uuid
 from dataclasses import dataclass
 from pathlib import Path
 
+import anyio.to_thread
 import imagehash
 from PIL import Image, ImageOps
 from sqlalchemy import select
@@ -90,7 +91,13 @@ async def save_listing_photo(
         _mark_failed(photo, error or "download failed")
     else:
         try:
-            stored = store_photo(photo_dir, listing.id, position, data)
+            # decode, resize, perceptual-hash and write to disk: hundreds of
+            # milliseconds of CPU and blocking file IO per photo, on the same event loop
+            # that serves the API (`POST /listings/manual*`) and the worker's other
+            # sources — so it runs in a thread, never inline.
+            stored = await anyio.to_thread.run_sync(
+                store_photo, photo_dir, listing.id, position, data
+            )
         except (OSError, ValueError, Image.DecompressionBombError) as exc:
             # undecodable/truncated bytes, an oversized "bomb" image, or the photo dir
             # not writable
