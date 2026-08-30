@@ -11,25 +11,59 @@ export function configureAuth(hooks: AuthHooks): void {
   auth = hooks;
 }
 
-const RETRIED = new WeakSet<Request>();
+/**
+ * Maps the request openapi-fetch is about to send to an untouched clone of it. Sending a
+ * request consumes its body, and `new Request(alreadySent, …)` then throws ("Cannot
+ * construct a Request with a Request object that has already been used"), so the 401
+ * retry has to be rebuilt from a clone taken *before* the send — never from the sent
+ * request itself. `clone()` does not disturb the original, so taking one costs nothing.
+ */
+const PRISTINE = new WeakMap<Request, Request>();
+
+/** The refresh endpoint is authenticated by the refresh token, not the access token. */
+function isAuthEndpoint(url: string): boolean {
+  const { pathname } = new URL(url);
+  return pathname.endsWith("/auth/refresh") || pathname.endsWith("/auth/login");
+}
+
+let inflightRefresh: Promise<string | null> | null = null;
+
+/** Concurrent 401s share one refresh call instead of racing several against the API. */
+function refreshOnce(): Promise<string | null> {
+  const pending = inflightRefresh ?? auth.refresh().finally(() => { inflightRefresh = null; });
+  inflightRefresh = pending;
+  return pending;
+}
 
 const bearer: Middleware = {
   async onRequest({ request }) {
     const token = auth.getAccess();
     if (token && !request.headers.has("authorization")) request.headers.set("authorization", `Bearer ${token}`);
+    // openapi-fetch sends this exact object, so it is the key the response side will see.
+    PRISTINE.set(request, request.clone());
     return request;
   },
   async onResponse({ request, response }) {
-    if (response.status !== 401 || RETRIED.has(request)) return response;
+    if (response.status !== 401) return response;
+    // The refresh call goes through this same middleware, and the API answers an expired
+    // *refresh* token with the very same 401 auth.token_expired — refreshing in response
+    // to that would recurse until the stack or the API gives out. Login is exempt for the
+    // same reason: a bad password must not trigger a token refresh.
+    if (isAuthEndpoint(request.url)) return response;
     const body: unknown = await response.clone().json().catch(() => null);
     const code = body && typeof body === "object" && "code" in body ? (body as { code?: unknown }).code : undefined;
     if (code !== "auth.token_expired") return response;
-    const fresh = await auth.refresh();
+    const fresh = await refreshOnce();
     if (!fresh) return response;
-    const retry = new Request(request, { headers: new Headers(request.headers) });
-    retry.headers.set("authorization", `Bearer ${fresh}`);
-    RETRIED.add(retry);
-    return fetch(retry);
+    const pristine = PRISTINE.get(request);
+    // Only reachable if another middleware swapped the request object out; replaying the
+    // consumed one would throw, so surface the 401 instead.
+    if (!pristine) return response;
+    const headers = new Headers(request.headers);
+    headers.set("authorization", `Bearer ${fresh}`);
+    // The retry is sent through a bare fetch(), which never re-enters this middleware, so
+    // one retry per request is structural — no "already retried" bookkeeping is needed.
+    return fetch(new Request(pristine, { headers }));
   },
 };
 
@@ -66,11 +100,15 @@ api.use(bearer);
  * would leak openapi-fetch internals into every call site; each union member of the real
  * return type is structurally assignable to this shape, so inference of `T` still lands on
  * the success `data` type at each call site.
+ *
+ * A successful response is allowed to carry no body: openapi-fetch reports 204 (and any
+ * empty 2xx) as `{ data: undefined, response }`, which is a value, not a failure — only
+ * `error` or a non-2xx status makes a problem.
  */
 export async function unwrap<T>(result: Promise<{ data?: T; error?: unknown; response: Response }>): Promise<T> {
   const { data, error, response } = await result;
-  if (error !== undefined || data === undefined) throw problemFrom(response.status, error ?? null);
-  return data;
+  if (error !== undefined || !response.ok) throw problemFrom(response.status, error ?? null);
+  return data as T;
 }
 
 export type { paths } from "./schema";

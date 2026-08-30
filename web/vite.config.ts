@@ -16,5 +16,7 @@ export default defineConfig({
     setupFiles: ["./vitest.setup.ts"],
     include: ["src/**/*.test.{ts,tsx}"],
     css: false,
+    // restore globals (notably `fetch`) after every test so a stub cannot leak
+    unstubGlobals: true,
   },
 });
