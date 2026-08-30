@@ -1,4 +1,4 @@
-.PHONY: venv up down migrate revision check-migrations test lint typecheck worker api cli openapi
+.PHONY: venv up down migrate revision check-migrations test lint typecheck worker api cli openapi web-install web web-check web-build
 
 COMPOSE := docker compose -f deploy/docker-compose.dev.yml
 
@@ -40,3 +40,15 @@ cli:
 
 openapi:
 	cd backend && .venv/bin/python -m app.api openapi > openapi.json
+
+web-install:
+	pnpm --dir web install --frozen-lockfile
+
+web:
+	pnpm --dir web dev
+
+web-check:
+	pnpm --dir web check
+
+web-build:
+	pnpm --dir web build

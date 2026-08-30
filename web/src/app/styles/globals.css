@@ -1,0 +1,99 @@
+@import "tailwindcss";
+@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap");
+
+@theme {
+  --font-sans: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Menlo, monospace;
+  --color-bg: #eef1f0;
+  --color-ink: #15211e;
+  --color-muted: #5c6b67;
+  --color-line: #dfe5e2;
+  --color-line-soft: #eaeeec;
+  --color-surface: #ffffff;
+  --color-surface-soft: #f7f9f8;
+  --color-primary: #0f6e63;
+  --color-primary-dark: #0b5349;
+  --color-sidebar: #15211e;
+  --color-sidebar-ink: #c9d6d2;
+  --color-status-active-bg: #dff3e4;
+  --color-status-active: #1a6b36;
+  --color-status-inactive-bg: #f8dfe4;
+  --color-status-inactive: #9c2a40;
+  --color-status-new-bg: #e6ebe9;
+  --color-status-new: #4c5b57;
+  --color-owner-bg: #e0f0ee;
+  --color-owner: #0f6e63;
+  --color-agent-bg: #f3e6dc;
+  --color-agent: #8a4b1c;
+  --color-warn-bg: #fff4e0;
+  --color-warn-line: #f1d59a;
+  --color-warn: #7a4a08;
+  --radius-card: 10px;
+}
+
+/* shadcn/ui CSS variables (new-york, mapped onto the mockup tokens) */
+:root {
+  --background: #eef1f0;
+  --foreground: #15211e;
+  --card: #ffffff;
+  --card-foreground: #15211e;
+  --popover: #ffffff;
+  --popover-foreground: #15211e;
+  --primary: #0f6e63;
+  --primary-foreground: #ffffff;
+  --secondary: #f7f9f8;
+  --secondary-foreground: #15211e;
+  --muted: #eef1f0;
+  --muted-foreground: #5c6b67;
+  --accent: #e0f0ee;
+  --accent-foreground: #0b5349;
+  --destructive: #9c2a40;
+  --destructive-foreground: #ffffff;
+  --border: #dfe5e2;
+  --input: #cfd8d5;
+  --ring: #0f6e63;
+  --radius: 0.5rem;
+}
+
+/*
+ * Register the shadcn/ui variables above as Tailwind v4 theme colors so the
+ * generated components (which use classes like `bg-background`, `border-border`,
+ * `text-muted-foreground`) resolve. `--color-primary` and `--color-muted` are
+ * deliberately NOT remapped here: the mockup `@theme` block above already owns
+ * those two names (`--color-primary` is value-identical to shadcn's `--primary`,
+ * so nothing changes; `--color-muted` is the mockup's de-emphasized *text* color
+ * (#5c6b67) and must stay authoritative for `text-muted` — shadcn's `--muted` is
+ * a pale *background* (#eef1f0) with a different meaning). Net effect: shadcn
+ * components that use `bg-muted` will render with the mockup's muted color
+ * instead of shadcn's default pale one, until a later task deliberately
+ * restyles them.
+ */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+@layer base {
+  * { @apply border-border; }
+  body { @apply bg-bg text-ink font-sans text-sm antialiased; }
+  .num { font-variant-numeric: tabular-nums; }
+}
