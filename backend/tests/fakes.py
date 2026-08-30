@@ -108,7 +108,7 @@ class FakeAdapter:
         )
 
 
-async def test_session_factory(db: AsyncSession) -> Callable[[], AsyncSession]:
+async def savepoint_session_factory(db: AsyncSession) -> Callable[[], AsyncSession]:
     """Build a session factory bound to `db`'s own connection.
 
     A worker's `commit()` then only releases a savepoint

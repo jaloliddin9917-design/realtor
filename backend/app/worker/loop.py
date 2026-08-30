@@ -59,6 +59,14 @@ async def run_due_sources(
     writes circuit-breaker bookkeeping before re-raising. So each source gets its own
     try/except/finally here: a failing source is logged, never allowed to stop the
     batch, and its session is committed regardless in the `finally`.
+
+    The commit itself can also fail — e.g. when `run_source`'s own bookkeeping flush
+    was already poisoned (its `run_bookkeeping_failed` log) — and that must not escape
+    this loop either, or a single broken source stalls every other due source behind
+    it. `due` is a fixed snapshot taken once, up front: `stop` (in `main`) is only
+    checked between ticks, not between sources, so once a tick starts, every source
+    that was due when it started gets its turn before shutdown can take effect (M0
+    accepts this latency).
     """
     async with session_factory() as session:
         due = [s.id for s in await due_sources(session, now)]
@@ -88,14 +96,30 @@ async def run_due_sources(
             except Exception as exc:  # noqa: BLE001 — the bookkeeping is already on the session; commit it
                 log.warning("source_run_failed", source=source.name, error=str(exc))
             finally:
-                await (
-                    session.commit()
-                )  # the pipeline's contract: commit after return AND after raise
+                # the pipeline's contract: commit after return AND after raise — but a
+                # poisoned transaction (see the docstring above) can make this commit
+                # itself raise (e.g. `PendingRollbackError`), which must not escape the
+                # loop and take every other due source down with it.
+                commit_failed = False
+                try:
+                    await session.commit()
+                except Exception as commit_exc:  # noqa: BLE001 — one broken source must not stop the batch
+                    log.warning("source_commit_failed", source=source.name, error=str(commit_exc))
+                    await session.rollback()
+                    commit_failed = True
+            if commit_failed:
+                continue
             if run_id is None:  # a failed run's row was written by run_source before it raised
-                stmt = select(CrawlRun.id).where(
-                    CrawlRun.source_id == source_id, CrawlRun.started_at == now
+                # no unique constraint on (source_id, started_at): take the latest
+                # instead of `scalar_one_or_none()`, which would raise on duplicates.
+                stmt = (
+                    select(CrawlRun)
+                    .where(CrawlRun.source_id == source_id, CrawlRun.started_at == now)
+                    .order_by(CrawlRun.started_at.desc())
+                    .limit(1)
                 )
-                run_id = (await session.execute(stmt)).scalar_one_or_none()
+                found = (await session.execute(stmt)).scalars().first()
+                run_id = found.id if found else None
             if run_id is not None:
                 run_ids.append(run_id)
     return run_ids
@@ -178,17 +202,32 @@ async def main() -> None:
     for sig in (signal.SIGINT, signal.SIGTERM):
         loop.add_signal_handler(sig, stop.set)
     log.info("worker_start", tick_seconds=settings.worker_tick_seconds, adapters=registry.kinds)
-    async with httpx.AsyncClient(timeout=30) as http:
-        while not stop.is_set():
-            try:
-                await tick(
-                    factory, registry, settings=settings, cfg=cfg, http=http, now=datetime.now(UTC)
-                )
-            except Exception as exc:  # noqa: BLE001 — a tick must never kill the worker
-                log.error("tick_failed", error=str(exc))
-            try:
-                await asyncio.wait_for(stop.wait(), timeout=settings.worker_tick_seconds)
-            except TimeoutError:
-                continue
-    await engine.dispose()
-    log.info("worker_stop")
+    try:
+        async with httpx.AsyncClient(timeout=30) as http:
+            while not stop.is_set():
+                try:
+                    await tick(
+                        factory,
+                        registry,
+                        settings=settings,
+                        cfg=cfg,
+                        http=http,
+                        now=datetime.now(UTC),
+                    )
+                except Exception as exc:  # noqa: BLE001 — a tick must never kill the worker
+                    log.error("tick_failed", error=str(exc))
+                # `stop` is only checked here, between ticks — never between the sources
+                # a tick runs (see `run_due_sources`) — so shutdown waits for the
+                # in-flight tick's sources to finish. M0 accepts this latency rather
+                # than cancelling a source run midway.
+                try:
+                    await asyncio.wait_for(stop.wait(), timeout=settings.worker_tick_seconds)
+                except TimeoutError:
+                    continue
+    finally:
+        # dispose the engine (and drop the signal handlers) even if the httpx client
+        # block above raised, not only on a clean stop.
+        for sig in (signal.SIGINT, signal.SIGTERM):
+            loop.remove_signal_handler(sig)
+        await engine.dispose()
+        log.info("worker_stop")
