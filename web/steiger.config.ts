@@ -52,6 +52,17 @@ export default defineConfig([
     },
   },
   {
+    // The list filters own effector units (the URL-synced stores, `querySync`, the fetch
+    // trigger) and are rendered as three separate bars the page places around the results,
+    // so they are a feature — but only the properties page can render them, which is what
+    // `insignificant-slice` reacts to. Merging would move a model into pages/, the wrong
+    // direction; "warn" rather than "off" for the same reason as features/auth/login above.
+    files: ["src/features/property/**"],
+    rules: {
+      "fsd/insignificant-slice": "warn",
+    },
+  },
+  {
     // `features/listing/add-manual` (the *Qo'lda qo'shish* dialog) is built and exported in
     // full by Task 6, but wiring its button into `pages/properties` is deliberately left to
     // Task 7 — that page is owned by a sibling M0-4 worktree (Tasks 4/5) and only gets
@@ -59,6 +70,17 @@ export default defineConfig([
     // "warn" rather than "off": once Task 7 wires it in, this override should be removed, and
     // a still-orphaned slice at that point should fail the gate like any other orphan.
     files: ["src/features/listing/add-manual/**"],
+    rules: {
+      "fsd/insignificant-slice": "warn",
+    },
+  },
+  {
+    // The table (≥ lg) and the card list (< lg) are two renderings of the same rows, and the
+    // page picks between them with CSS — so each has exactly one consumer by construction.
+    // They stay separate widgets because either one is a self-contained block of markup that
+    // the page merely places; folding both into pages/properties would make that one file the
+    // whole list UI. "warn" keeps the report honest without failing the gate.
+    files: ["src/widgets/property-table/**", "src/widgets/property-card-list/**"],
     rules: {
       "fsd/insignificant-slice": "warn",
     },
