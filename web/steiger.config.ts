@@ -63,12 +63,15 @@ export default defineConfig([
     },
   },
   {
-    // `features/listing/add-manual` (the *Qo'lda qo'shish* dialog) is built and exported in
-    // full by Task 6, but wiring its button into `pages/properties` is deliberately left to
-    // Task 7 — that page is owned by a sibling M0-4 worktree (Tasks 4/5) and only gets
-    // merged, and wired, after both branches land. Until then the slice has zero consumers.
-    // "warn" rather than "off": once Task 7 wires it in, this override should be removed, and
-    // a still-orphaned slice at that point should fail the gate like any other orphan.
+    // `features/listing/add-manual` (the *Qo'lda qo'shish* dialog) owns its own Effector
+    // model (`addUrlRequested`, `addUrlFx`, `$urlError`) tightly coupled to one dialog, the
+    // same shape as `features/auth/login` and `features/source/*` above — and, since Task 7
+    // wired its button into `pages/properties`, that page is its only consumer. The slice is
+    // no longer a zero-reference orphan, but `insignificant-slice` also fires for a slice
+    // with exactly one reference ("consider merging them"), which would mean moving the
+    // dialog's model into pages/ — the wrong direction, for the same reason as the other
+    // single-consumer features here. "warn" rather than "off" for the same reason as the
+    // rest of this file: still visible, not a hard failure.
     files: ["src/features/listing/add-manual/**"],
     rules: {
       "fsd/insignificant-slice": "warn",

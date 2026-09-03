@@ -585,6 +585,8 @@ Stack: React 18 + TypeScript, Vite, Tailwind, TanStack Query, react-i18next (uz-
 
 Mobile layout is the default; the properties list is a card list on phones and a table on desktop. Dial buttons are `tel:` links so the phone's dialer opens; the log form appears when the agent returns to the tab.
 
+Implemented in `web/` per spec §9; gates in `pnpm check`.
+
 ---
 
 ## 12. API surface

@@ -42,6 +42,11 @@ describe("PropertiesPage", () => {
     expect(screen.getByText("1 / 3")).toBeInTheDocument();
   });
 
+  it("renders the manual-add button", async () => {
+    await mount();
+    expect(screen.getByRole("button", { name: "Qo'lda qo'shish" })).toBeInTheDocument();
+  });
+
   it("puts a chip click into the URL instead of component state", async () => {
     const scope = await mount();
     await userEvent.click(screen.getByRole("button", { name: "Sergeli" }));

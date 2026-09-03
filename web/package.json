@@ -14,7 +14,9 @@
     "lint:fsd": "steiger ./src",
     "api:generate": "openapi-typescript ../backend/openapi.json -o src/shared/api/schema.d.ts",
     "api:check": "node scripts/check-api-client.mjs",
-    "check": "pnpm typecheck && pnpm lint:fsd && pnpm test && vite build"
+    "i18n:extract": "i18next -c i18next-parser.config.js",
+    "i18n:check": "node scripts/check-i18n.mjs",
+    "check": "pnpm typecheck && pnpm lint:fsd && pnpm test && pnpm i18n:check && pnpm api:check && vite build"
   },
   "dependencies": {
     "atomic-router": "0.12.0",
@@ -45,6 +47,7 @@
     "@vitejs/plugin-react": "6.1.1",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
+    "i18next-parser": "9.4.0",
     "jsdom": "30.0.1",
     "lucide-react": "1.37.0",
     "openapi-typescript": "7.13.0",

@@ -2,6 +2,7 @@ import { useUnit } from "effector-react";
 import { useTranslation } from "react-i18next";
 import { $listPending, $rows } from "@/entities/property";
 import { LanguageSwitch } from "@/features/i18n/switch-language";
+import { AddManualDialog } from "@/features/listing/add-manual";
 import { FilterBar, Pagination, ResultsBar } from "@/features/property/filters";
 import { Skeleton } from "@/shared/ui/skeleton";
 import { AppLayout } from "@/widgets/app-layout";
@@ -12,7 +13,7 @@ export function PropertiesPage() {
   const { t } = useTranslation();
   const [rows, pending] = useUnit([$rows, $listPending]);
   return (
-    <AppLayout title={t("properties.title")} actions={<LanguageSwitch />}>
+    <AppLayout title={t("properties.title")} actions={<><AddManualDialog /><LanguageSwitch /></>}>
       <FilterBar />
       <ResultsBar />
       {pending && rows.length === 0

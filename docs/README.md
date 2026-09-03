@@ -7,7 +7,7 @@
 | [`superpowers/specs/2026-08-29-m0-fetch-everything-design.md`](superpowers/specs/2026-08-29-m0-fetch-everything-design.md) | Approved design spec for milestone M0 "Fetch everything" — the first thing being built; implementation plans go to `superpowers/plans/` |
 | [`mockups/`](mockups/) | UI mockups — 8 screens (admin desktop: dashboard, listings, duplicates, bot monitor, settings; agent mobile: queue, property, call log). Published canvas: https://claude.ai/code/artifact/e431e74b-7f22-4fd0-a450-cd5eaeb7ae9f · sources in `mockups/src/`, rebuild with `python3 docs/mockups/src/build.py`; ready-to-send PNGs of every screen in `mockups/png/` |
 
-Status: docs are **Draft v0.1 (2026-08-29)**. Code: plans M0-1 (backend core — schema, parsing, persistence, photos, dedupe, properties, pipeline), M0-2 (Telegram and OLX adapters, manual ingestion by link or form, the worker loop, the operator CLI) and M0-3 (the HTTP API — auth, properties, listings, manual ingestion, sources, OpenAPI contract) are implemented, with a real-PostgreSQL test suite; the implementation plans live in `superpowers/plans/`. Next is M0-4 (the web panel and deployment). Mockups are Draft v0.1 too; UI copy is Uzbek (Latin) with fictional sample data.
+Status: docs are **Draft v0.1 (2026-08-29)**. Code: plans M0-1 (backend core — schema, parsing, persistence, photos, dedupe, properties, pipeline), M0-2 (Telegram and OLX adapters, manual ingestion by link or form, the worker loop, the operator CLI), M0-3 (the HTTP API — auth, properties, listings, manual ingestion, sources, OpenAPI contract) and M0-4's web panel (see "Web" below) are implemented, with a real-PostgreSQL backend test suite and a typecheck/steiger/vitest/i18n/API-client-gated web suite; the implementation plans live in `superpowers/plans/`. Remaining for M0-4 is deployment, per the "Deployment" section below. Mockups are Draft v0.1 too; UI copy is Uzbek (Latin) with fictional sample data.
 
 ## Running
 
@@ -47,6 +47,17 @@ curl -s http://127.0.0.1:8000/api/v1/auth/login -H 'content-type: application/js
 ```
 
 Then `POST /api/v1/auth/refresh {"refresh": "…"}` and `GET /api/v1/me` for the session itself; `GET /api/v1/meta` for the district, status, source-kind and contact-classification values the filters offer; `GET /api/v1/properties?district=…&rooms=2&status=active&page=1`, `GET /api/v1/properties/{property_id}`, `POST /api/v1/properties/{property_id}/status {"status": "active"}`, `POST /api/v1/listings/manual {"url": "…"}` and `POST /api/v1/listings/manual/form` (multipart: the same fields plus up to 10 photos); and, for admins, `GET|POST /api/v1/sources`, `PATCH /api/v1/sources/{source_id}`, `GET /api/v1/sources/{source_id}/runs`. `GET /api/v1/healthz` returns 200 only when the database answers and the worker heartbeat is under 5 minutes old. Photos are served from `/api/v1/photos/<listing id>/<n>.jpg`.
+
+### Web
+
+```
+pnpm --dir web install --frozen-lockfile     # once (Node 22, pnpm 11)
+pnpm --dir web dev                           # http://127.0.0.1:5173 — proxies /api to the API on :8000
+pnpm --dir web check                         # tsc, steiger (FSD), vitest, i18n key check, API-client check, build
+pnpm --dir web api:generate                  # after `make openapi`: regenerate src/shared/api/schema.d.ts
+```
+
+The web app is Feature-Sliced (`web/src/{app,pages,widgets,features,entities,shared}`), state is Effector, routing is atomic-router (filters live in the URL), strings come from `web/src/shared/i18n/{uz,ru}.json` (add keys to both files — `pnpm i18n:check` fails otherwise). Log in with a user created by `create-user`; admins also see *Manbalar* (`/admin/sources`).
 
 ## Deployment
 
