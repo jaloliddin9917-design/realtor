@@ -157,6 +157,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/properties/{property_id}/call-log": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Call Log */
+        post: operations["create_call_log_api_v1_properties__property_id__call_log_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/properties/{property_id}/status": {
         parameters: {
             query?: never;
@@ -168,6 +185,57 @@ export interface paths {
         put?: never;
         /** Set Property Status */
         post: operations["set_property_status_api_v1_properties__property_id__status_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/queue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Queue */
+        get: operations["get_queue_api_v1_queue_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/queue/{property_id}/release": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Release Queue Item */
+        post: operations["release_queue_item_api_v1_queue__property_id__release_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/queue/{property_id}/take": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Take Queue Item */
+        post: operations["take_queue_item_api_v1_queue__property_id__take_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -230,6 +298,19 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AvailabilityOut */
+        AvailabilityOut: {
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "vacant" | "taken" | "unknown";
+        };
         /** Body_add_listing_by_form_api_v1_listings_manual_form_post */
         Body_add_listing_by_form_api_v1_listings_manual_form_post: {
             /** Area Sqm */
@@ -257,6 +338,70 @@ export interface components {
             title: string;
             /** Total Floors */
             total_floors?: number | null;
+        };
+        /** CallConditionsIn */
+        CallConditionsIn: {
+            /** Deposit Months */
+            deposit_months?: number | null;
+            /**
+             * Family Only
+             * @default false
+             */
+            family_only: boolean;
+            /**
+             * Foreigners
+             * @default false
+             */
+            foreigners: boolean;
+        };
+        /** CallLogIn */
+        CallLogIn: {
+            /**
+             * @default {
+             *       "family_only": false,
+             *       "foreigners": false
+             *     }
+             */
+            conditions: components["schemas"]["CallConditionsIn"];
+            next_check?: components["schemas"]["NextCheckIn"] | null;
+            /**
+             * Note
+             * @default
+             */
+            note: string;
+            /**
+             * Outcome
+             * @enum {string}
+             */
+            outcome: "still_available" | "taken" | "no_answer" | "call_back" | "realtor_not_owner" | "do_not_contact" | "wrong_number";
+        };
+        /** CheckOut */
+        CheckOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Logged At
+             * Format: date-time
+             */
+            logged_at: string;
+            /**
+             * Outcome
+             * @enum {string}
+             */
+            outcome: "still_available" | "taken" | "no_answer" | "call_back" | "realtor_not_owner" | "do_not_contact" | "wrong_number";
+            /**
+             * Property Id
+             * Format: uuid
+             */
+            property_id: string;
+            /**
+             * Resulting Status
+             * @enum {string}
+             */
+            resulting_status: "vacant" | "taken" | "unchanged";
         };
         /** ContactOut */
         ContactOut: {
@@ -332,6 +477,16 @@ export interface components {
             stale: boolean;
             /** Usd Uzs */
             usd_uzs: string;
+        };
+        /** LastActivityOut */
+        LastActivityOut: {
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /** Text */
+            text: string;
         };
         /** ListingOut */
         ListingOut: {
@@ -427,6 +582,16 @@ export interface components {
             /** Statuses */
             statuses: ("new" | "active" | "inactive")[];
         };
+        /** NextCheckIn */
+        NextCheckIn: {
+            /**
+             * Choice
+             * @enum {string}
+             */
+            choice: "in_3_days" | "tomorrow" | "date";
+            /** Date */
+            date?: string | null;
+        };
         /** OwnerOut */
         OwnerOut: {
             /** Agency Score */
@@ -482,8 +647,8 @@ export interface components {
              *     `auth.invalid_credentials`, `auth.forbidden`, `not_found`, `method_not_allowed`,
              *     `validation_error`, `internal_error`, `listing.unsupported_url`, `listing.invalid_url`,
              *     `listing.gone`, `source.misconfigured`, `source.unavailable`, `source.login_required`,
-             *     `source.peer_unresolved`, `source.exists`; any other HTTP status raised by the framework
-             *     becomes `http.<status>`.
+             *     `source.peer_unresolved`, `source.exists`, `queue.locked`; any other HTTP status raised by
+             *     the framework becomes `http.<status>`.
              */
             code: string;
             /** Detail */
@@ -608,6 +773,63 @@ export interface components {
             status: "new" | "active" | "inactive";
             /** Total Floors */
             total_floors: number | null;
+        };
+        /** QueueItemOut */
+        QueueItemOut: {
+            /** Area Sqm */
+            area_sqm: number | null;
+            availability: components["schemas"]["AvailabilityOut"];
+            /** District */
+            district: string | null;
+            /** Floor */
+            floor: number | null;
+            /** Id */
+            id: string;
+            last_activity: components["schemas"]["LastActivityOut"];
+            owner: components["schemas"]["QueueOwnerOut"];
+            /** Price Usd */
+            price_usd: number;
+            /**
+             * Property Id
+             * Format: uuid
+             */
+            property_id: string;
+            /** Rooms */
+            rooms: number | null;
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "olx" | "telegram" | "manual";
+            state: components["schemas"]["QueueStateOut"];
+            /** Sub Area */
+            sub_area: string;
+            /** Total Floors */
+            total_floors: number | null;
+        };
+        /** QueueOwnerOut */
+        QueueOwnerOut: {
+            /**
+             * Classification
+             * @enum {string}
+             */
+            classification: "owner" | "agent" | "unknown";
+            /** Home Count */
+            home_count: number | null;
+            /** Phone */
+            phone: string;
+        };
+        /** QueueStateOut */
+        QueueStateOut: {
+            /** Agent Name */
+            agent_name?: string | null;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "mine" | "locked" | "new" | "retry";
+            /** Until */
+            until?: string | null;
         };
         /** RefreshIn */
         RefreshIn: {
@@ -772,8 +994,8 @@ export interface components {
              *     `auth.invalid_credentials`, `auth.forbidden`, `not_found`, `method_not_allowed`,
              *     `validation_error`, `internal_error`, `listing.unsupported_url`, `listing.invalid_url`,
              *     `listing.gone`, `source.misconfigured`, `source.unavailable`, `source.login_required`,
-             *     `source.peer_unresolved`, `source.exists`; any other HTTP status raised by the framework
-             *     becomes `http.<status>`.
+             *     `source.peer_unresolved`, `source.exists`, `queue.locked`; any other HTTP status raised by
+             *     the framework becomes `http.<status>`.
              */
             code: string;
             /** Detail */
@@ -1254,6 +1476,68 @@ export interface operations {
             };
         };
     };
+    create_call_log_api_v1_properties__property_id__call_log_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                property_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CallLogIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CheckOut"];
+                };
+            };
+            /** @description missing, invalid or expired token; or inactive user */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description unknown property */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description request validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            /** @description unexpected error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     set_property_status_api_v1_properties__property_id__status_post: {
         parameters: {
             query?: never;
@@ -1289,6 +1573,178 @@ export interface operations {
             };
             /** @description unknown property */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description request validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            /** @description unexpected error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    get_queue_api_v1_queue_get: {
+        parameters: {
+            query?: {
+                scope?: "all" | "today" | "retry";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QueueItemOut"][];
+                };
+            };
+            /** @description missing, invalid or expired token; or inactive user */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description request validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            /** @description unexpected error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    release_queue_item_api_v1_queue__property_id__release_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                property_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description missing, invalid or expired token; or inactive user */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description unknown property */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description request validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            /** @description unexpected error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    take_queue_item_api_v1_queue__property_id__take_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                property_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QueueItemOut"];
+                };
+            };
+            /** @description missing, invalid or expired token; or inactive user */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description unknown property */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description another agent holds this property */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

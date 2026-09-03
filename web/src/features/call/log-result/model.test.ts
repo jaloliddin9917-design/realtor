@@ -1,6 +1,6 @@
 import { allSettled, fork } from "effector";
 import { createMemoryHistory } from "history";
-import { $items } from "@/entities/queue";
+import { $items, MOCK_QUEUE, releaseFx, fetchQueueFx } from "@/entities/queue";
 import { router, routes } from "@/shared/router";
 import { $note, $outcome, $resultingStatus, noteChanged, outcomeChanged, submitRequested } from "./model";
 
@@ -16,18 +16,24 @@ describe("$resultingStatus", () => {
 });
 
 describe("submitRequested", () => {
-  it("saves the log, releases the item's lock, resets the draft, and returns to the queue", async () => {
-    const scope = fork();
-    // routes.queue.navigate only reaches $isOpened through an actual history push (see
-    // features/listing/add-manual/model.test.ts for the same pattern).
+  it("saves the log, releases the item's lock on the server, resets the draft, and returns to the queue", async () => {
+    let releasedId: string | null = null;
+    const scope = fork({
+      values: [[$items, MOCK_QUEUE]],
+      // the real lock release is a server call (POST release); mock it so the log flow can be
+      // asserted without a backend, and capture the id it releases.
+      handlers: [
+        [releaseFx, async (id: string) => { releasedId = id; }],
+        [fetchQueueFx, async () => MOCK_QUEUE],
+      ],
+    });
     await allSettled(router.setHistory, { scope, params: createMemoryHistory({ initialEntries: ["/queue/1042"] }) });
-    expect(scope.getState($items).find((i) => i.id === "1042")!.state.kind).toBe("mine");
 
     await allSettled(outcomeChanged, { scope, params: "taken" });
     await allSettled(noteChanged, { scope, params: "ijaraga berildi" });
     await allSettled(submitRequested, { scope, params: { queueItemId: "1042" } });
 
-    expect(scope.getState($items).find((i) => i.id === "1042")!.state.kind).toBe("new");
+    expect(releasedId).toBe("1042");
     expect(scope.getState($outcome)).toBeNull();
     expect(scope.getState($note)).toBe("");
     expect(scope.getState(routes.queue.$isOpened)).toBe(true);

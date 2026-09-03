@@ -1,24 +1,32 @@
-import { createEffect, createEvent, createStore } from "effector";
-import { fetchQueue, MOCK_QUEUE, type QueueItem } from "./api";
+import { createEffect, createEvent, createStore, sample } from "effector";
+import { toast } from "sonner";
+import { fetchQueue, releaseItem, takeItem, type QueueItem } from "./api";
+import { isApiProblem } from "@/shared/api";
+import { i18n, problemKey } from "@/shared/i18n";
 
-/** Reserved for the real backend: not yet called anywhere (nothing wires it to a route-open
- * sample — see app/router.ts's own comment on why that wiring lives at the app layer). Kept so
- * swapping the mock for `/api/v1/queue` is a one-line change: seed `$items` from its `.doneData`
- * instead of `MOCK_QUEUE` below. */
-export const fetchQueueFx = createEffect(fetchQueue);
+/** Load the open queue — wired to run on `queue.opened` in app/router.ts. */
+export const fetchQueueFx = createEffect(() => fetchQueue("all"));
+/** Claim an item (POST take); the effect rejects with a 409 `queue.locked` problem if another
+ * agent already holds it. */
+export const takeFx = createEffect(takeItem);
+/** Release my claim (POST release); also invoked after a call is logged. */
+export const releaseFx = createEffect(releaseItem);
 
-const FOUR_HOURS_MS = 4 * 60 * 60 * 1000;
-
-/** An item became mine — locked to me until four hours from now. Fired by
- * features/queue/take on both the "new" and "retry" take actions. */
+/** "Olish va qo'ng'iroq" / "Qayta urinish" — claim the item (features/queue/take then navigates). */
 export const take = createEvent<string>();
-/** A call was logged for an item (features/call/log-result) — its lock is released back to
- * the open pool so the next check (or another agent) can pick it up. */
+/** A call was logged for an item (features/call/log-result) — release its lock. */
 export const released = createEvent<string>();
 
-// Seeded directly from the mock array (not via fetchQueueFx) so the list renders immediately —
-// see the "mock-data pattern" this whole slice follows.
-export const $items = createStore<QueueItem[]>(MOCK_QUEUE)
-  .on(take, (items, id) => items.map((item) =>
-    item.id === id ? { ...item, state: { kind: "mine", until: new Date(Date.now() + FOUR_HOURS_MS).toISOString() } } : item))
-  .on(released, (items, id) => items.map((item) => (item.id === id ? { ...item, state: { kind: "new" } } : item)));
+export const $items = createStore<QueueItem[]>([])
+  .on(fetchQueueFx.doneData, (_, items) => items)
+  .on(takeFx.doneData, (items, taken) => items.map((i) => (i.id === taken.id ? taken : i)));
+
+sample({ clock: take, target: takeFx });
+sample({ clock: released, target: releaseFx });
+// re-sync from the server after a release, or after a take that lost the race (409)
+sample({ clock: [releaseFx.done, takeFx.fail], target: fetchQueueFx });
+
+const toastErrorFx = createEffect((e: unknown) => {
+  toast.error(i18n.t(isApiProblem(e) ? problemKey(e.code) : "errors.network"));
+});
+sample({ clock: [fetchQueueFx.failData, takeFx.failData, releaseFx.failData], target: toastErrorFx });

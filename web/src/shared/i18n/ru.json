@@ -36,6 +36,7 @@
   "manual": { "title": "Добавить объявление вручную", "url": "Ссылка OLX или Telegram", "urlPlaceholder": "https://www.olx.uz/d/obyavlenie/… или https://t.me/kanal/123", "submit": "Добавить", "added": "Объявление добавлено" },
   "errors": {
     "unknown": "Непредвиденная ошибка. Попробуйте ещё раз.", "network": "Нет связи с сервером", "not_found": "Не найдено", "method_not_allowed": "Недопустимое действие", "validation_error": "Данные заполнены неверно", "internal_error": "Ошибка сервера",
+    "queue": { "locked": "Эту квартиру уже взял другой агент" },
     "auth": { "missing_token": "Войдите в систему", "token_expired": "Сессия истекла — войдите снова", "token_invalid": "Сессия недействительна — войдите снова", "user_inactive": "Пользователь отключён", "invalid_credentials": "Неверный телефон или пароль", "forbidden": "Нужны права администратора" },
     "listing": { "unsupported_url": "Поддерживаются только ссылки olx.uz и t.me", "invalid_url": "Неверная ссылка", "gone": "Объявление удалено в источнике" },
     "source": { "misconfigured": "Источник не настроен (нет ключей Telegram)", "unavailable": "Источник не отвечает — попробуйте позже", "login_required": "Нужен вход в аккаунт Telegram (telegram-login)", "peer_unresolved": "Канал не найден", "exists": "Источник с таким названием уже есть" }

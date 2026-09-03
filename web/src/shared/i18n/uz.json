@@ -36,6 +36,7 @@
   "manual": { "title": "E'lonni qo'lda qo'shish", "url": "OLX yoki Telegram havolasi", "urlPlaceholder": "https://www.olx.uz/d/obyavlenie/… yoki https://t.me/kanal/123", "submit": "Qo'shish", "added": "E'lon qo'shildi" },
   "errors": {
     "unknown": "Kutilmagan xato. Qayta urinib ko'ring.", "network": "Server bilan aloqa yo'q", "not_found": "Topilmadi", "method_not_allowed": "Ruxsat etilmagan amal", "validation_error": "Ma'lumotlar noto'g'ri to'ldirilgan", "internal_error": "Serverda xato",
+    "queue": { "locked": "Bu uyni boshqa agent band qilgan" },
     "auth": { "missing_token": "Tizimga kiring", "token_expired": "Sessiya muddati tugadi — qayta kiring", "token_invalid": "Sessiya yaroqsiz — qayta kiring", "user_inactive": "Foydalanuvchi faol emas", "invalid_credentials": "Telefon yoki parol noto'g'ri", "forbidden": "Bu amal uchun admin huquqi kerak" },
     "listing": { "unsupported_url": "Faqat olx.uz va t.me havolalari qo'llab-quvvatlanadi", "invalid_url": "Havola noto'g'ri", "gone": "E'lon manbada o'chirilgan" },
     "source": { "misconfigured": "Manba sozlanmagan (Telegram kalitlari yo'q)", "unavailable": "Manba javob bermadi — keyinroq urinib ko'ring", "login_required": "Telegram akkauntiga kirish kerak (telegram-login)", "peer_unresolved": "Kanal topilmadi", "exists": "Bunday nomli manba allaqachon bor" }

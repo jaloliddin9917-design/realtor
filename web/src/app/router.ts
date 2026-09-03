@@ -4,6 +4,7 @@ import { and, not } from "patronum";
 import { $meta, loadMetaFx } from "@/entities/meta";
 import { detailCleared, fetchPropertyFx } from "@/entities/property";
 import { $isAdmin, $isAuthorized, $sessionChecked, loginFx, logout, restoreSessionFx, sessionRestored } from "@/entities/session";
+import { fetchQueueFx } from "@/entities/queue";
 import { fetchSourcesFx } from "@/entities/source";
 import { router, routes } from "@/shared/router";
 
@@ -49,6 +50,9 @@ redirect({ clock: router.routeNotFound, route: routes.properties, replace: true 
 
 // load the admin sources list (and FX rate) whenever /admin/sources opens
 sample({ clock: authorized.adminSources.opened, target: fetchSourcesFx });
+
+// load the agent queue whenever /queue opens
+sample({ clock: authorized.queue.opened, target: fetchQueueFx });
 
 // Load the property on `opened` *and* `updated`: atomic-router only fires `opened` the first
 // time the route matches, so navigating straight from one property to another (the path stays

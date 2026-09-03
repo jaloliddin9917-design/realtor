@@ -7,6 +7,7 @@ import { createMemoryHistory } from "history";
 import { sessionRestored, type User } from "@/entities/session";
 import { i18nReady } from "@/shared/i18n";
 import { router, routes } from "@/shared/router";
+import { $items, MOCK_QUEUE, releaseFx, fetchQueueFx } from "@/entities/queue";
 import { CallPage } from "./index";
 
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
@@ -14,7 +15,10 @@ vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 const agent: User = { id: "u1", phone: "+998900000001", name: "Aziz", role: "agent", locale: "uz" };
 
 async function mount(path: string) {
-  const scope = fork();
+  const scope = fork({
+    values: [[$items, MOCK_QUEUE]],
+    handlers: [[releaseFx, async () => undefined], [fetchQueueFx, async () => MOCK_QUEUE]],
+  });
   await allSettled(sessionRestored, { scope, params: agent });
   await allSettled(router.setHistory, { scope, params: createMemoryHistory({ initialEntries: [path] }) });
   render(

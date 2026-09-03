@@ -7,12 +7,13 @@ import { createMemoryHistory } from "history";
 import { sessionRestored, type User } from "@/entities/session";
 import { i18nReady } from "@/shared/i18n";
 import { router } from "@/shared/router";
+import { $items, fetchQueueFx, MOCK_QUEUE } from "@/entities/queue";
 import { QueuePage } from "./ui";
 
 const agent: User = { id: "u1", phone: "+998900000001", name: "Aziz", role: "agent", locale: "uz" };
 
 async function mount() {
-  const scope = fork();
+  const scope = fork({ values: [[$items, MOCK_QUEUE]], handlers: [[fetchQueueFx, async () => MOCK_QUEUE]] });
   await allSettled(sessionRestored, { scope, params: agent });
   await allSettled(router.setHistory, { scope, params: createMemoryHistory({ initialEntries: ["/queue"] }) });
   render(

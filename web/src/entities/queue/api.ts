@@ -1,3 +1,5 @@
+import { api, unwrap, type Schemas } from "@/shared/api";
+
 export type QueueStateKind = "mine" | "new" | "locked" | "retry";
 export type OwnerClassification = "owner" | "agent" | "unknown";
 export type AvailabilityStatus = "vacant" | "taken" | "unknown";
@@ -156,9 +158,46 @@ function buildMockQueue(): QueueItem[] {
   ];
 }
 
-// TODO(real): GET /api/v1/queue
-export function fetchQueue(): Promise<QueueItem[]> {
-  return Promise.resolve(buildMockQueue());
+// ---- real API ----
+type QueueItemOut = Schemas["QueueItemOut"];
+
+/** Map the API's snake_case queue row to the view model the UI renders. A property with no
+ * parsed rooms/floor/area/district yet collapses to 0 / "" for display. */
+function mapItem(o: QueueItemOut): QueueItem {
+  return {
+    id: o.id,
+    propertyId: o.property_id,
+    district: o.district ?? "",
+    subArea: o.sub_area,
+    rooms: o.rooms ?? 0,
+    floor: o.floor ?? 0,
+    totalFloors: o.total_floors ?? 0,
+    areaSqm: o.area_sqm ?? 0,
+    priceUsd: o.price_usd,
+    availability: { status: o.availability.status, at: o.availability.at },
+    owner: { phone: o.owner.phone, classification: o.owner.classification, homeCount: o.owner.home_count ?? undefined },
+    lastActivity: { text: o.last_activity.text, at: o.last_activity.at },
+    state: { kind: o.state.kind, until: o.state.until ?? undefined, agentName: o.state.agent_name ?? undefined },
+    source: o.source,
+  };
 }
 
+export type QueueScope = "all" | "today" | "retry";
+
+export function fetchQueue(scope: QueueScope = "all"): Promise<QueueItem[]> {
+  return unwrap(api.GET("/api/v1/queue", { params: { query: { scope } } })).then((rows) => rows.map(mapItem));
+}
+
+/** Claim the item as mine for the next four hours; rejects 409 `queue.locked` if another agent holds it. */
+export function takeItem(id: string): Promise<QueueItem> {
+  return unwrap(api.POST("/api/v1/queue/{property_id}/take", { params: { path: { property_id: id } } })).then(mapItem);
+}
+
+/** Release my claim back to the open pool (also happens server-side when a call is logged). */
+export function releaseItem(id: string): Promise<void> {
+  return unwrap(api.POST("/api/v1/queue/{property_id}/release", { params: { path: { property_id: id } } })).then(() => undefined);
+}
+
+/** Test fixture only — production reads {@link fetchQueue}. Kept so the Queue tests can seed
+ * `$items` with a full, state-varied board without standing up the API. */
 export const MOCK_QUEUE: QueueItem[] = buildMockQueue();
