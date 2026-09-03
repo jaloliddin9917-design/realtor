@@ -1,6 +1,6 @@
 import { allSettled, fork } from "effector";
-import { $detail, type PropertyDetail } from "@/entities/property";
-import { statusRequested } from "./model";
+import { $detail, detailCleared, type PropertyDetail } from "@/entities/property";
+import { $note, noteChanged, statusRequested } from "./model";
 
 const detail = { id: "p1", status: "new", district: "chilonzor", rooms: 2, floor: 3, total_floors: 9, area_sqm: 54, price_usd_min_minor: 45000, source_removed: false, needs_recheck: false, first_seen_at: "2026-08-12T09:00:00Z", last_seen_at: "2026-08-29T12:40:00Z", listing_count: 1, source_kinds: ["olx"], probable_owner: null, photo_url: null, last_status_event: null, listings: [], status_events: [{ id: 1, from_status: null, to_status: "new", actor_type: "crawler", actor_id: null, note: null, created_at: "2026-08-12T09:00:00Z" }], duplicates: [] } as PropertyDetail;
 
@@ -22,5 +22,15 @@ describe("set status", () => {
     const scope = fork({ values: [[$detail, detail]] });
     await allSettled(statusRequested, { scope, params: { id: "other", status: "inactive" } });
     expect(scope.getState($detail)).toEqual(detail);
+  });
+});
+
+describe("note draft", () => {
+  it("resets when the detail route closes, so an unsubmitted draft does not cross into the next property", async () => {
+    const scope = fork();
+    await allSettled(noteChanged, { scope, params: "draft on property A" });
+    expect(scope.getState($note)).toBe("draft on property A");
+    await allSettled(detailCleared, { scope });
+    expect(scope.getState($note)).toBe("");
   });
 });

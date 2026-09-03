@@ -1,6 +1,6 @@
 import { createEffect, createEvent, createStore, sample } from "effector";
 import { toast } from "sonner";
-import { setPropertyStatus, statusUpdated } from "@/entities/property";
+import { detailCleared, setPropertyStatus, statusUpdated } from "@/entities/property";
 import { isApiProblem } from "@/shared/api";
 import { i18n, problemKey } from "@/shared/i18n";
 
@@ -12,11 +12,14 @@ export const setStatusFx = createEffect(({ id, status, note }: StatusRequest) =>
 export const noteChanged = createEvent<string>();
 export const noteCleared = createEvent();
 /**
- * The agent's draft note. Cleared only once the write it was sent with has actually succeeded
- * (see the `setStatusFx.done` sample below) — not the moment the button is clicked — so a
- * failed POST leaves what they typed in place for a retry instead of silently discarding it.
+ * The agent's draft note. Cleared once the write it was sent with has actually succeeded (see
+ * the `setStatusFx.done` sample below) — not the moment the button is clicked — so a failed
+ * POST leaves what they typed in place for a retry instead of silently discarding it. Also
+ * reset on `detailCleared` (the detail route closing): otherwise an unsubmitted draft typed on
+ * one property survives the navigation and pre-fills — and could be written onto — the next
+ * property opened.
  */
-export const $note = createStore("").on(noteChanged, (_, v) => v).reset(noteCleared);
+export const $note = createStore("").on(noteChanged, (_, v) => v).reset(noteCleared, detailCleared);
 
 const toastFx = createEffect((key: string) => { toast.success(i18n.t(key)); });
 const toastErrorFx = createEffect((e: unknown) => { toast.error(i18n.t(isApiProblem(e) ? problemKey(e.code) : "errors.network")); });

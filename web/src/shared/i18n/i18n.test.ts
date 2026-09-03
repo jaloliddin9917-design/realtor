@@ -18,6 +18,6 @@ describe("translations", () => {
     for (const s of ["ok", "failing", "login_required", "paused", "misconfigured"]) expect(k.has(`sources.status.${s}`)).toBe(true);
     // the 12 canonical districts of backend/app/ingestion/parse/districts.py (GET /api/v1/meta returns them at runtime)
     for (const d of ["bektemir", "chilonzor", "mirobod", "mirzo_ulugbek", "olmazor", "sergeli", "shayxontohur", "uchtepa", "yakkasaroy", "yangihayot", "yashnobod", "yunusobod"]) expect(k.has(`district.${d}`)).toBe(true);
-    for (const c of ["auth.missing_token", "auth.token_expired", "auth.token_invalid", "auth.user_inactive", "auth.invalid_credentials", "auth.forbidden", "not_found", "validation_error", "internal_error", "listing.unsupported_url", "listing.invalid_url", "listing.gone", "source.misconfigured", "source.unavailable", "source.login_required", "source.peer_unresolved", "source.exists"]) expect(k.has(`errors.${c}`)).toBe(true);
+    for (const c of ["auth.missing_token", "auth.token_expired", "auth.token_invalid", "auth.user_inactive", "auth.invalid_credentials", "auth.forbidden", "not_found", "method_not_allowed", "validation_error", "internal_error", "listing.unsupported_url", "listing.invalid_url", "listing.gone", "source.misconfigured", "source.unavailable", "source.login_required", "source.peer_unresolved", "source.exists"]) expect(k.has(`errors.${c}`)).toBe(true);
   });
 });
