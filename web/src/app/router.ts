@@ -28,8 +28,14 @@ export function chainAdmin<P extends RouteParams>(route: RouteInstance<P>): Rout
 }
 
 export const authorized = {
+  dashboard: chainAuthorized(routes.dashboard),
   properties: chainAuthorized(routes.properties),
   property: chainAuthorized(routes.property),
+  queue: chainAuthorized(routes.queue),
+  call: chainAuthorized(routes.call),
+  duplicates: chainAuthorized(routes.duplicates),
+  botMonitor: chainAuthorized(routes.botMonitor),
+  settings: chainAdmin(routes.settings),
   adminSources: chainAdmin(routes.adminSources),
 };
 

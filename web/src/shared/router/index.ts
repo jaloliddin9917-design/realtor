@@ -2,8 +2,14 @@ import { createHistoryRouter, createRoute, createRouterControls, type ParamsSeri
 
 export const routes = {
   login: createRoute(),
+  dashboard: createRoute(),
   properties: createRoute(),
   property: createRoute<{ id: string }>(),
+  queue: createRoute(),
+  call: createRoute<{ id: string }>(),
+  duplicates: createRoute(),
+  botMonitor: createRoute(),
+  settings: createRoute(),
   adminSources: createRoute(),
 };
 
@@ -38,8 +44,14 @@ export const router = createHistoryRouter({
   serialize,
   routes: [
     { path: "/login", route: routes.login },
+    { path: "/dashboard", route: routes.dashboard },
     { path: "/properties", route: routes.properties },
     { path: "/properties/:id", route: routes.property },
+    { path: "/queue", route: routes.queue },
+    { path: "/queue/:id", route: routes.call },
+    { path: "/duplicates", route: routes.duplicates },
+    { path: "/bot", route: routes.botMonitor },
+    { path: "/settings", route: routes.settings },
     { path: "/admin/sources", route: routes.adminSources },
   ],
 });

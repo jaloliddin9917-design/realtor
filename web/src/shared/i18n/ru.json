@@ -1,6 +1,12 @@
 {
   "app": { "name": "Realtor CRM", "tagline": "Ташкент · 4 агента", "loading": "Загрузка…", "retry": "Повторить", "cancel": "Отмена", "save": "Сохранить", "close": "Закрыть", "empty": "Ничего не найдено", "menu": "Меню" },
-  "nav": { "properties": "Квартиры", "sources": "Источники", "logout": "Выйти", "role": { "admin": "админ", "agent": "агент" } },
+  "nav": { "dashboard": "Главная", "queue": "Очередь", "properties": "Квартиры", "duplicates": "Дубликаты", "bot": "Сообщения", "sources": "Источники", "settings": "Настройки", "logout": "Выйти", "role": { "admin": "админ", "agent": "агент" } },
+  "queue": {},
+  "call": {},
+  "dashboard": {},
+  "duplicates": {},
+  "bot": {},
+  "settingsPage": {},
   "lang": { "uz": "UZ", "ru": "RU" },
   "auth": { "title": "Вход", "phone": "Телефон", "password": "Пароль", "submit": "Войти", "phonePlaceholder": "+998 90 123 45 67" },
   "properties": {

@@ -1,6 +1,12 @@
 {
   "app": { "name": "Realtor CRM", "tagline": "Toshkent · 4 agent", "loading": "Yuklanmoqda…", "retry": "Qayta urinish", "cancel": "Bekor qilish", "save": "Saqlash", "close": "Yopish", "empty": "Hech narsa topilmadi", "menu": "Menyu" },
-  "nav": { "properties": "Uylar", "sources": "Manbalar", "logout": "Chiqish", "role": { "admin": "admin", "agent": "agent" } },
+  "nav": { "dashboard": "Asosiy", "queue": "Navbat", "properties": "Uylar", "duplicates": "Dublikatlar", "bot": "Xabarlar", "sources": "Manbalar", "settings": "Sozlamalar", "logout": "Chiqish", "role": { "admin": "admin", "agent": "agent" } },
+  "queue": {},
+  "call": {},
+  "dashboard": {},
+  "duplicates": {},
+  "bot": {},
+  "settingsPage": {},
   "lang": { "uz": "UZ", "ru": "RU" },
   "auth": { "title": "Kirish", "phone": "Telefon", "password": "Parol", "submit": "Kirish", "phonePlaceholder": "+998 90 123 45 67" },
   "properties": {
