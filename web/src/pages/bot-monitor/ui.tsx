@@ -1,12 +1,17 @@
 import { useTranslation } from "react-i18next";
+import { LanguageSwitch } from "@/features/i18n/switch-language";
 import { AppLayout } from "@/widgets/app-layout";
+import { ChannelCards } from "./ui/ChannelCards";
+import { CountersBar } from "./ui/CountersBar";
+import { OutreachTable } from "./ui/OutreachTable";
 
-// Placeholder — replaced by the screen implementation.
 export function BotMonitorPage() {
   const { t } = useTranslation();
   return (
-    <AppLayout title={t("nav.bot")}>
-      <p className="p-6 text-center text-muted-foreground">{t("app.loading")}</p>
+    <AppLayout title={t("nav.bot")} actions={<LanguageSwitch />}>
+      <ChannelCards />
+      <CountersBar />
+      <OutreachTable />
     </AppLayout>
   );
 }
