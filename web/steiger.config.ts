@@ -108,4 +108,26 @@ export default defineConfig([
       "fsd/insignificant-slice": "warn",
     },
   },
+  {
+    // The six remaining mockup screens (dashboard, queue, call log, duplicates, bot monitor,
+    // settings). Each screen's data/effector entity and its action features are consumed by
+    // exactly one page by construction — the same single-consumer shape as every override
+    // above — so `insignificant-slice` (and, where a slice sits beside a like-named segment,
+    // `ambiguous-slice-names`) would fire. "warn" keeps them visible without failing the gate,
+    // consistent with the rest of this file. Widgets for these screens live as local page
+    // components under `pages/<screen>/ui/` and so need no slice override.
+    files: [
+      "src/entities/queue/**", "src/entities/call/**", "src/entities/dashboard/**",
+      "src/entities/duplicate/**", "src/entities/bot/**", "src/entities/agent/**",
+      "src/entities/setting/**", "src/entities/settings/**",
+      "src/features/queue/**", "src/features/call/**", "src/features/dashboard/**",
+      "src/features/duplicate/**", "src/features/bot/**", "src/features/settings/**",
+      "src/widgets/queue-list/**", "src/widgets/duplicate-compare/**",
+      "src/widgets/bot-table/**", "src/widgets/settings-panel/**", "src/widgets/dashboard-board/**",
+    ],
+    rules: {
+      "fsd/insignificant-slice": "warn",
+      "fsd/ambiguous-slice-names": "warn",
+    },
+  },
 ]);
