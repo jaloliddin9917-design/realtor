@@ -1,6 +1,30 @@
 {
   "components": {
     "schemas": {
+      "AvailabilityOut": {
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "title": "At",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "vacant",
+              "taken",
+              "unknown"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "at"
+        ],
+        "title": "AvailabilityOut",
+        "type": "object"
+      },
       "Body_add_listing_by_form_api_v1_listings_manual_form_post": {
         "properties": {
           "area_sqm": {
@@ -135,6 +159,130 @@
           "title"
         ],
         "title": "Body_add_listing_by_form_api_v1_listings_manual_form_post",
+        "type": "object"
+      },
+      "CallConditionsIn": {
+        "properties": {
+          "deposit_months": {
+            "anyOf": [
+              {
+                "maximum": 60.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deposit Months"
+          },
+          "family_only": {
+            "default": false,
+            "title": "Family Only",
+            "type": "boolean"
+          },
+          "foreigners": {
+            "default": false,
+            "title": "Foreigners",
+            "type": "boolean"
+          }
+        },
+        "title": "CallConditionsIn",
+        "type": "object"
+      },
+      "CallLogIn": {
+        "properties": {
+          "conditions": {
+            "$ref": "#/components/schemas/CallConditionsIn",
+            "default": {
+              "family_only": false,
+              "foreigners": false
+            }
+          },
+          "next_check": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NextCheckIn"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "note": {
+            "default": "",
+            "maxLength": 2000,
+            "title": "Note",
+            "type": "string"
+          },
+          "outcome": {
+            "enum": [
+              "still_available",
+              "taken",
+              "no_answer",
+              "call_back",
+              "realtor_not_owner",
+              "do_not_contact",
+              "wrong_number"
+            ],
+            "title": "Outcome",
+            "type": "string"
+          }
+        },
+        "required": [
+          "outcome"
+        ],
+        "title": "CallLogIn",
+        "type": "object"
+      },
+      "CheckOut": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "logged_at": {
+            "format": "date-time",
+            "title": "Logged At",
+            "type": "string"
+          },
+          "outcome": {
+            "enum": [
+              "still_available",
+              "taken",
+              "no_answer",
+              "call_back",
+              "realtor_not_owner",
+              "do_not_contact",
+              "wrong_number"
+            ],
+            "title": "Outcome",
+            "type": "string"
+          },
+          "property_id": {
+            "format": "uuid",
+            "title": "Property Id",
+            "type": "string"
+          },
+          "resulting_status": {
+            "enum": [
+              "vacant",
+              "taken",
+              "unchanged"
+            ],
+            "title": "Resulting Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "property_id",
+          "outcome",
+          "resulting_status",
+          "logged_at"
+        ],
+        "title": "CheckOut",
         "type": "object"
       },
       "ContactOut": {
@@ -306,6 +454,25 @@
           "stale"
         ],
         "title": "FxOut",
+        "type": "object"
+      },
+      "LastActivityOut": {
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "title": "At",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text",
+          "at"
+        ],
+        "title": "LastActivityOut",
         "type": "object"
       },
       "ListingOut": {
@@ -606,6 +773,36 @@
         "title": "MetaOut",
         "type": "object"
       },
+      "NextCheckIn": {
+        "properties": {
+          "choice": {
+            "enum": [
+              "in_3_days",
+              "tomorrow",
+              "date"
+            ],
+            "title": "Choice",
+            "type": "string"
+          },
+          "date": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date"
+          }
+        },
+        "required": [
+          "choice"
+        ],
+        "title": "NextCheckIn",
+        "type": "object"
+      },
       "OwnerOut": {
         "properties": {
           "agency_score": {
@@ -759,7 +956,7 @@
         "description": "The body of every error response, sent as `application/problem+json`.",
         "properties": {
           "code": {
-            "description": "The machine-readable error code the web translates. One of:\n`auth.missing_token`, `auth.token_expired`, `auth.token_invalid`, `auth.user_inactive`,\n`auth.invalid_credentials`, `auth.forbidden`, `not_found`, `method_not_allowed`,\n`validation_error`, `internal_error`, `listing.unsupported_url`, `listing.invalid_url`,\n`listing.gone`, `source.misconfigured`, `source.unavailable`, `source.login_required`,\n`source.peer_unresolved`, `source.exists`; any other HTTP status raised by the framework\nbecomes `http.<status>`.",
+            "description": "The machine-readable error code the web translates. One of:\n`auth.missing_token`, `auth.token_expired`, `auth.token_invalid`, `auth.user_inactive`,\n`auth.invalid_credentials`, `auth.forbidden`, `not_found`, `method_not_allowed`,\n`validation_error`, `internal_error`, `listing.unsupported_url`, `listing.invalid_url`,\n`listing.gone`, `source.misconfigured`, `source.unavailable`, `source.login_required`,\n`source.peer_unresolved`, `source.exists`, `queue.locked`; any other HTTP status raised by\nthe framework becomes `http.<status>`.",
             "title": "Code",
             "type": "string"
           },
@@ -1173,6 +1370,198 @@
           "last_status_event"
         ],
         "title": "PropertyRow",
+        "type": "object"
+      },
+      "QueueItemOut": {
+        "properties": {
+          "area_sqm": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Area Sqm"
+          },
+          "availability": {
+            "$ref": "#/components/schemas/AvailabilityOut"
+          },
+          "district": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "District"
+          },
+          "floor": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Floor"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "last_activity": {
+            "$ref": "#/components/schemas/LastActivityOut"
+          },
+          "owner": {
+            "$ref": "#/components/schemas/QueueOwnerOut"
+          },
+          "price_usd": {
+            "title": "Price Usd",
+            "type": "integer"
+          },
+          "property_id": {
+            "format": "uuid",
+            "title": "Property Id",
+            "type": "string"
+          },
+          "rooms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rooms"
+          },
+          "source": {
+            "enum": [
+              "olx",
+              "telegram",
+              "manual"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "state": {
+            "$ref": "#/components/schemas/QueueStateOut"
+          },
+          "sub_area": {
+            "title": "Sub Area",
+            "type": "string"
+          },
+          "total_floors": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Floors"
+          }
+        },
+        "required": [
+          "id",
+          "property_id",
+          "district",
+          "sub_area",
+          "rooms",
+          "floor",
+          "total_floors",
+          "area_sqm",
+          "price_usd",
+          "availability",
+          "owner",
+          "last_activity",
+          "state",
+          "source"
+        ],
+        "title": "QueueItemOut",
+        "type": "object"
+      },
+      "QueueOwnerOut": {
+        "properties": {
+          "classification": {
+            "enum": [
+              "owner",
+              "agent",
+              "unknown"
+            ],
+            "title": "Classification",
+            "type": "string"
+          },
+          "home_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Home Count"
+          },
+          "phone": {
+            "title": "Phone",
+            "type": "string"
+          }
+        },
+        "required": [
+          "phone",
+          "classification",
+          "home_count"
+        ],
+        "title": "QueueOwnerOut",
+        "type": "object"
+      },
+      "QueueStateOut": {
+        "properties": {
+          "agent_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Agent Name"
+          },
+          "kind": {
+            "enum": [
+              "mine",
+              "locked",
+              "new",
+              "retry"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "until": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Until"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "QueueStateOut",
         "type": "object"
       },
       "RefreshIn": {
@@ -1592,7 +1981,7 @@
       "ValidationProblem": {
         "properties": {
           "code": {
-            "description": "The machine-readable error code the web translates. One of:\n`auth.missing_token`, `auth.token_expired`, `auth.token_invalid`, `auth.user_inactive`,\n`auth.invalid_credentials`, `auth.forbidden`, `not_found`, `method_not_allowed`,\n`validation_error`, `internal_error`, `listing.unsupported_url`, `listing.invalid_url`,\n`listing.gone`, `source.misconfigured`, `source.unavailable`, `source.login_required`,\n`source.peer_unresolved`, `source.exists`; any other HTTP status raised by the framework\nbecomes `http.<status>`.",
+            "description": "The machine-readable error code the web translates. One of:\n`auth.missing_token`, `auth.token_expired`, `auth.token_invalid`, `auth.user_inactive`,\n`auth.invalid_credentials`, `auth.forbidden`, `not_found`, `method_not_allowed`,\n`validation_error`, `internal_error`, `listing.unsupported_url`, `listing.invalid_url`,\n`listing.gone`, `source.misconfigured`, `source.unavailable`, `source.login_required`,\n`source.peer_unresolved`, `source.exists`, `queue.locked`; any other HTTP status raised by\nthe framework becomes `http.<status>`.",
             "title": "Code",
             "type": "string"
           },
@@ -2378,6 +2767,94 @@
         ]
       }
     },
+    "/api/v1/properties/{property_id}/call-log": {
+      "post": {
+        "operationId": "create_call_log_api_v1_properties__property_id__call_log_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "property_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Property Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CallLogIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "missing, invalid or expired token; or inactive user"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "unknown property"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblem"
+                }
+              }
+            },
+            "description": "request validation failed"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "unexpected error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Call Log",
+        "tags": [
+          "queue"
+        ]
+      }
+    },
     "/api/v1/properties/{property_id}/status": {
       "post": {
         "operationId": "set_property_status_api_v1_properties__property_id__status_post",
@@ -2463,6 +2940,242 @@
         "summary": "Set Property Status",
         "tags": [
           "properties"
+        ]
+      }
+    },
+    "/api/v1/queue": {
+      "get": {
+        "operationId": "get_queue_api_v1_queue_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "scope",
+            "required": false,
+            "schema": {
+              "default": "all",
+              "enum": [
+                "all",
+                "today",
+                "retry"
+              ],
+              "title": "Scope",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/QueueItemOut"
+                  },
+                  "title": "Response Get Queue Api V1 Queue Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "missing, invalid or expired token; or inactive user"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblem"
+                }
+              }
+            },
+            "description": "request validation failed"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "unexpected error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Queue",
+        "tags": [
+          "queue"
+        ]
+      }
+    },
+    "/api/v1/queue/{property_id}/release": {
+      "post": {
+        "operationId": "release_queue_item_api_v1_queue__property_id__release_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "property_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Property Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "missing, invalid or expired token; or inactive user"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "unknown property"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblem"
+                }
+              }
+            },
+            "description": "request validation failed"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "unexpected error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Release Queue Item",
+        "tags": [
+          "queue"
+        ]
+      }
+    },
+    "/api/v1/queue/{property_id}/take": {
+      "post": {
+        "operationId": "take_queue_item_api_v1_queue__property_id__take_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "property_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Property Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QueueItemOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "missing, invalid or expired token; or inactive user"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "unknown property"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "another agent holds this property"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblem"
+                }
+              }
+            },
+            "description": "request validation failed"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "unexpected error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Take Queue Item",
+        "tags": [
+          "queue"
         ]
       }
     },

@@ -1,4 +1,4 @@
-from sqlalchemy import Float, Integer, String, UniqueConstraint
+from sqlalchemy import Boolean, Float, Integer, String, UniqueConstraint, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base, IdMixin, TimestampMixin
@@ -17,3 +17,7 @@ class Contact(IdMixin, TimestampMixin, Base):
     )  # owner | agent | unknown
     distinct_property_count_90d: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     human_decision: Mapped[str | None] = mapped_column(String(16))
+    # set by a `do_not_contact` call outcome; the queue never surfaces such a property again
+    do_not_contact: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )

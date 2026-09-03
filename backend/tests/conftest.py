@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engin
 # Without this, running a subset of test files (e.g. only the listings-service
 # tests) never imports app.modules.properties.models, and SQLAlchemy can't
 # resolve Listing.property_id's string-based ForeignKey("properties.id") at flush.
+import app.modules.availability.models  # noqa: F401,E402
 import app.modules.contacts.models  # noqa: F401,E402
 import app.modules.dedupe.models  # noqa: F401,E402
 import app.modules.identity.models  # noqa: F401,E402
