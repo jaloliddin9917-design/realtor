@@ -1,5 +1,9 @@
 import { allSettled, fork } from "effector";
-import { $rows, $total, fetchPropertiesFx } from "./model";
+import { toast } from "sonner";
+import { i18n } from "@/shared/i18n";
+import { $rows, $total, fetchPropertiesFx, fetchPropertyFx } from "./model";
+
+vi.mock("sonner", () => ({ toast: { error: vi.fn() } }));
 
 describe("property list", () => {
   it("loads a page and exposes rows/total", async () => {
@@ -15,5 +19,27 @@ describe("property list", () => {
     expect(calls[0]).toContain("/api/v1/properties?");
     expect(calls[0]).toContain("district=chilonzor");
     expect(calls[0]).toContain("rooms=2");
+  });
+});
+
+describe("property detail load errors", () => {
+  it("stays silent on a 404 — pages/property renders property.notFound instead", async () => {
+    vi.mocked(toast.error).mockClear();
+    vi.stubGlobal("fetch", vi.fn(async () =>
+      new Response(JSON.stringify({ type: "about:blank", title: "x", status: 404, detail: "x", code: "not_found" }), { status: 404, headers: { "content-type": "application/problem+json" } }),
+    ));
+    const scope = fork();
+    await allSettled(fetchPropertyFx, { scope, params: "missing" });
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it("toasts a translated error for anything other than a 404", async () => {
+    vi.mocked(toast.error).mockClear();
+    vi.stubGlobal("fetch", vi.fn(async () =>
+      new Response(JSON.stringify({ type: "about:blank", title: "x", status: 500, detail: "x", code: "internal_error" }), { status: 500, headers: { "content-type": "application/problem+json" } }),
+    ));
+    const scope = fork();
+    await allSettled(fetchPropertyFx, { scope, params: "p1" });
+    expect(toast.error).toHaveBeenCalledWith(i18n.t("errors.internal_error"));
   });
 });

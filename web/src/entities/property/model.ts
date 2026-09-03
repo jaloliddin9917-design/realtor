@@ -1,5 +1,9 @@
-import { createEffect, createEvent, createStore } from "effector";
+import { createEffect, createEvent, createStore, sample } from "effector";
+import { toast } from "sonner";
 import { fetchProperties, fetchProperty, type PropertyDetail, type PropertyPage, type PropertyQuery, type PropertyStatus, type StatusEvent } from "./api";
+import { isApiProblem } from "@/shared/api";
+import { i18n, problemKey } from "@/shared/i18n";
+import { routes } from "@/shared/router";
 
 export const fetchPropertiesFx = createEffect(fetchProperties);
 export const fetchPropertyFx = createEffect(fetchProperty);
@@ -23,8 +27,22 @@ function asStatus(value: string, fallback: PropertyStatus): PropertyStatus {
   return value === "new" || value === "active" || value === "inactive" ? value : fallback;
 }
 
+/**
+ * `fetchPropertyFx` can have two calls in flight at once — the user opens p1, then navigates
+ * straight to p2 before p1 answers — and nothing guarantees the request that was *sent* first
+ * *answers* first. Gating on the route's own `$params` (rather than accepting whatever
+ * `doneData` shows up) means a late answer for a property that is no longer the open route is
+ * dropped instead of overwriting `$detail` with the wrong property under the current URL.
+ */
+const detailForOpenRoute = sample({
+  clock: fetchPropertyFx.doneData,
+  source: routes.property.$params,
+  filter: (params, detail) => params.id === detail.id,
+  fn: (_params, detail) => detail,
+});
+
 export const $detail = createStore<PropertyDetail | null>(null)
-  .on(fetchPropertyFx.doneData, (_, d) => d)
+  .on(detailForOpenRoute, (_, d) => d)
   .on(statusUpdated, (d, { id, event }) =>
     d && d.id === id
       ? {
@@ -37,5 +55,17 @@ export const $detail = createStore<PropertyDetail | null>(null)
       : d)
   .reset(detailCleared);
 export const $detailPending = fetchPropertyFx.pending;
+
+const toastErrorFx = createEffect((e: unknown) => { toast.error(i18n.t(isApiProblem(e) ? problemKey(e.code) : "errors.network")); });
+/**
+ * A 404 already renders as `property.notFound` (pages/property, driven by `$detail` staying
+ * null) — that failure needs no toast on top. Anything else — network error, 500 — has no
+ * dedicated UI, so it must not fail silently.
+ */
+sample({
+  clock: fetchPropertyFx.failData,
+  filter: (e) => !(isApiProblem(e) && e.status === 404),
+  target: toastErrorFx,
+});
 
 export type { PropertyQuery };

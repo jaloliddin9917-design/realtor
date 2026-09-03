@@ -44,9 +44,14 @@ redirect({ clock: router.routeNotFound, route: routes.properties, replace: true 
 // load the admin sources list (and FX rate) whenever /admin/sources opens
 sample({ clock: authorized.adminSources.opened, target: fetchSourcesFx });
 
-// load the property whenever /properties/:id opens, and drop it again on the way out so the
-// next property never renders the previous one's photos while its own request is in flight
-sample({ clock: authorized.property.opened, fn: ({ params }) => params.id, target: fetchPropertyFx });
+// Load the property on `opened` *and* `updated`: atomic-router only fires `opened` the first
+// time the route matches, so navigating straight from one property to another (the path stays
+// `/properties/:id`, only the param changes) fires `updated` instead — hooking `opened` alone
+// would leave the previous property on screen under the new URL. Both clocks clear the detail
+// first, so the new property's loading state renders rather than a stale flash of the one just
+// left; `closed` drops it entirely on the way out.
+sample({ clock: [authorized.property.opened, authorized.property.updated], target: detailCleared });
+sample({ clock: [authorized.property.opened, authorized.property.updated], fn: ({ params }) => params.id, target: fetchPropertyFx });
 sample({ clock: authorized.property.closed, target: detailCleared });
 
 /**

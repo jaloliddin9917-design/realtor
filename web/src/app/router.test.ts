@@ -1,10 +1,13 @@
-import { allSettled, fork } from "effector";
+import { allSettled, fork, scopeBind } from "effector";
 import { createMemoryHistory } from "history";
 import { $districts } from "@/entities/meta";
 import { $detail } from "@/entities/property";
-import { $tokens, sessionRestored } from "@/entities/session";
+import { $sessionChecked, $tokens, sessionRestored } from "@/entities/session";
 import { router, routes } from "@/shared/router";
 import { authorized } from "./router";
+
+const json = (body: unknown) => new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
+const detailFor = (id: string) => ({ id, status: "new", district: "chilonzor", rooms: 2, floor: 3, total_floors: 9, area_sqm: 54, price_usd_min_minor: 45000, source_removed: false, needs_recheck: false, first_seen_at: "2026-08-12T09:00:00Z", last_seen_at: "2026-08-29T12:40:00Z", listing_count: 1, source_kinds: ["olx"], probable_owner: null, photo_url: null, last_status_event: null, listings: [], status_events: [], duplicates: [] });
 
 describe("auth guard", () => {
   it("sends an anonymous visitor from /properties to /login", async () => {
@@ -85,6 +88,51 @@ describe("auth guard", () => {
     await allSettled(routes.properties.navigate, { scope, params: { params: {}, query: {} } });
     expect(scope.getState(authorized.property.$isOpened)).toBe(false);
     expect(scope.getState($detail)).toBeNull();
+  });
+
+  it("ignores a stale property response once a different property is the open route", async () => {
+    const scope = fork({ values: [[$tokens, { access: "a", refresh: "r" }], [$sessionChecked, true]] });
+    vi.stubGlobal("fetch", vi.fn(async (req: Request) => {
+      if (req.url.includes("/api/v1/properties/p1")) {
+        // p1 is requested first but answers last — the exact race the fix guards against
+        await new Promise((r) => setTimeout(r, 15));
+        return json(detailFor("p1"));
+      }
+      if (req.url.includes("/api/v1/properties/p2")) return json(detailFor("p2"));
+      if (req.url.includes("/api/v1/meta")) return json({ districts: [], statuses: [], source_kinds: [], contact_classifications: [] });
+      return json({ items: [], total: 0, page: 1, page_size: 20 });
+    }));
+
+    const setHistory = scopeBind(router.setHistory, { scope });
+    const navigate = scopeBind(routes.property.navigate, { scope });
+    const tick = () => new Promise((r) => setTimeout(r, 0));
+
+    setHistory(createMemoryHistory({ initialEntries: ["/properties/p1"] }));
+    await tick(); // let /properties/p1 open and its (slow) request start
+    navigate({ params: { id: "p2" }, query: {} });
+    await tick(); // let /properties/p2 open and its (fast) request start — both now in flight
+
+    await new Promise((r) => setTimeout(r, 100)); // both requests settle; p1's stale answer lands last
+    expect(scope.getState($detail)?.id).toBe("p2");
+  });
+
+  it("refetches on a params-only navigation and never shows the previous property under the new route", async () => {
+    const scope = fork({ values: [[$tokens, { access: "a", refresh: "r" }]] });
+    const propertyCalls: string[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (req: Request) => {
+      if (req.url.includes("/api/v1/properties/p1")) { propertyCalls.push(req.url); return json(detailFor("p1")); }
+      if (req.url.includes("/api/v1/properties/p2")) { propertyCalls.push(req.url); return json(detailFor("p2")); }
+      if (req.url.includes("/api/v1/properties")) return json({ items: [], total: 0, page: 1, page_size: 20 });
+      if (req.url.includes("/api/v1/meta")) return json({ districts: [], statuses: [], source_kinds: [], contact_classifications: [] });
+      return json({ id: "u", phone: "+998900000001", name: "A", role: "agent", locale: "uz" });
+    }));
+    await allSettled(router.setHistory, { scope, params: createMemoryHistory({ initialEntries: ["/properties/p1"] }) });
+    expect(scope.getState($detail)?.id).toBe("p1");
+    // same route, only the :id param changes — atomic-router fires `updated`, not `opened`
+    await allSettled(routes.property.navigate, { scope, params: { params: { id: "p2" }, query: {} } });
+    expect(scope.getState(authorized.property.$isOpened)).toBe(true);
+    expect(scope.getState($detail)?.id).toBe("p2");
+    expect(propertyCalls).toHaveLength(2);
   });
 
   // No `notFoundRoute` (see shared/router): an unknown path is redirected, address bar and all.
