@@ -12,7 +12,8 @@ from sqlalchemy.exc import IntegrityError
 from app.api.deps import AdminUser, RegistryDep, SessionDep
 from app.api.problems import PROBLEM_422, ApiError, problem_response
 from app.ingestion.adapters.base import AdapterBackoff, LoginRequired
-from app.modules.listings.models import CrawlRun, FxRate, Source
+from app.modules.listings.fx import FX_STALE_DAYS, latest_rate
+from app.modules.listings.models import CrawlRun, Source
 from app.modules.listings.schemas import (
     CrawlRunOut,
     FxOut,
@@ -24,7 +25,6 @@ from app.modules.listings.schemas import (
 
 router = APIRouter(tags=["sources"])
 log = structlog.get_logger()
-FX_STALE_DAYS = 7
 RUNS_LIMIT = 20
 
 
@@ -49,9 +49,7 @@ async def _last_runs(session: SessionDep, source_ids: list[uuid.UUID]) -> dict[u
 
 
 async def _fx(session: SessionDep) -> FxOut | None:
-    rate = (
-        await session.execute(select(FxRate).order_by(FxRate.date.desc()).limit(1))
-    ).scalar_one_or_none()
+    rate = await latest_rate(session)
     if rate is None:
         return None
     return FxOut.from_rate(rate, datetime.now(UTC).date(), FX_STALE_DAYS)

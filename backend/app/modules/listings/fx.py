@@ -9,6 +9,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.modules.listings.models import FxRate
 
 CBU_URL = "https://cbu.uz/uz/arkhiv-kursov-valyut/json/USD/"
+# How many days old a stored rate may be before the FX banner marks it stale. One domain
+# constant so every endpoint that shows the banner (GET /sources, GET /meta) agrees; never
+# re-typed per router.
+FX_STALE_DAYS = 7
 
 
 async def fetch_cbu_rate(client: httpx.AsyncClient) -> tuple[date, Decimal]:
@@ -30,6 +34,17 @@ async def refresh_rate(session: AsyncSession, client: httpx.AsyncClient) -> FxRa
     await session.execute(stmt)
     await session.flush()
     return (await session.execute(select(FxRate).where(FxRate.date == day))).scalar_one()
+
+
+async def latest_rate(session: AsyncSession) -> FxRate | None:
+    """The most recently dated stored rate, or None on an empty table (fresh database).
+
+    Backs the FX banner on GET /sources and GET /meta; `FxOut.from_rate` turns the row into
+    the API shape using the shared `FX_STALE_DAYS` threshold.
+    """
+    return (
+        await session.execute(select(FxRate).order_by(FxRate.date.desc()).limit(1))
+    ).scalar_one_or_none()
 
 
 async def rate_for(session: AsyncSession, day: date) -> Decimal | None:

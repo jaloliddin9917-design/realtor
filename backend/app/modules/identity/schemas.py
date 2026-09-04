@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from typing import Literal, cast
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.modules.identity.models import User
 
@@ -12,6 +12,16 @@ UserRole = Literal["admin", "agent"]
 class LoginIn(BaseModel):
     phone: str
     password: str
+
+
+class UserCreateIn(BaseModel):
+    """Admin Settings "add user" form. `role` is a closed set and `password` a minimum
+    length, both enforced here so a bad request is a 422 before the service is called."""
+
+    name: str
+    phone: str
+    password: str = Field(min_length=8)
+    role: UserRole
 
 
 class RefreshIn(BaseModel):

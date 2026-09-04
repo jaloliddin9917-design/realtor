@@ -1364,6 +1364,19 @@
             "title": "Districts",
             "type": "array"
           },
+          "fx": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FxOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "rules": {
+            "$ref": "#/components/schemas/RulesOut"
+          },
           "source_kinds": {
             "items": {
               "enum": [
@@ -1393,7 +1406,9 @@
           "districts",
           "statuses",
           "source_kinds",
-          "contact_classifications"
+          "contact_classifications",
+          "fx",
+          "rules"
         ],
         "title": "MetaOut",
         "type": "object"
@@ -1819,7 +1834,7 @@
         "description": "The body of every error response, sent as `application/problem+json`.",
         "properties": {
           "code": {
-            "description": "The machine-readable error code the web translates. One of:\n`auth.missing_token`, `auth.token_expired`, `auth.token_invalid`, `auth.user_inactive`,\n`auth.invalid_credentials`, `auth.forbidden`, `not_found`, `method_not_allowed`,\n`validation_error`, `internal_error`, `listing.unsupported_url`, `listing.invalid_url`,\n`listing.gone`, `source.misconfigured`, `source.unavailable`, `source.login_required`,\n`source.peer_unresolved`, `source.exists`, `queue.locked`, `dedupe.already_decided`,\n`outreach.not_resolvable`; any other HTTP status raised by the framework becomes\n`http.<status>`.",
+            "description": "The machine-readable error code the web translates. One of:\n`auth.missing_token`, `auth.token_expired`, `auth.token_invalid`, `auth.user_inactive`,\n`auth.invalid_credentials`, `auth.forbidden`, `not_found`, `method_not_allowed`,\n`validation_error`, `internal_error`, `listing.unsupported_url`, `listing.invalid_url`,\n`listing.gone`, `source.misconfigured`, `source.unavailable`, `source.login_required`,\n`source.peer_unresolved`, `source.exists`, `user.exists`, `queue.locked`,\n`dedupe.already_decided`, `outreach.not_resolvable`; any other HTTP status raised by the\nframework becomes `http.<status>`.",
             "title": "Code",
             "type": "string"
           },
@@ -2530,6 +2545,71 @@
         "title": "ResolveIn",
         "type": "object"
       },
+      "RulesOut": {
+        "description": "Only the config constants the system actually enforces, each read from its real source\n(not a literal here). Quiet-hours and per-contact send caps are deliberately absent: they\nare NOT implemented, so advertising them would imply a guarantee the backend does not make.",
+        "properties": {
+          "duplicate_merge_threshold": {
+            "title": "Duplicate Merge Threshold",
+            "type": "number"
+          },
+          "lock_hours": {
+            "title": "Lock Hours",
+            "type": "integer"
+          },
+          "new_listing_check_days": {
+            "title": "New Listing Check Days",
+            "type": "integer"
+          },
+          "recheck_days": {
+            "title": "Recheck Days",
+            "type": "integer"
+          },
+          "sms_per_day": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sms Per Day"
+          },
+          "telegram_per_day": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Telegram Per Day"
+          },
+          "telegram_per_hour": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Telegram Per Hour"
+          }
+        },
+        "required": [
+          "lock_hours",
+          "recheck_days",
+          "new_listing_check_days",
+          "duplicate_merge_threshold",
+          "telegram_per_hour",
+          "telegram_per_day",
+          "sms_per_day"
+        ],
+        "title": "RulesOut",
+        "type": "object"
+      },
       "SourceCreateIn": {
         "properties": {
           "interval_seconds": {
@@ -2922,6 +3002,40 @@
         "title": "TokenPair",
         "type": "object"
       },
+      "UserCreateIn": {
+        "description": "Admin Settings \"add user\" form. `role` is a closed set and `password` a minimum\nlength, both enforced here so a bad request is a 422 before the service is called.",
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "password": {
+            "minLength": 8,
+            "title": "Password",
+            "type": "string"
+          },
+          "phone": {
+            "title": "Phone",
+            "type": "string"
+          },
+          "role": {
+            "enum": [
+              "admin",
+              "agent"
+            ],
+            "title": "Role",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "phone",
+          "password",
+          "role"
+        ],
+        "title": "UserCreateIn",
+        "type": "object"
+      },
       "UserOut": {
         "properties": {
           "id": {
@@ -2985,7 +3099,7 @@
       "ValidationProblem": {
         "properties": {
           "code": {
-            "description": "The machine-readable error code the web translates. One of:\n`auth.missing_token`, `auth.token_expired`, `auth.token_invalid`, `auth.user_inactive`,\n`auth.invalid_credentials`, `auth.forbidden`, `not_found`, `method_not_allowed`,\n`validation_error`, `internal_error`, `listing.unsupported_url`, `listing.invalid_url`,\n`listing.gone`, `source.misconfigured`, `source.unavailable`, `source.login_required`,\n`source.peer_unresolved`, `source.exists`, `queue.locked`, `dedupe.already_decided`,\n`outreach.not_resolvable`; any other HTTP status raised by the framework becomes\n`http.<status>`.",
+            "description": "The machine-readable error code the web translates. One of:\n`auth.missing_token`, `auth.token_expired`, `auth.token_invalid`, `auth.user_inactive`,\n`auth.invalid_credentials`, `auth.forbidden`, `not_found`, `method_not_allowed`,\n`validation_error`, `internal_error`, `listing.unsupported_url`, `listing.invalid_url`,\n`listing.gone`, `source.misconfigured`, `source.unavailable`, `source.login_required`,\n`source.peer_unresolved`, `source.exists`, `user.exists`, `queue.locked`,\n`dedupe.already_decided`, `outreach.not_resolvable`; any other HTTP status raised by the\nframework becomes `http.<status>`.",
             "title": "Code",
             "type": "string"
           },
@@ -4912,6 +5026,91 @@
           }
         ],
         "summary": "List Users Endpoint",
+        "tags": [
+          "users"
+        ]
+      },
+      "post": {
+        "description": "Create a user. Duplicate phone -> 409 `user.exists`; a too-short password or a role\noutside {admin, agent} is a 422 from `UserCreateIn` before this body runs. Never returns\nthe password hash (`AdminUserOut` has no such field).",
+        "operationId": "create_user_endpoint_api_v1_users_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserCreateIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminUserOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "missing, invalid or expired token; or inactive user"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "admin role required"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "phone already registered"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblem"
+                }
+              }
+            },
+            "description": "request validation failed"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "unexpected error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create User Endpoint",
         "tags": [
           "users"
         ]
