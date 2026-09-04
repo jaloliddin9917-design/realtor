@@ -29,9 +29,15 @@ export function PropertyTable({ rows }: { rows: PropertyRow[] }) {
           {rows.map((row) => (
             <tr key={row.id} className="hover:bg-surface-soft">
               <td className={td}>
-                <Link to={routes.property} params={{ id: row.id }} className="block text-ink">
-                  <PropertyTitle row={row} />
-                  {row.source_removed && <span className="mt-1 inline-block rounded bg-status-new-bg px-1.5 text-[11px] text-status-new">{t("properties.removedBadge")}</span>}
+                <Link to={routes.property} params={{ id: row.id }} className="flex items-center gap-2.5 text-ink">
+                  {/* thumbnail — the wide table showed no photo before, only the title (see PropertyCardList for the narrow one) */}
+                  {row.photo_url
+                    ? <img src={row.photo_url} alt="" className="size-11 flex-none rounded-md object-cover" />
+                    : <div className="size-11 flex-none rounded-md bg-line" />}
+                  <div className="min-w-0">
+                    <PropertyTitle row={row} />
+                    {row.source_removed && <span className="mt-1 inline-block rounded bg-status-new-bg px-1.5 text-[11px] text-status-new">{t("properties.removedBadge")}</span>}
+                  </div>
                 </Link>
               </td>
               <td className={td}><div className="num font-semibold">{formatUsdFromMinor(row.price_usd_min_minor)}</div></td>

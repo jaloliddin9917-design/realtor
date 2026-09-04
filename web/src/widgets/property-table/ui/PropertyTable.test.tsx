@@ -27,4 +27,11 @@ describe("PropertyTable", () => {
     render(<Provider value={fork()}><RouterProvider router={router}><PropertyTable rows={[row]} /></RouterProvider></Provider>);
     expect(screen.getByRole("link", { name: /Chilonzor/ })).toHaveAttribute("href", "/properties/p1");
   });
+
+  it("shows the property thumbnail when a photo is present", () => {
+    const withPhoto: PropertyRow = { ...row, id: "p9", photo_url: "/api/v1/photos/l9/0.jpg" };
+    const { container } = render(<Provider value={fork()}><RouterProvider router={router}><PropertyTable rows={[withPhoto]} /></RouterProvider></Provider>);
+    expect(container.querySelector('img[src="/api/v1/photos/l9/0.jpg"]')).not.toBeNull();
+  });
+
 });
