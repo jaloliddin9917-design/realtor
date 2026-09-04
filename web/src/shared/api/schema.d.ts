@@ -55,6 +55,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/duplicates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Duplicates */
+        get: operations["list_duplicates_api_v1_duplicates_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/duplicates/{review_id}/decide": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Decide Duplicate */
+        post: operations["decide_duplicate_api_v1_duplicates__review_id__decide_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/healthz": {
         parameters: {
             query?: never;
@@ -431,6 +465,18 @@ export interface components {
             /** Vacant */
             vacant: number;
         };
+        /** BreakdownItem */
+        BreakdownItem: {
+            /** Detail */
+            detail?: string | null;
+            /** Points */
+            points: number;
+            /**
+             * Signal
+             * @enum {string}
+             */
+            signal: "contact" | "photo" | "description" | "rooms_floors" | "area" | "price";
+        };
         /** CallConditionsIn */
         CallConditionsIn: {
             /** Deposit Months */
@@ -559,6 +605,23 @@ export interface components {
             /** Unassigned */
             unassigned: number;
         };
+        /** DecideIn */
+        DecideIn: {
+            /**
+             * Decision
+             * @enum {string}
+             */
+            decision: "merge" | "separate";
+        };
+        /** DecidedRecentOut */
+        DecidedRecentOut: {
+            /** Count */
+            count: number;
+            /** Days */
+            days: number;
+            /** Merged Pct */
+            merged_pct: number;
+        };
         /** DuplicateOut */
         DuplicateOut: {
             /**
@@ -568,6 +631,90 @@ export interface components {
             property_id: string;
             /** Score */
             score: number;
+        };
+        /** DuplicateOwnerOut */
+        DuplicateOwnerOut: {
+            /**
+             * Classification
+             * @enum {string}
+             */
+            classification: "owner" | "agent" | "unknown";
+            /** Home Count */
+            home_count: number | null;
+            /** Phone */
+            phone: string | null;
+        };
+        /** DuplicatePairOut */
+        DuplicatePairOut: {
+            a: components["schemas"]["DuplicateSideOut"];
+            b: components["schemas"]["DuplicateSideOut"];
+            /** Breakdown */
+            breakdown: components["schemas"]["BreakdownItem"][];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Decided At */
+            decided_at?: string | null;
+            /** Decided By */
+            decided_by?: string | null;
+            /** Decision */
+            decision?: ("merge" | "separate") | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Score */
+            score: number;
+        };
+        /** DuplicateQueueOut */
+        DuplicateQueueOut: {
+            decided_recent: components["schemas"]["DecidedRecentOut"];
+            /** Items */
+            items: components["schemas"]["DuplicatePairOut"][];
+            thresholds: components["schemas"]["ThresholdsOut"];
+        };
+        /**
+         * DuplicateSideOut
+         * @description One side of a review pair: a property, rendered through a representative listing.
+         */
+        DuplicateSideOut: {
+            /** Address Text */
+            address_text: string | null;
+            /** Area Sqm */
+            area_sqm: number | null;
+            /** Description */
+            description: string;
+            /** District */
+            district: string | null;
+            /** External Id */
+            external_id: string;
+            /**
+             * First Seen At
+             * Format: date-time
+             */
+            first_seen_at: string;
+            /** Floor */
+            floor: number | null;
+            owner: components["schemas"]["DuplicateOwnerOut"] | null;
+            /** Photos */
+            photos: string[];
+            /** Posted At */
+            posted_at: string | null;
+            price: components["schemas"]["PriceOut"];
+            /** Property Id */
+            property_id: string | null;
+            /** Rooms */
+            rooms: number | null;
+            source: components["schemas"]["SourceRef"];
+            /** Title */
+            title: string;
+            /** Total Floors */
+            total_floors: number | null;
+            /** Url */
+            url: string | null;
         };
         /** FxOut */
         FxOut: {
@@ -768,8 +915,8 @@ export interface components {
              *     `auth.invalid_credentials`, `auth.forbidden`, `not_found`, `method_not_allowed`,
              *     `validation_error`, `internal_error`, `listing.unsupported_url`, `listing.invalid_url`,
              *     `listing.gone`, `source.misconfigured`, `source.unavailable`, `source.login_required`,
-             *     `source.peer_unresolved`, `source.exists`, `queue.locked`; any other HTTP status raised by
-             *     the framework becomes `http.<status>`.
+             *     `source.peer_unresolved`, `source.exists`, `queue.locked`, `dedupe.already_decided`; any
+             *     other HTTP status raised by the framework becomes `http.<status>`.
              */
             code: string;
             /** Detail */
@@ -1104,6 +1251,13 @@ export interface components {
              */
             status: "active" | "inactive";
         };
+        /** ThresholdsOut */
+        ThresholdsOut: {
+            /** Merge Threshold */
+            merge_threshold: number;
+            /** Review Threshold */
+            review_threshold: number;
+        };
         /** TokenPair */
         TokenPair: {
             /** Access */
@@ -1151,8 +1305,8 @@ export interface components {
              *     `auth.invalid_credentials`, `auth.forbidden`, `not_found`, `method_not_allowed`,
              *     `validation_error`, `internal_error`, `listing.unsupported_url`, `listing.invalid_url`,
              *     `listing.gone`, `source.misconfigured`, `source.unavailable`, `source.login_required`,
-             *     `source.peer_unresolved`, `source.exists`, `queue.locked`; any other HTTP status raised by
-             *     the framework becomes `http.<status>`.
+             *     `source.peer_unresolved`, `source.exists`, `queue.locked`, `dedupe.already_decided`; any
+             *     other HTTP status raised by the framework becomes `http.<status>`.
              */
             code: string;
             /** Detail */
@@ -1305,6 +1459,115 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description unexpected error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    list_duplicates_api_v1_duplicates_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DuplicateQueueOut"];
+                };
+            };
+            /** @description missing, invalid or expired token; or inactive user */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description unexpected error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    decide_duplicate_api_v1_duplicates__review_id__decide_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                review_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DecideIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DuplicatePairOut"];
+                };
+            };
+            /** @description missing, invalid or expired token; or inactive user */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description unknown review */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description this review has already been decided */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description request validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"];
                 };
             };
             /** @description unexpected error */

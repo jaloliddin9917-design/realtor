@@ -3,6 +3,7 @@ import { createEvent, sample } from "effector";
 import { and, not } from "patronum";
 import { agentsReceived, mapAgentToday } from "@/entities/agent";
 import { fetchDashboardFx } from "@/entities/dashboard";
+import { fetchDuplicatesFx } from "@/entities/duplicate";
 import { $meta, loadMetaFx } from "@/entities/meta";
 import { detailCleared, fetchPropertyFx } from "@/entities/property";
 import { $isAdmin, $isAuthorized, $sessionChecked, loginFx, logout, restoreSessionFx, sessionRestored } from "@/entities/session";
@@ -56,6 +57,9 @@ sample({ clock: authorized.adminSources.opened, target: fetchSourcesFx });
 
 // load the agent queue whenever /queue opens
 sample({ clock: authorized.queue.opened, target: fetchQueueFx });
+
+// load the duplicates review queue whenever /duplicates opens
+sample({ clock: authorized.duplicates.opened, target: fetchDuplicatesFx });
 
 // load the dashboard whenever /dashboard opens — one fetch feeds both entities/dashboard's
 // stats and entities/agent's board (entities must not import one another, so this is the one

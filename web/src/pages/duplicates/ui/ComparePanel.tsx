@@ -1,6 +1,6 @@
 import { useUnit } from "effector-react";
 import { useTranslation } from "react-i18next";
-import { $current, $index, $pairs, pairSelected, SCORE_THRESHOLDS, type ScoreBreakdownItem } from "@/entities/duplicate";
+import { $current, $index, $pairs, $thresholds, pairSelected, type ScoreBreakdownItem } from "@/entities/duplicate";
 import { DecisionButtons } from "@/features/duplicate/decide";
 import { Button } from "@/shared/ui/button";
 import { ListingCard } from "./ListingCard";
@@ -9,7 +9,7 @@ function BreakdownRow({ item }: { item: ScoreBreakdownItem }) {
   const { t } = useTranslation();
   return (
     <div className="flex items-center justify-between gap-2 text-sm">
-      <span>{t(`duplicates.breakdown.${item.id}`, item.params)}</span>
+      <span>{t(`duplicates.breakdown.${item.id}`)}</span>
       <span className="num font-semibold text-primary">+{item.points.toFixed(2)}</span>
     </div>
   );
@@ -18,7 +18,7 @@ function BreakdownRow({ item }: { item: ScoreBreakdownItem }) {
 /** The right-hand review panel — the featured pair's heading, pager, A/B cards, score breakdown and decision buttons. */
 export function ComparePanel() {
   const { t } = useTranslation();
-  const [current, index, pairs, select] = useUnit([$current, $index, $pairs, pairSelected]);
+  const [current, index, pairs, thresholds, select] = useUnit([$current, $index, $pairs, $thresholds, pairSelected]);
   if (!current) return null;
   return (
     <div className="flex flex-col gap-3">
@@ -26,7 +26,7 @@ export function ComparePanel() {
         <div>
           <h2 className="text-base font-semibold">{t("duplicates.heading")}</h2>
           <p className="text-sm text-muted-foreground">
-            {t("duplicates.headingSub", { score: current.score.toFixed(2), low: SCORE_THRESHOLDS.low.toFixed(2), high: SCORE_THRESHOLDS.high.toFixed(2) })}
+            {t("duplicates.headingSub", { score: current.score.toFixed(2), low: thresholds.low.toFixed(2), high: thresholds.high.toFixed(2) })}
           </p>
         </div>
         <div className="flex items-center gap-2">
