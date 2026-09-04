@@ -1,6 +1,6 @@
 import { createEffect, createEvent, createStore, sample } from "effector";
 import { toast } from "sonner";
-import { logCall, type CallLogInput, type CallOutcome, type NextCheckChoice, type ResultingStatus } from "@/entities/call";
+import { logCall, resultingStatus, type CallLogInput, type CallOutcome, type NextCheckChoice, type ResultingStatus } from "@/entities/call";
 import { released } from "@/entities/queue";
 import { i18n } from "@/shared/i18n";
 import { routes } from "@/shared/router";
@@ -27,8 +27,9 @@ export const $note = createStore("").on(noteChanged, (_, v) => v).reset(formRese
 export const $nextCheck = createStore<NextCheckChoice>("in_3_days").on(nextCheckChanged, (_, v) => v).reset(formReset);
 export const $nextCheckDate = createStore("").on(nextCheckDateChanged, (_, v) => v).reset(formReset);
 
-/** Drives the Save button's label — Bo'sh by default, Topshirilgan only once chosen (see spec). */
-export const $resultingStatus = $outcome.map((o): ResultingStatus => (o === "taken" ? "taken" : "vacant"));
+/** Drives the Save button's label — vacant by default (and once "still_available" is chosen),
+ * taken once "taken" is chosen, unchanged for every other outcome (see entities/call). */
+export const $resultingStatus = $outcome.map((o): ResultingStatus => (o ? resultingStatus(o) : "vacant"));
 
 export const submitFx = createEffect((input: CallLogInput) => logCall(input));
 

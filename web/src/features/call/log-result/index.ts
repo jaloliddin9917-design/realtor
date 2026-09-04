@@ -1,2 +1,2 @@
 export { LogResultForm } from "./ui";
-export { $resultingStatus, formReset, submitRequested } from "./model";
+export { $resultingStatus, formReset, submitFx, submitRequested } from "./model";

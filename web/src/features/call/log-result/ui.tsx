@@ -11,7 +11,7 @@ import {
   noteChanged, outcomeChanged, submitFx, submitRequested,
 } from "./model";
 
-const OUTCOMES: CallOutcome[] = ["taken", "no_answer", "call_back", "realtor_not_owner", "do_not_contact", "wrong_number"];
+const OUTCOMES: CallOutcome[] = ["still_available", "taken", "no_answer", "call_back", "realtor_not_owner", "do_not_contact", "wrong_number"];
 const NEXT_CHECKS: NextCheckChoice[] = ["in_3_days", "tomorrow", "date"];
 const section = "flex flex-col gap-3 rounded-card border border-line bg-surface p-3.5";
 const sectionTitle = "text-[11px] font-semibold uppercase tracking-wider text-muted-foreground";
@@ -25,7 +25,9 @@ export function LogResultForm({ queueItemId }: { queueItemId: string }) {
   const [changeOutcome, toggleForeigners, toggleFamilyOnly, changeDeposit, changeNote, changeNextCheck, changeNextCheckDate, submit] = useUnit([
     outcomeChanged, foreignersToggled, familyOnlyToggled, depositChanged, noteChanged, nextCheckChanged, nextCheckDateChanged, submitRequested,
   ]);
-  const statusLabel = t(resultingStatus === "taken" ? outcomeKey("taken") : "call.statusVacant");
+  // resultingStatus is only "taken" or "unchanged" once an outcome is picked, so the non-null
+  // assertion below is never exercised while outcome is actually null (see call.save's default).
+  const statusLabel = t(resultingStatus === "vacant" ? "call.statusVacant" : outcomeKey(outcome!));
 
   return (
     <div className="flex flex-col gap-3">
