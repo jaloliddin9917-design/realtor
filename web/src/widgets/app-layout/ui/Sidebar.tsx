@@ -16,7 +16,7 @@ export function Sidebar({ className }: { className?: string }) {
   ]);
   const item = "flex h-10 items-center gap-2.5 rounded-lg px-2.5 text-sm font-medium text-sidebar-ink hover:bg-white/10";
   return (
-    <nav className={cn("flex w-56 flex-none flex-col gap-1 bg-sidebar p-3 text-sidebar-ink", className)} aria-label="main">
+    <nav className={cn("flex w-56 flex-none flex-col gap-1 overflow-y-auto bg-sidebar p-3 text-sidebar-ink", className)} aria-label="main">
       <div className="flex items-center gap-2.5 px-2.5 pb-4 pt-1.5">
         <div className="flex size-8 items-center justify-center rounded-lg bg-primary text-white"><Building2 className="size-4" /></div>
         <div><div className="text-[15px] font-bold text-white">{APP_NAME}</div><div className="text-[11px] text-[#8fa39d]">{t("app.tagline")}</div></div>
