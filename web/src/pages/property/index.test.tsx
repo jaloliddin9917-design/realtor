@@ -1,4 +1,5 @@
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { RouterProvider } from "atomic-router-react";
 import { fork } from "effector";
 import { Provider } from "effector-react";
@@ -67,4 +68,17 @@ describe("PropertyPage", () => {
     expect(screen.getByText("Uy topilmadi")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Nofaol" })).not.toBeInTheDocument();
   });
+
+  it("opens a lightbox to browse every photo from the '+N' tile", async () => {
+    const l0 = detail.listings[0]!;
+    const four = { ...detail, listings: [{ ...l0, photos: [0, 1, 2, 3].map((n) => ({ position: n, url: `/api/v1/photos/l1/${n}.jpg`, width: 300, height: 200 })) }, detail.listings[1]!] } as PropertyDetail;
+    mount(four);
+    // the preview shows the first two photos and a "+2" tile for the remaining two
+    await userEvent.click(screen.getByText("+2"));
+    // the lightbox opens at the third photo, with a position counter and next/prev controls
+    expect(screen.getByText("3 / 4")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Keyingi rasm" }));
+    expect(screen.getByText("4 / 4")).toBeInTheDocument();
+  });
+
 });
