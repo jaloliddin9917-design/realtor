@@ -285,6 +285,43 @@
         "title": "BotReplies",
         "type": "object"
       },
+      "BreakdownItem": {
+        "properties": {
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "points": {
+            "title": "Points",
+            "type": "number"
+          },
+          "signal": {
+            "enum": [
+              "contact",
+              "photo",
+              "description",
+              "rooms_floors",
+              "area",
+              "price"
+            ],
+            "title": "Signal",
+            "type": "string"
+          }
+        },
+        "required": [
+          "signal",
+          "points"
+        ],
+        "title": "BreakdownItem",
+        "type": "object"
+      },
       "CallConditionsIn": {
         "properties": {
           "deposit_months": {
@@ -581,6 +618,46 @@
         "title": "DashboardOut",
         "type": "object"
       },
+      "DecideIn": {
+        "properties": {
+          "decision": {
+            "enum": [
+              "merge",
+              "separate"
+            ],
+            "title": "Decision",
+            "type": "string"
+          }
+        },
+        "required": [
+          "decision"
+        ],
+        "title": "DecideIn",
+        "type": "object"
+      },
+      "DecidedRecentOut": {
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "days": {
+            "title": "Days",
+            "type": "integer"
+          },
+          "merged_pct": {
+            "title": "Merged Pct",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "days",
+          "count",
+          "merged_pct"
+        ],
+        "title": "DecidedRecentOut",
+        "type": "object"
+      },
       "DuplicateOut": {
         "properties": {
           "property_id": {
@@ -598,6 +675,319 @@
           "score"
         ],
         "title": "DuplicateOut",
+        "type": "object"
+      },
+      "DuplicateOwnerOut": {
+        "properties": {
+          "classification": {
+            "enum": [
+              "owner",
+              "agent",
+              "unknown"
+            ],
+            "title": "Classification",
+            "type": "string"
+          },
+          "home_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Home Count"
+          },
+          "phone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phone"
+          }
+        },
+        "required": [
+          "phone",
+          "classification",
+          "home_count"
+        ],
+        "title": "DuplicateOwnerOut",
+        "type": "object"
+      },
+      "DuplicatePairOut": {
+        "properties": {
+          "a": {
+            "$ref": "#/components/schemas/DuplicateSideOut"
+          },
+          "b": {
+            "$ref": "#/components/schemas/DuplicateSideOut"
+          },
+          "breakdown": {
+            "items": {
+              "$ref": "#/components/schemas/BreakdownItem"
+            },
+            "title": "Breakdown",
+            "type": "array"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "decided_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          },
+          "decided_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided By"
+          },
+          "decision": {
+            "anyOf": [
+              {
+                "enum": [
+                  "merge",
+                  "separate"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decision"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "score": {
+            "title": "Score",
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "score",
+          "created_at",
+          "a",
+          "b",
+          "breakdown"
+        ],
+        "title": "DuplicatePairOut",
+        "type": "object"
+      },
+      "DuplicateQueueOut": {
+        "properties": {
+          "decided_recent": {
+            "$ref": "#/components/schemas/DecidedRecentOut"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/DuplicatePairOut"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "thresholds": {
+            "$ref": "#/components/schemas/ThresholdsOut"
+          }
+        },
+        "required": [
+          "items",
+          "thresholds",
+          "decided_recent"
+        ],
+        "title": "DuplicateQueueOut",
+        "type": "object"
+      },
+      "DuplicateSideOut": {
+        "description": "One side of a review pair: a property, rendered through a representative listing.",
+        "properties": {
+          "address_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Address Text"
+          },
+          "area_sqm": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Area Sqm"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "district": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "District"
+          },
+          "external_id": {
+            "title": "External Id",
+            "type": "string"
+          },
+          "first_seen_at": {
+            "format": "date-time",
+            "title": "First Seen At",
+            "type": "string"
+          },
+          "floor": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Floor"
+          },
+          "owner": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DuplicateOwnerOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "photos": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Photos",
+            "type": "array"
+          },
+          "posted_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Posted At"
+          },
+          "price": {
+            "$ref": "#/components/schemas/PriceOut"
+          },
+          "property_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Property Id"
+          },
+          "rooms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rooms"
+          },
+          "source": {
+            "$ref": "#/components/schemas/SourceRef"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "total_floors": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Floors"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          }
+        },
+        "required": [
+          "property_id",
+          "source",
+          "external_id",
+          "url",
+          "title",
+          "description",
+          "price",
+          "rooms",
+          "floor",
+          "total_floors",
+          "area_sqm",
+          "district",
+          "address_text",
+          "posted_at",
+          "first_seen_at",
+          "owner",
+          "photos"
+        ],
+        "title": "DuplicateSideOut",
         "type": "object"
       },
       "FxOut": {
@@ -1164,7 +1554,7 @@
         "description": "The body of every error response, sent as `application/problem+json`.",
         "properties": {
           "code": {
-            "description": "The machine-readable error code the web translates. One of:\n`auth.missing_token`, `auth.token_expired`, `auth.token_invalid`, `auth.user_inactive`,\n`auth.invalid_credentials`, `auth.forbidden`, `not_found`, `method_not_allowed`,\n`validation_error`, `internal_error`, `listing.unsupported_url`, `listing.invalid_url`,\n`listing.gone`, `source.misconfigured`, `source.unavailable`, `source.login_required`,\n`source.peer_unresolved`, `source.exists`, `queue.locked`; any other HTTP status raised by\nthe framework becomes `http.<status>`.",
+            "description": "The machine-readable error code the web translates. One of:\n`auth.missing_token`, `auth.token_expired`, `auth.token_invalid`, `auth.user_inactive`,\n`auth.invalid_credentials`, `auth.forbidden`, `not_found`, `method_not_allowed`,\n`validation_error`, `internal_error`, `listing.unsupported_url`, `listing.invalid_url`,\n`listing.gone`, `source.misconfigured`, `source.unavailable`, `source.login_required`,\n`source.peer_unresolved`, `source.exists`, `queue.locked`, `dedupe.already_decided`; any\nother HTTP status raised by the framework becomes `http.<status>`.",
             "title": "Code",
             "type": "string"
           },
@@ -2208,6 +2598,24 @@
         "title": "StatusIn",
         "type": "object"
       },
+      "ThresholdsOut": {
+        "properties": {
+          "merge_threshold": {
+            "title": "Merge Threshold",
+            "type": "number"
+          },
+          "review_threshold": {
+            "title": "Review Threshold",
+            "type": "number"
+          }
+        },
+        "required": [
+          "review_threshold",
+          "merge_threshold"
+        ],
+        "title": "ThresholdsOut",
+        "type": "object"
+      },
       "TokenPair": {
         "properties": {
           "access": {
@@ -2295,7 +2703,7 @@
       "ValidationProblem": {
         "properties": {
           "code": {
-            "description": "The machine-readable error code the web translates. One of:\n`auth.missing_token`, `auth.token_expired`, `auth.token_invalid`, `auth.user_inactive`,\n`auth.invalid_credentials`, `auth.forbidden`, `not_found`, `method_not_allowed`,\n`validation_error`, `internal_error`, `listing.unsupported_url`, `listing.invalid_url`,\n`listing.gone`, `source.misconfigured`, `source.unavailable`, `source.login_required`,\n`source.peer_unresolved`, `source.exists`, `queue.locked`; any other HTTP status raised by\nthe framework becomes `http.<status>`.",
+            "description": "The machine-readable error code the web translates. One of:\n`auth.missing_token`, `auth.token_expired`, `auth.token_invalid`, `auth.user_inactive`,\n`auth.invalid_credentials`, `auth.forbidden`, `not_found`, `method_not_allowed`,\n`validation_error`, `internal_error`, `listing.unsupported_url`, `listing.invalid_url`,\n`listing.gone`, `source.misconfigured`, `source.unavailable`, `source.login_required`,\n`source.peer_unresolved`, `source.exists`, `queue.locked`, `dedupe.already_decided`; any\nother HTTP status raised by the framework becomes `http.<status>`.",
             "title": "Code",
             "type": "string"
           },
@@ -2513,6 +2921,150 @@
         "summary": "Get Dashboard",
         "tags": [
           "dashboard"
+        ]
+      }
+    },
+    "/api/v1/duplicates": {
+      "get": {
+        "operationId": "list_duplicates_api_v1_duplicates_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DuplicateQueueOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "missing, invalid or expired token; or inactive user"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "unexpected error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Duplicates",
+        "tags": [
+          "duplicates"
+        ]
+      }
+    },
+    "/api/v1/duplicates/{review_id}/decide": {
+      "post": {
+        "operationId": "decide_duplicate_api_v1_duplicates__review_id__decide_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "review_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Review Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DecideIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DuplicatePairOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "missing, invalid or expired token; or inactive user"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "unknown review"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "this review has already been decided"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblem"
+                }
+              }
+            },
+            "description": "request validation failed"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "unexpected error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Decide Duplicate",
+        "tags": [
+          "duplicates"
         ]
       }
     },

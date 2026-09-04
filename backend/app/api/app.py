@@ -13,6 +13,7 @@ from app.api.routers import (
     auth,
     availability,
     dashboard,
+    duplicates,
     health,
     listings,
     meta,
@@ -95,6 +96,7 @@ def create_app(
         listings.router,
         availability.router,
         dashboard.router,
+        duplicates.router,
     ):
         app.include_router(router, prefix=API_PREFIX, responses={**PROBLEM_401, **PROBLEM_500})
     for router in (sources.router, users.router):

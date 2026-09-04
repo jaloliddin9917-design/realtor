@@ -24,8 +24,8 @@ CODES = """The machine-readable error code the web translates. One of:
 `auth.invalid_credentials`, `auth.forbidden`, `not_found`, `method_not_allowed`,
 `validation_error`, `internal_error`, `listing.unsupported_url`, `listing.invalid_url`,
 `listing.gone`, `source.misconfigured`, `source.unavailable`, `source.login_required`,
-`source.peer_unresolved`, `source.exists`, `queue.locked`; any other HTTP status raised by
-the framework becomes `http.<status>`."""
+`source.peer_unresolved`, `source.exists`, `queue.locked`, `dedupe.already_decided`; any
+other HTTP status raised by the framework becomes `http.<status>`."""
 
 log = structlog.get_logger()
 

@@ -15,6 +15,8 @@ EXPECTED_PATHS = {
     "/api/v1/properties",
     "/api/v1/properties/{property_id}",
     "/api/v1/properties/{property_id}/status",
+    "/api/v1/duplicates",
+    "/api/v1/duplicates/{review_id}/decide",
     "/api/v1/listings/manual",
     "/api/v1/listings/manual/form",
     "/api/v1/sources",
