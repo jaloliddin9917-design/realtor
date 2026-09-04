@@ -2,6 +2,8 @@ import { render, screen } from "@testing-library/react";
 import { RouterProvider } from "atomic-router-react";
 import { fork } from "effector";
 import { Provider } from "effector-react";
+import { $agentRows, MOCK_AGENTS_TODAY } from "@/entities/agent";
+import { $dashboardStats, fetchDashboardFx, MOCK_DASHBOARD_STATS } from "@/entities/dashboard";
 import { i18nReady } from "@/shared/i18n";
 import { router } from "@/shared/router";
 import { DashboardPage } from "./index";
@@ -10,10 +12,17 @@ describe("DashboardPage", () => {
   beforeAll(() => i18nReady);
 
   it("shows the stat cards, an agent's activity and the recheck list", () => {
+    // Both stores start empty (see entities/dashboard, entities/agent) and are normally filled
+    // by the dashboard.opened wiring in app/router.ts — seeded here the same way pages/queue's
+    // test seeds $items, with a `fetchDashboardFx` handler as a safety net.
+    const scope = fork({
+      values: [[$dashboardStats, MOCK_DASHBOARD_STATS], [$agentRows, MOCK_AGENTS_TODAY.rows]],
+      handlers: [[fetchDashboardFx, async () => ({ stats: MOCK_DASHBOARD_STATS, agents: [] })]],
+    });
     // AppLayout's Sidebar renders atomic-router-react <Link>s, which need a RouterProvider
     // ancestor (see widgets/app-layout/ui/AppLayout.test.tsx for the same wrapping).
     render(
-      <Provider value={fork()}>
+      <Provider value={scope}>
         <RouterProvider router={router}><DashboardPage /></RouterProvider>
       </Provider>,
     );

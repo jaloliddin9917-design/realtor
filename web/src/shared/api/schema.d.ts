@@ -38,6 +38,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/dashboard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Dashboard */
+        get: operations["get_dashboard_api_v1_dashboard_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/healthz": {
         parameters: {
             query?: never;
@@ -294,10 +311,72 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Users Endpoint */
+        get: operations["list_users_endpoint_api_v1_users_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * AdminUserOut
+         * @description One user row for the admin Settings screen. Never carries the password hash.
+         */
+        AdminUserOut: {
+            /** Active */
+            active: boolean;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Phone */
+            phone: string;
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "admin" | "agent";
+        };
+        /** AgentToday */
+        AgentToday: {
+            /** Calls */
+            calls: number;
+            /** Found Vacant */
+            found_vacant: number;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** In Queue */
+            in_queue: number;
+            /** Name */
+            name: string;
+            /** Working On */
+            working_on: string | null;
+        };
         /** AvailabilityOut */
         AvailabilityOut: {
             /**
@@ -338,6 +417,19 @@ export interface components {
             title: string;
             /** Total Floors */
             total_floors?: number | null;
+        };
+        /** BotReplies */
+        BotReplies: {
+            /** Answered */
+            answered: number;
+            /** Sent */
+            sent: number;
+            /** Taken */
+            taken: number;
+            /** Unclear */
+            unclear: number;
+            /** Vacant */
+            vacant: number;
         };
         /** CallConditionsIn */
         CallConditionsIn: {
@@ -450,6 +542,22 @@ export interface components {
              * Format: date-time
              */
             started_at: string;
+        };
+        /** DashboardOut */
+        DashboardOut: {
+            /** Agents */
+            agents: components["schemas"]["AgentToday"][];
+            /** Auto Distribute */
+            auto_distribute: boolean;
+            bot_replies: components["schemas"]["BotReplies"];
+            new_listings: components["schemas"]["NewListings"];
+            /** Recheck Items */
+            recheck_items: components["schemas"]["RecheckItem"][];
+            /** Recheck Total */
+            recheck_total: number;
+            status_counts: components["schemas"]["StatusCounts"];
+            /** Unassigned */
+            unassigned: number;
         };
         /** DuplicateOut */
         DuplicateOut: {
@@ -581,6 +689,19 @@ export interface components {
             source_kinds: ("olx" | "telegram" | "manual")[];
             /** Statuses */
             statuses: ("new" | "active" | "inactive")[];
+        };
+        /** NewListings */
+        NewListings: {
+            /** Duplicates */
+            duplicates: number;
+            /** Manual */
+            manual: number;
+            /** Olx */
+            olx: number;
+            /** Telegram */
+            telegram: number;
+            /** Total */
+            total: number;
         };
         /** NextCheckIn */
         NextCheckIn: {
@@ -831,6 +952,29 @@ export interface components {
             /** Until */
             until?: string | null;
         };
+        /** RecheckItem */
+        RecheckItem: {
+            /** Agent */
+            agent: string | null;
+            /** District */
+            district: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Last Checked At
+             * Format: date-time
+             */
+            last_checked_at: string;
+            /** Price Usd */
+            price_usd: number | null;
+            /** Rooms */
+            rooms: number | null;
+            /** Source Removed */
+            source_removed: boolean;
+        };
         /** RefreshIn */
         RefreshIn: {
             /** Refresh */
@@ -916,6 +1060,19 @@ export interface components {
             fx: components["schemas"]["FxOut"] | null;
             /** Items */
             items: components["schemas"]["SourceOut"][];
+        };
+        /** StatusCounts */
+        StatusCounts: {
+            /** New */
+            new: number;
+            /** Taken */
+            taken: number;
+            /** To Check Today */
+            to_check_today: number;
+            /** Vacant */
+            vacant: number;
+            /** Vacant Confirmed 3D */
+            vacant_confirmed_3d: number;
         };
         /** StatusEventOut */
         StatusEventOut: {
@@ -1110,6 +1267,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            /** @description unexpected error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    get_dashboard_api_v1_dashboard_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DashboardOut"];
+                };
+            };
+            /** @description missing, invalid or expired token; or inactive user */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
                 };
             };
             /** @description unexpected error */
@@ -2022,6 +2217,53 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            /** @description unexpected error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    list_users_endpoint_api_v1_users_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminUserOut"][];
+                };
+            };
+            /** @description missing, invalid or expired token; or inactive user */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description admin role required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
                 };
             };
             /** @description unexpected error */

@@ -1,13 +1,11 @@
 import { useUnit } from "effector-react";
 import { useTranslation } from "react-i18next";
-import { $users, type UserPresence } from "@/entities/setting";
+import { $users } from "@/entities/setting";
 import { AddUserDialog } from "@/features/settings/add-user";
 import { formatPhone } from "@/shared/lib";
 
 const th = "whitespace-nowrap bg-surface-soft px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground";
 const td = "border-b border-line-soft px-3 py-2.5 align-middle";
-
-const PRESENCE_KEY: Record<UserPresence, string> = { plain: "settingsPage.users.status.plain", online_now: "settingsPage.users.status.onlineNow", online: "settingsPage.users.status.online" };
 
 export function UsersSection() {
   const { t } = useTranslation();
@@ -25,7 +23,6 @@ export function UsersSection() {
               <th className={th}>{t("settingsPage.users.columns.name")}</th>
               <th className={th}>{t("settingsPage.users.columns.role")}</th>
               <th className={th}>{t("settingsPage.users.columns.phone")}</th>
-              <th className={th}>{t("settingsPage.users.columns.bot")}</th>
               <th className={th}>{t("settingsPage.users.columns.status")}</th>
             </tr>
           </thead>
@@ -35,8 +32,7 @@ export function UsersSection() {
                 <td className={`${td} font-medium`}>{u.name}</td>
                 <td className={td}>{t(`nav.role.${u.role}`)}</td>
                 <td className={`${td} num`}>{formatPhone(u.phone)}</td>
-                <td className={td}>{t(u.bot_connected ? "settingsPage.connected" : "settingsPage.disconnected")}</td>
-                <td className={td}>{t(PRESENCE_KEY[u.presence])}</td>
+                <td className={td}>{t(u.active ? "settingsPage.users.status.active" : "settingsPage.users.status.inactive")}</td>
               </tr>
             ))}
           </tbody>

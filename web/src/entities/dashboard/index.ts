@@ -1,3 +1,3 @@
-export { fetchDashboardStatsFx, $dashboardStats } from "./model";
-export { fetchDashboardStats } from "./api";
-export type { DashboardStats, VacantStat, ToCheckStat, NewListingsStat, BotRepliesStat, RecheckItem, RemovedFrom } from "./api";
+export { fetchDashboardFx, $dashboardStats } from "./model";
+export { fetchDashboard, MOCK_DASHBOARD_STATS } from "./api";
+export type { DashboardStats, DashboardFetch, VacantStat, ToCheckStat, NewListingsStat, BotRepliesStat, RecheckItem, RemovedFrom } from "./api";

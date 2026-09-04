@@ -1,10 +1,13 @@
 import { chainRoute, redirect, type RouteInstance, type RouteParams, type RouteParamsAndQuery } from "atomic-router";
 import { createEvent, sample } from "effector";
 import { and, not } from "patronum";
+import { agentsReceived, mapAgentToday } from "@/entities/agent";
+import { fetchDashboardFx } from "@/entities/dashboard";
 import { $meta, loadMetaFx } from "@/entities/meta";
 import { detailCleared, fetchPropertyFx } from "@/entities/property";
 import { $isAdmin, $isAuthorized, $sessionChecked, loginFx, logout, restoreSessionFx, sessionRestored } from "@/entities/session";
 import { fetchQueueFx } from "@/entities/queue";
+import { fetchUsersFx } from "@/entities/setting";
 import { fetchSourcesFx } from "@/entities/source";
 import { router, routes } from "@/shared/router";
 
@@ -53,6 +56,17 @@ sample({ clock: authorized.adminSources.opened, target: fetchSourcesFx });
 
 // load the agent queue whenever /queue opens
 sample({ clock: authorized.queue.opened, target: fetchQueueFx });
+
+// load the dashboard whenever /dashboard opens — one fetch feeds both entities/dashboard's
+// stats and entities/agent's board (entities must not import one another, so this is the one
+// place allowed to know about both; see the module docstrings on each).
+sample({ clock: authorized.dashboard.opened, target: fetchDashboardFx });
+sample({ clock: fetchDashboardFx.doneData, fn: (d) => d.agents.map(mapAgentToday), target: agentsReceived });
+
+// load the users and sources overviews whenever /settings opens (sources reuses the same
+// fetchSourcesFx/$sources as /admin/sources — entities/source is real data throughout, no mock)
+sample({ clock: authorized.settings.opened, target: fetchUsersFx });
+sample({ clock: authorized.settings.opened, target: fetchSourcesFx });
 
 // Load the property on `opened` *and* `updated`: atomic-router only fires `opened` the first
 // time the route matches, so navigating straight from one property to another (the path stays

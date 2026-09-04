@@ -1,21 +1,27 @@
 import { useUnit } from "effector-react";
 import { useTranslation } from "react-i18next";
-import { $sources, type SourceFeed } from "@/entities/setting";
+import { $sources, type Source } from "@/entities/source";
 import { AddChannelDialog } from "@/features/settings/add-channel";
+import { kindKey, sourceStatusKey } from "@/shared/i18n";
+import { formatDate } from "@/shared/lib";
 
-function sourceLine(t: (key: string, opts?: Record<string, unknown>) => string, feed: SourceFeed): string {
-  switch (feed.kind) {
-    case "olx":
-      return t("settingsPage.sources.olx", { interval: feed.interval_minutes, ago: feed.last_checked_minutes_ago, added: feed.added_today });
-    case "telegram_channels":
-      return t("settingsPage.sources.telegramChannels", { count: feed.handles?.length ?? 0, handles: (feed.handles ?? []).join(" · ") });
-    case "other_portal":
-      return t("settingsPage.sources.otherPortal");
-  }
+/**
+ * The real `Source` shape (kind/enabled/status/last_run) has no per-kind sentence template the
+ * way the old mock's `SourceFeed` did, so this composes one line per source from the same
+ * `sources.*` copy the admin sources table (`widgets/sources-table`) already uses, rather than
+ * adding new i18n keys for a shape the mock invented.
+ */
+function sourceLine(t: (key: string, opts?: Record<string, unknown>) => string, lang: string, s: Source): string {
+  const state = t(s.enabled ? "sources.enabled" : "sources.disabled");
+  const status = t(sourceStatusKey(s.status));
+  const lastRun = s.last_run
+    ? `${formatDate(s.last_run.started_at, lang, "datetime")} · ${t("sources.columns.found")} ${s.last_run.found} · ${t("sources.columns.new")} ${s.last_run.new}`
+    : t("sources.never");
+  return `${s.name} — ${t(kindKey(s.kind))} · ${state} · ${status} · ${lastRun}`;
 }
 
 export function SourcesSection() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const sources = useUnit($sources);
   return (
     <div className="flex flex-col gap-3 rounded-card border border-line bg-surface p-3.5">
@@ -24,8 +30,8 @@ export function SourcesSection() {
         <AddChannelDialog />
       </div>
       <ul className="flex flex-col gap-2">
-        {sources.map((feed) => (
-          <li key={feed.id} className="rounded-lg border border-line-soft bg-surface-soft px-3 py-2 text-[13px]">{sourceLine(t, feed)}</li>
+        {sources.map((s) => (
+          <li key={s.id} className="rounded-lg border border-line-soft bg-surface-soft px-3 py-2 text-[13px]">{sourceLine(t, i18n.language, s)}</li>
         ))}
       </ul>
       <div className="flex flex-col gap-1 text-xs text-muted-foreground">

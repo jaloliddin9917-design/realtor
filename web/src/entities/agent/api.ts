@@ -1,19 +1,19 @@
-/**
- * `active`: on a call right now, expected free by `time`. `callback`: no call in progress, a
- * callback is scheduled for `time`. `idle`: nothing queued or in progress.
- */
-export type AgentActivity =
-  | { kind: "active"; district: string; rooms: number; time: string }
-  | { kind: "callback"; district: string; rooms: number; time: string }
-  | { kind: "idle" };
+import { type Schemas } from "@/shared/api";
 
 export interface AgentRow {
   id: string;
   name: string;
-  queued: number;
+  inQueue: number;
   calls: number;
-  vacantFound: number;
-  activity: AgentActivity;
+  foundVacant: number;
+  /**
+   * Raw free-text description of what the agent is doing right now (e.g. "Chilonzor · 2 xonali
+   * · 16:05 gacha"), or `null` when idle. The API's `AgentToday.working_on` is a plain nullable
+   * string — unlike the old mock, there is no `kind` telling the UI whether this is an active
+   * call (locked until a time) or a scheduled callback, so the card renders it verbatim rather
+   * than composing a translated sentence.
+   */
+  workingOn: string | null;
 }
 
 export interface AgentsToday {
@@ -25,17 +25,20 @@ export interface AgentsToday {
 
 export const MOCK_AGENTS_TODAY: AgentsToday = {
   rows: [
-    { id: "a1", name: "Aziz", queued: 14, calls: 22, vacantFound: 9, activity: { kind: "active", district: "chilonzor", rooms: 2, time: "16:05" } },
-    { id: "a2", name: "Malika", queued: 16, calls: 25, vacantFound: 11, activity: { kind: "active", district: "yunusobod", rooms: 3, time: "15:40" } },
-    { id: "a3", name: "Dilshod", queued: 11, calls: 18, vacantFound: 7, activity: { kind: "callback", district: "mirobod", rooms: 3, time: "17:00" } },
-    { id: "a4", name: "Jasur", queued: 9, calls: 12, vacantFound: 4, activity: { kind: "idle" } },
+    { id: "a1", name: "Aziz", inQueue: 14, calls: 22, foundVacant: 9, workingOn: "Chilonzor · 2-xonali · 16:05 gacha" },
+    { id: "a2", name: "Malika", inQueue: 16, calls: 25, foundVacant: 11, workingOn: "Yunusobod · 3-xonali · 15:40 gacha" },
+    { id: "a3", name: "Dilshod", inQueue: 11, calls: 18, foundVacant: 7, workingOn: "Mirobod · 3-xonali · 17:00 gacha" },
+    { id: "a4", name: "Jasur", inQueue: 9, calls: 12, foundVacant: 4, workingOn: null },
   ],
   callsTotal: 77,
   vacantFoundTotal: 31,
   duplicateCallsAvoided: 2,
 };
 
-// TODO(real): GET /api/v1/agents/today
-export function fetchAgentsToday(): Promise<AgentsToday> {
-  return Promise.resolve(MOCK_AGENTS_TODAY);
+type AgentToday = Schemas["AgentToday"];
+
+/** Maps one row of `GET /api/v1/dashboard`'s `agents` array — there is no separate agents
+ * endpoint, so this is called from `app/router.ts` off the dashboard fetch (see entities/dashboard). */
+export function mapAgentToday(o: AgentToday): AgentRow {
+  return { id: o.id, name: o.name, inQueue: o.in_queue, calls: o.calls, foundVacant: o.found_vacant, workingOn: o.working_on };
 }

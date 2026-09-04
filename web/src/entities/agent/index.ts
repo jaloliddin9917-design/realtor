@@ -1,3 +1,3 @@
-export { fetchAgentsTodayFx, $agentsToday, $agentRows } from "./model";
-export { fetchAgentsToday } from "./api";
-export type { AgentsToday, AgentRow, AgentActivity } from "./api";
+export { agentsReceived, $agentRows, $agentsToday } from "./model";
+export { mapAgentToday, MOCK_AGENTS_TODAY } from "./api";
+export type { AgentRow, AgentsToday } from "./api";
