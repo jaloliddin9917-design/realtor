@@ -1,12 +1,10 @@
+import { useUnit } from "effector-react";
 import { useTranslation } from "react-i18next";
+import { $meta } from "@/entities/meta";
 import type { QueueItem } from "@/entities/queue";
 import { districtKey } from "@/shared/i18n";
 import { formatMoney, formatUsdFromMinor } from "@/shared/lib";
 
-// A flat demo exchange rate — entities/source does carry a live $fx, but it only loads once an
-// admin visits /admin/sources (see app/router.ts), so it cannot be relied on for an agent here.
-// TODO(real): once /api/v1/queue exists, have it (or entities/source's $fx) supply this.
-const MOCK_USD_UZS = 11_900;
 const PHOTO_TOTAL = 7;
 const PHOTO_THUMB_COUNT = 5;
 
@@ -15,6 +13,11 @@ const PHOTO_THUMB_COUNT = 5;
 export function CallHeader({ item }: { item: QueueItem }) {
   const { t, i18n } = useTranslation();
   const lang = i18n.language;
+  // The session-wide fx snapshot (entities/meta, loaded once via app/router's loadMetaFx — this
+  // screen is one of its trigger routes). No fabricated fallback: if the rate hasn't loaded yet
+  // (or the backend has never fetched one), the so'm line is simply not shown.
+  const meta = useUnit($meta);
+  const fx = meta?.fx ?? null;
 
   return (
     <div className="flex flex-col gap-3">
@@ -34,7 +37,7 @@ export function CallHeader({ item }: { item: QueueItem }) {
         <div className="flex flex-wrap items-baseline gap-1.5">
           <span className="num text-[22px] font-bold">{formatUsdFromMinor(item.priceUsd * 100)}</span>
           <span className="text-xs text-muted-foreground">{t("call.perMonth")}</span>
-          <span className="num text-sm text-muted-foreground">{t("call.approxSum", { amount: formatMoney(item.priceUsd * MOCK_USD_UZS * 100, "UZS", lang) })}</span>
+          {fx && <span className="num text-sm text-muted-foreground">{t("call.approxSum", { amount: formatMoney(item.priceUsd * Number(fx.usd_uzs) * 100, "UZS", lang) })}</span>}
         </div>
         <div className="text-sm text-muted-foreground">{t("call.attrs", { rooms: item.rooms, floor: item.floor, total: item.totalFloors, area: Math.round(item.areaSqm) })}</div>
       </div>

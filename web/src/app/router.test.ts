@@ -74,6 +74,39 @@ describe("auth guard", () => {
     expect(metaCalls).toBe(1);
   });
 
+  it("also loads meta on a deep link straight to /queue/:id — the call screen's fx line needs it without visiting /properties first", async () => {
+    const scope = fork({ values: [[$tokens, { access: "a", refresh: "r" }]] });
+    let metaCalls = 0;
+    vi.stubGlobal("fetch", vi.fn(async (req: Request) => {
+      if (req.url.includes("/api/v1/meta")) {
+        metaCalls += 1;
+        return json({ districts: [], statuses: [], source_kinds: [], contact_classifications: [], fx: null, rules: { lock_hours: 4, recheck_days: 3, new_listing_check_days: 2, duplicate_merge_threshold: 0.75, telegram_per_hour: null, telegram_per_day: null, sms_per_day: null } });
+      }
+      return json({ id: "u", phone: "+998900000001", name: "A", role: "agent", locale: "uz" });
+    }));
+    await allSettled(router.setHistory, { scope, params: createMemoryHistory({ initialEntries: ["/queue/1042"] }) });
+    expect(scope.getState(authorized.call.$isOpened)).toBe(true);
+    expect(metaCalls).toBe(1);
+  });
+
+  it("also loads meta on a deep link straight to /settings — the rules section needs it without visiting /admin/sources first", async () => {
+    const scope = fork({ values: [[$tokens, { access: "a", refresh: "r" }]] });
+    let metaCalls = 0;
+    vi.stubGlobal("fetch", vi.fn(async (req: Request) => {
+      if (req.url.includes("/api/v1/meta")) {
+        metaCalls += 1;
+        return json({ districts: [], statuses: [], source_kinds: [], contact_classifications: [], fx: null, rules: { lock_hours: 4, recheck_days: 3, new_listing_check_days: 2, duplicate_merge_threshold: 0.75, telegram_per_hour: null, telegram_per_day: null, sms_per_day: null } });
+      }
+      if (req.url.includes("/api/v1/users")) return json([]);
+      if (req.url.includes("/api/v1/sources")) return json({ items: [], fx: null });
+      if (req.url.includes("/api/v1/bot")) return json({ channels: [], counters: { today: 0, queued: 0, answered: 0, unclear: 0, errors: 0 }, items: [] });
+      return json({ id: "u", phone: "+998900000001", name: "A", role: "admin", locale: "uz" });
+    }));
+    await allSettled(router.setHistory, { scope, params: createMemoryHistory({ initialEntries: ["/settings"] }) });
+    expect(scope.getState(authorized.settings.$isOpened)).toBe(true);
+    expect(metaCalls).toBe(1);
+  });
+
   it("loads the property when /properties/:id opens and drops it when the route closes", async () => {
     const scope = fork({ values: [[$tokens, { access: "a", refresh: "r" }]] });
     const json = (body: unknown) => new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });

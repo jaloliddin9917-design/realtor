@@ -1,8 +1,7 @@
 import { allSettled, fork } from "effector";
 import { toast } from "sonner";
 import { i18n } from "@/shared/i18n";
-import { $users, fetchUsersFx, userAdded } from "./model";
-import type { SettingUser } from "./api";
+import { $users, fetchUsersFx } from "./model";
 
 vi.mock("sonner", () => ({ toast: { error: vi.fn() } }));
 
@@ -20,16 +19,6 @@ describe("fetchUsersFx", () => {
       { id: "u1", name: "Sardor", phone: "+998900001120", role: "admin", active: true },
       { id: "u4", name: "Dilshod", phone: "+998933334455", role: "agent", active: false },
     ]);
-  });
-});
-
-describe("userAdded", () => {
-  it("appends locally, on top of whatever fetchUsersFx last loaded", async () => {
-    const existing: SettingUser = { id: "u1", name: "Sardor", phone: "+998900001120", role: "admin", active: true };
-    const scope = fork({ values: [[$users, [existing]]] });
-    const added: SettingUser = { id: "u-new", name: "Nodira", phone: "+998900000002", role: "agent", active: true };
-    await allSettled(userAdded, { scope, params: added });
-    expect(scope.getState($users)).toEqual([existing, added]);
   });
 });
 

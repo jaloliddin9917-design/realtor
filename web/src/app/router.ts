@@ -72,9 +72,12 @@ sample({ clock: authorized.dashboard.opened, target: fetchDashboardFx });
 sample({ clock: fetchDashboardFx.doneData, fn: (d) => d.agents.map(mapAgentToday), target: agentsReceived });
 
 // load the users and sources overviews whenever /settings opens (sources reuses the same
-// fetchSourcesFx/$sources as /admin/sources — entities/source is real data throughout, no mock)
+// fetchSourcesFx/$sources as /admin/sources — entities/source is real data throughout, no mock).
+// The bot channels overview reuses entities/bot's own fetchBotFx/$channels — the same store the
+// Bot Monitor screen (/bot) renders — rather than a settings-local copy.
 sample({ clock: authorized.settings.opened, target: fetchUsersFx });
 sample({ clock: authorized.settings.opened, target: fetchSourcesFx });
+sample({ clock: authorized.settings.opened, target: fetchBotFx });
 
 // Load the property on `opened` *and* `updated`: atomic-router only fires `opened` the first
 // time the route matches, so navigating straight from one property to another (the path stays
@@ -87,13 +90,16 @@ sample({ clock: [authorized.property.opened, authorized.property.updated], fn: (
 sample({ clock: authorized.property.closed, target: detailCleared });
 
 /**
- * The API's enumerations (districts, statuses, source kinds) are fetched once per session,
- * on the first authorized page that opens. It is wired here rather than in entities/meta
- * because entities must not import one another and none of them knows about the routes —
- * the app layer is the one place allowed to know both.
+ * The API's enumerations (districts, statuses, source kinds), the USD/UZS fx snapshot and the
+ * enforced rule constants are fetched once per session, on the first authorized page that opens.
+ * /queue/:id (call) and /settings both render real `$meta.fx`/`$meta.rules` values, so a visitor
+ * who deep-links straight to either — never passing through /properties or /admin/sources first
+ * — still gets them. It is wired here rather than in entities/meta because entities must not
+ * import one another and none of them knows about the routes — the app layer is the one place
+ * allowed to know both.
  */
 sample({
-  clock: [authorized.properties.opened, authorized.property.opened, authorized.adminSources.opened],
+  clock: [authorized.properties.opened, authorized.property.opened, authorized.adminSources.opened, authorized.call.opened, authorized.settings.opened],
   source: $meta,
   filter: (meta) => meta === null,
   fn: () => undefined,

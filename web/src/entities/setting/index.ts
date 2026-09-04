@@ -1,3 +1,3 @@
-export { fetchUsersFx, userAdded, rulesSaved, $users, $botChannels, $rules } from "./model";
-export { fetchUsers, saveRules, addUser, addSourceChannel, MOCK_SETTINGS } from "./api";
-export type { UserRole, SettingUser, BotChannelSettingKind, BotChannelSetting, Rules } from "./api";
+export { fetchUsersFx, $users } from "./model";
+export { fetchUsers, addUser, MOCK_USERS } from "./api";
+export type { UserRole, SettingUser, AddUserInput } from "./api";

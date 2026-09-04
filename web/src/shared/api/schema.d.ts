@@ -389,7 +389,13 @@ export interface paths {
         /** List Users Endpoint */
         get: operations["list_users_endpoint_api_v1_users_get"];
         put?: never;
-        post?: never;
+        /**
+         * Create User Endpoint
+         * @description Create a user. Duplicate phone -> 409 `user.exists`; a too-short password or a role
+         *     outside {admin, agent} is a 422 from `UserCreateIn` before this body runs. Never returns
+         *     the password hash (`AdminUserOut` has no such field).
+         */
+        post: operations["create_user_endpoint_api_v1_users_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -887,6 +893,8 @@ export interface components {
             contact_classifications: ("owner" | "agent" | "unknown")[];
             /** Districts */
             districts: string[];
+            fx: components["schemas"]["FxOut"] | null;
+            rules: components["schemas"]["RulesOut"];
             /** Source Kinds */
             source_kinds: ("olx" | "telegram" | "manual")[];
             /** Statuses */
@@ -1030,9 +1038,9 @@ export interface components {
              *     `auth.invalid_credentials`, `auth.forbidden`, `not_found`, `method_not_allowed`,
              *     `validation_error`, `internal_error`, `listing.unsupported_url`, `listing.invalid_url`,
              *     `listing.gone`, `source.misconfigured`, `source.unavailable`, `source.login_required`,
-             *     `source.peer_unresolved`, `source.exists`, `queue.locked`, `dedupe.already_decided`,
-             *     `outreach.not_resolvable`; any other HTTP status raised by the framework becomes
-             *     `http.<status>`.
+             *     `source.peer_unresolved`, `source.exists`, `user.exists`, `queue.locked`,
+             *     `dedupe.already_decided`, `outreach.not_resolvable`; any other HTTP status raised by the
+             *     framework becomes `http.<status>`.
              */
             code: string;
             /** Detail */
@@ -1251,6 +1259,28 @@ export interface components {
              */
             result: "vacant" | "taken";
         };
+        /**
+         * RulesOut
+         * @description Only the config constants the system actually enforces, each read from its real source
+         *     (not a literal here). Quiet-hours and per-contact send caps are deliberately absent: they
+         *     are NOT implemented, so advertising them would imply a guarantee the backend does not make.
+         */
+        RulesOut: {
+            /** Duplicate Merge Threshold */
+            duplicate_merge_threshold: number;
+            /** Lock Hours */
+            lock_hours: number;
+            /** New Listing Check Days */
+            new_listing_check_days: number;
+            /** Recheck Days */
+            recheck_days: number;
+            /** Sms Per Day */
+            sms_per_day: number | null;
+            /** Telegram Per Day */
+            telegram_per_day: number | null;
+            /** Telegram Per Hour */
+            telegram_per_hour: number | null;
+        };
         /** SourceCreateIn */
         SourceCreateIn: {
             /**
@@ -1395,6 +1425,24 @@ export interface components {
              */
             token_type: "bearer";
         };
+        /**
+         * UserCreateIn
+         * @description Admin Settings "add user" form. `role` is a closed set and `password` a minimum
+         *     length, both enforced here so a bad request is a 422 before the service is called.
+         */
+        UserCreateIn: {
+            /** Name */
+            name: string;
+            /** Password */
+            password: string;
+            /** Phone */
+            phone: string;
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "admin" | "agent";
+        };
         /** UserOut */
         UserOut: {
             /**
@@ -1429,9 +1477,9 @@ export interface components {
              *     `auth.invalid_credentials`, `auth.forbidden`, `not_found`, `method_not_allowed`,
              *     `validation_error`, `internal_error`, `listing.unsupported_url`, `listing.invalid_url`,
              *     `listing.gone`, `source.misconfigured`, `source.unavailable`, `source.login_required`,
-             *     `source.peer_unresolved`, `source.exists`, `queue.locked`, `dedupe.already_decided`,
-             *     `outreach.not_resolvable`; any other HTTP status raised by the framework becomes
-             *     `http.<status>`.
+             *     `source.peer_unresolved`, `source.exists`, `user.exists`, `queue.locked`,
+             *     `dedupe.already_decided`, `outreach.not_resolvable`; any other HTTP status raised by the
+             *     framework becomes `http.<status>`.
              */
             code: string;
             /** Detail */
@@ -2761,6 +2809,75 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description unexpected error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    create_user_endpoint_api_v1_users_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UserCreateIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminUserOut"];
+                };
+            };
+            /** @description missing, invalid or expired token; or inactive user */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description admin role required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description phone already registered */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description request validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"];
                 };
             };
             /** @description unexpected error */
