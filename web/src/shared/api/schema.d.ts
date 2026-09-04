@@ -38,6 +38,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/bot": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Bot Monitor */
+        get: operations["get_bot_monitor_api_v1_bot_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/bot/{message_id}/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Resolve Bot Message */
+        post: operations["resolve_bot_message_api_v1_bot__message_id__resolve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/dashboard": {
         parameters: {
             query?: never;
@@ -513,6 +547,27 @@ export interface components {
              */
             outcome: "still_available" | "taken" | "no_answer" | "call_back" | "realtor_not_owner" | "do_not_contact" | "wrong_number";
         };
+        /** ChannelStatOut */
+        ChannelStatOut: {
+            /**
+             * Channel
+             * @enum {string}
+             */
+            channel: "telegram" | "sms";
+            /** Enabled */
+            enabled: boolean;
+            /** Per Day */
+            per_day: number | null;
+            /** Per Hour */
+            per_hour: number | null;
+            /** Sent Today */
+            sent_today: number;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "not_configured" | "ready";
+        };
         /** CheckOut */
         CheckOut: {
             /**
@@ -860,6 +915,66 @@ export interface components {
             /** Date */
             date?: string | null;
         };
+        /** OutreachCountersOut */
+        OutreachCountersOut: {
+            /** Answered */
+            answered: number;
+            /** Errors */
+            errors: number;
+            /** Queued */
+            queued: number;
+            /** Today */
+            today: number;
+            /** Unclear */
+            unclear: number;
+        };
+        /** OutreachItemOut */
+        OutreachItemOut: {
+            /**
+             * Channel
+             * @enum {string}
+             */
+            channel: "telegram" | "sms";
+            /** District */
+            district: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Phone */
+            phone: string | null;
+            /** Price Usd */
+            price_usd: number | null;
+            /**
+             * Property Id
+             * Format: uuid
+             */
+            property_id: string;
+            /** Reply At */
+            reply_at: string | null;
+            /** Reply Text */
+            reply_text: string | null;
+            /** Result */
+            result: ("vacant" | "taken" | "unclear") | null;
+            /** Rooms */
+            rooms: number | null;
+            /** Sent At */
+            sent_at: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "queued" | "sent" | "answered" | "no_reply" | "error";
+        };
+        /** OutreachMonitorOut */
+        OutreachMonitorOut: {
+            /** Channels */
+            channels: components["schemas"]["ChannelStatOut"][];
+            counters: components["schemas"]["OutreachCountersOut"];
+            /** Items */
+            items: components["schemas"]["OutreachItemOut"][];
+        };
         /** OwnerOut */
         OwnerOut: {
             /** Agency Score */
@@ -915,8 +1030,9 @@ export interface components {
              *     `auth.invalid_credentials`, `auth.forbidden`, `not_found`, `method_not_allowed`,
              *     `validation_error`, `internal_error`, `listing.unsupported_url`, `listing.invalid_url`,
              *     `listing.gone`, `source.misconfigured`, `source.unavailable`, `source.login_required`,
-             *     `source.peer_unresolved`, `source.exists`, `queue.locked`, `dedupe.already_decided`; any
-             *     other HTTP status raised by the framework becomes `http.<status>`.
+             *     `source.peer_unresolved`, `source.exists`, `queue.locked`, `dedupe.already_decided`,
+             *     `outreach.not_resolvable`; any other HTTP status raised by the framework becomes
+             *     `http.<status>`.
              */
             code: string;
             /** Detail */
@@ -1127,6 +1243,14 @@ export interface components {
             /** Refresh */
             refresh: string;
         };
+        /** ResolveIn */
+        ResolveIn: {
+            /**
+             * Result
+             * @enum {string}
+             */
+            result: "vacant" | "taken";
+        };
         /** SourceCreateIn */
         SourceCreateIn: {
             /**
@@ -1305,8 +1429,9 @@ export interface components {
              *     `auth.invalid_credentials`, `auth.forbidden`, `not_found`, `method_not_allowed`,
              *     `validation_error`, `internal_error`, `listing.unsupported_url`, `listing.invalid_url`,
              *     `listing.gone`, `source.misconfigured`, `source.unavailable`, `source.login_required`,
-             *     `source.peer_unresolved`, `source.exists`, `queue.locked`, `dedupe.already_decided`; any
-             *     other HTTP status raised by the framework becomes `http.<status>`.
+             *     `source.peer_unresolved`, `source.exists`, `queue.locked`, `dedupe.already_decided`,
+             *     `outreach.not_resolvable`; any other HTTP status raised by the framework becomes
+             *     `http.<status>`.
              */
             code: string;
             /** Detail */
@@ -1407,6 +1532,115 @@ export interface operations {
             };
             /** @description invalid or expired refresh token */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description request validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            /** @description unexpected error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    get_bot_monitor_api_v1_bot_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OutreachMonitorOut"];
+                };
+            };
+            /** @description missing, invalid or expired token; or inactive user */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description unexpected error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    resolve_bot_message_api_v1_bot__message_id__resolve_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                message_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResolveIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OutreachItemOut"];
+                };
+            };
+            /** @description missing, invalid or expired token; or inactive user */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description unknown outreach message */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description message is not awaiting manual classification */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

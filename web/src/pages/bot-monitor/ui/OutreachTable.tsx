@@ -1,7 +1,7 @@
 import { Link } from "atomic-router-react";
 import { useUnit } from "effector-react";
 import { useTranslation } from "react-i18next";
-import { $rows, type OutreachResult, type OutreachRow } from "@/entities/bot";
+import { $rows, formatTime, type OutreachResult, type OutreachRow } from "@/entities/bot";
 import { ResolveUnclearButtons } from "@/features/bot/resolve-unclear";
 import { districtKey } from "@/shared/i18n";
 import { cn, formatPhone, formatUsdFromMinor } from "@/shared/lib";
@@ -13,14 +13,19 @@ const RESULT_STYLE: Record<OutreachResult, string> = {
   unclear: "bg-warn-bg text-warn",
   waiting: "bg-status-new-bg text-status-new",
   queued: "bg-status-unknown-bg text-status-unknown",
+  error: "bg-status-inactive-bg text-status-inactive",
 };
 
 const th = "whitespace-nowrap bg-surface-soft px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground";
 const td = "border-b border-line-soft px-3 py-2.5 align-middle";
 
+/** No street/assigned-agent here — the API carries neither field for an outreach row (unlike
+ * the original mock), so the title collapses to district · rooms · price rather than faking
+ * the rest. */
 function PropertyCell({ row }: { row: OutreachRow }) {
   const { t } = useTranslation();
-  const title = `${t(districtKey(row.district))}, ${row.street} · ${t("bot.table.rooms", { count: row.rooms })} · ${formatUsdFromMinor(row.price_usd_minor)} · ${row.agent ?? t("bot.table.unassigned")}`;
+  const district = row.district ? t(districtKey(row.district)) : "—";
+  const title = `${district} · ${t("bot.table.rooms", { count: row.rooms })} · ${formatUsdFromMinor(row.priceUsdMinor)}`;
   return <span className="font-medium">{title}</span>;
 }
 
@@ -30,29 +35,38 @@ function ContactCell({ row }: { row: OutreachRow }) {
 }
 
 function SentReplyCell({ row }: { row: OutreachRow }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const lang = i18n.language;
   if (row.result === "queued") return <span className="text-muted-foreground">{t("bot.table.notSentYet")}</span>;
-  if (row.result === "waiting") return <span>{t("bot.table.noReplyYet", { sent: row.sent_at, hours: row.no_reply_hours })}</span>;
-  return <span>{t("bot.table.repliedAt", { sent: row.sent_at, reply: row.reply_text, at: row.replied_at })}</span>;
+  if (row.result === "error") return <span className="text-warn">{t("bot.table.sendError")}</span>;
+  if (row.result === "waiting") return <span>{t("bot.table.noReplyYet", { sent: formatTime(row.sentAt, lang), hours: row.noReplyHours })}</span>;
+  return <span>{t("bot.table.repliedAt", { sent: formatTime(row.sentAt, lang), reply: row.replyText, at: formatTime(row.repliedAt, lang) })}</span>;
 }
 
+/** Unclear replies get the resolve buttons; a classified reply links back to the list (no
+ * fabricated property id); everything else (queued / still waiting / send failed) has no
+ * action to offer yet. */
 function ActionCell({ row }: { row: OutreachRow }) {
   const { t } = useTranslation();
   switch (row.result) {
     case "unclear":
       return <ResolveUnclearButtons id={row.id} />;
-    case "waiting":
-      return <span className="text-xs text-muted-foreground">{t("bot.table.followUp", { when: `${t("bot.today")} ${row.follow_up_time}`, agent: row.follow_up_agent })}</span>;
-    case "queued":
-      return <span className="text-muted-foreground">—</span>;
-    default:
+    case "vacant":
+    case "taken":
       return <Link to={routes.properties} className="text-sm font-medium text-primary">{t("bot.table.openProperty")}</Link>;
+    default:
+      return <span className="text-muted-foreground">—</span>;
   }
 }
 
 export function OutreachTable() {
   const { t } = useTranslation();
   const rows = useUnit($rows);
+
+  if (rows.length === 0) {
+    return <p className="rounded-card border border-line bg-surface p-6 text-center text-muted-foreground">{t("bot.emptyState")}</p>;
+  }
+
   return (
     <div className="overflow-x-auto rounded-card border border-line bg-surface">
       <table className="w-full border-collapse text-[13px]">

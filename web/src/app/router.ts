@@ -2,6 +2,7 @@ import { chainRoute, redirect, type RouteInstance, type RouteParams, type RouteP
 import { createEvent, sample } from "effector";
 import { and, not } from "patronum";
 import { agentsReceived, mapAgentToday } from "@/entities/agent";
+import { fetchBotFx } from "@/entities/bot";
 import { fetchDashboardFx } from "@/entities/dashboard";
 import { fetchDuplicatesFx } from "@/entities/duplicate";
 import { $meta, loadMetaFx } from "@/entities/meta";
@@ -60,6 +61,9 @@ sample({ clock: authorized.queue.opened, target: fetchQueueFx });
 
 // load the duplicates review queue whenever /duplicates opens
 sample({ clock: authorized.duplicates.opened, target: fetchDuplicatesFx });
+
+// load the bot monitor whenever /bot opens
+sample({ clock: authorized.botMonitor.opened, target: fetchBotFx });
 
 // load the dashboard whenever /dashboard opens — one fetch feeds both entities/dashboard's
 // stats and entities/agent's board (entities must not import one another, so this is the one
