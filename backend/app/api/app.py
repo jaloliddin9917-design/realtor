@@ -25,6 +25,10 @@ from app.api.routers import (
 from app.core.db import make_engine, make_session_factory
 from app.core.settings import API_PREFIX, PHOTO_URL_PREFIX, Settings, get_settings
 from app.ingestion.registry import AdapterRegistry, build_registry
+from app.modules import models  # noqa: F401
+from app.modules import (
+    models as _models,  # noqa: F401  (registers every ORM model — complete metadata)
+)
 from app.modules.dedupe.config import load_config
 
 INSECURE_JWT_SECRET = (

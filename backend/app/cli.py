@@ -20,6 +20,10 @@ from app.ingestion.adapters.telegram.client import make_client
 from app.ingestion.manual import HOST_KINDS, ingest_url
 from app.ingestion.pipeline import process_raw, run_source
 from app.ingestion.registry import AdapterRegistry, build_registry
+from app.modules import models  # noqa: F401
+from app.modules import (
+    models as _models,  # noqa: F401  (registers every ORM model — complete metadata)
+)
 from app.modules.dedupe.config import load_config
 from app.modules.identity.models import User
 from app.modules.identity.service import create_user as create_user_service

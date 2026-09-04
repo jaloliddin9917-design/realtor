@@ -324,3 +324,29 @@ async def test_tick_skips_daily_jobs_when_stopped(db: AsyncSession, tmp_path: Pa
     }
     assert beats == {"worker": NOW}
     assert (await db.execute(select(FxRate))).scalars().all() == []
+
+
+def test_worker_process_has_complete_orm_metadata() -> None:
+    """A worker-only process must register every model so string ForeignKeys resolve.
+
+    Regression guard for the "could not find table 'users'" flush failure: the worker imports
+    the ORM directly (not through the API's router graph), so it must pull in every model module
+    — otherwise `properties.assigned_agent_id -> users` cannot be resolved. The in-process test
+    suite can't catch this (conftest imports every model), so this runs a fresh subprocess that
+    imports only the worker and forces mapper configuration.
+    """
+    import subprocess
+    import sys
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "import app.worker.loop; "
+            "from sqlalchemy.orm import configure_mappers; "
+            "configure_mappers()",
+        ],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr

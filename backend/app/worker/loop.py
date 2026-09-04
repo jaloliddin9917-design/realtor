@@ -19,6 +19,10 @@ from app.core.logging import configure_logging
 from app.core.settings import Settings, get_settings
 from app.ingestion.pipeline import run_source
 from app.ingestion.registry import AdapterRegistry, build_registry
+from app.modules import models  # noqa: F401
+from app.modules import (
+    models as _models,  # noqa: F401  (registers every ORM model — complete metadata)
+)
 from app.modules.contacts.scoring import rescore_all
 from app.modules.dedupe.config import DedupeConfig, load_config
 from app.modules.listings.fx import refresh_rate
