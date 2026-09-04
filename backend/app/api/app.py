@@ -17,6 +17,7 @@ from app.api.routers import (
     health,
     listings,
     meta,
+    outreach,
     properties,
     sources,
     users,
@@ -97,6 +98,7 @@ def create_app(
         availability.router,
         dashboard.router,
         duplicates.router,
+        outreach.router,
     ):
         app.include_router(router, prefix=API_PREFIX, responses={**PROBLEM_401, **PROBLEM_500})
     for router in (sources.router, users.router):

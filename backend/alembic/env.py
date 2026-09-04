@@ -18,6 +18,7 @@ import app.modules.contacts.models  # noqa: F401,E402
 import app.modules.properties.models  # noqa: F401,E402
 import app.modules.availability.models  # noqa: F401,E402
 import app.modules.dedupe.models  # noqa: F401,E402
+import app.modules.outreach.models  # noqa: F401,E402
 import app.worker.models  # noqa: F401,E402
 
 config = context.config
