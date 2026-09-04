@@ -8,7 +8,7 @@ from app.ingestion.adapters.base import SourceAdapter
 from app.ingestion.adapters.olx import OlxAdapter
 from app.ingestion.adapters.telegram import TelegramAdapter
 from app.ingestion.adapters.telegram.client import TelegramClientLike, make_client
-from app.ingestion.http import HttpClient, HttpxClient, RateLimiter
+from app.ingestion.http import CurlCffiClient, HttpClient, RateLimiter
 from app.ingestion.manual import ManualAdapter
 from app.modules.listings.models import Source
 
@@ -80,7 +80,7 @@ def build_registry(
     http: HttpClient | None = None,
     telegram_client: TelegramClientLike | None = None,
 ) -> AdapterRegistry:
-    http = http or HttpxClient(user_agent=settings.http_user_agent, proxy=settings.olx_proxy_url)
+    http = http or CurlCffiClient(user_agent=settings.http_user_agent, proxy=settings.olx_proxy_url)
     olx = OlxAdapter(
         http,
         RateLimiter(settings.olx_request_interval),

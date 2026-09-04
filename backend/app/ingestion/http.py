@@ -7,6 +7,7 @@ from datetime import timedelta
 from typing import Any, Protocol
 
 import httpx
+from curl_cffi.requests import AsyncSession as _CurlSession
 
 from app.modules.listings.models import Source
 
@@ -61,6 +62,49 @@ class HttpxClient:
 
     async def aclose(self) -> None:
         await self._client.aclose()
+
+
+class CurlCffiClient:
+    """Browser-impersonating HTTP client with the same interface as :class:`HttpxClient`.
+
+    OLX sits behind Cloudflare, which fingerprints the TLS/HTTP2 handshake: plain ``httpx``
+    (any headers) is answered 403, while a real browser — or ``curl`` — gets 200. ``curl_cffi``
+    replays a real Chrome handshake, so the same *public* listing pages load. Used as the default
+    client (see registry) so live OLX crawls actually reach the site; tests still inject their own
+    transport-backed :class:`HttpxClient`.
+    """
+
+    def __init__(
+        self,
+        *,
+        user_agent: str,
+        proxy: str | None = None,
+        timeout: float = 30.0,
+        impersonate: str = "chrome",
+    ) -> None:
+        # `user_agent` is accepted for interface parity but deliberately not forced: the
+        # impersonation profile ships its own UA (and full header order) that must match the
+        # TLS fingerprint, so overriding just the UA string would give the block something to
+        # notice. We only bias Accept-Language toward the ru/uz audience.
+        self._timeout = timeout
+        self._impersonate = impersonate
+        self._headers = {"Accept": BROWSER_ACCEPT, "Accept-Language": "ru,uz;q=0.8,en;q=0.5"}
+        kwargs: dict[str, Any] = {}
+        if proxy:
+            kwargs["proxies"] = {"http": proxy, "https": proxy}
+        self._session = _CurlSession(**kwargs)
+
+    async def get(self, url: str, *, headers: dict[str, str] | None = None) -> HttpResponse:
+        merged = {**self._headers, **(headers or {})}
+        response = await self._session.get(
+            url, headers=merged, timeout=self._timeout, impersonate=self._impersonate
+        )
+        return HttpResponse(
+            status=response.status_code, url=str(response.url), content=response.content
+        )
+
+    async def aclose(self) -> None:
+        await self._session.close()
 
 
 class RateLimiter:
