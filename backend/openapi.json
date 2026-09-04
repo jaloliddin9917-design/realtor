@@ -1,6 +1,97 @@
 {
   "components": {
     "schemas": {
+      "AdminUserOut": {
+        "description": "One user row for the admin Settings screen. Never carries the password hash.",
+        "properties": {
+          "active": {
+            "title": "Active",
+            "type": "boolean"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "phone": {
+            "title": "Phone",
+            "type": "string"
+          },
+          "role": {
+            "enum": [
+              "admin",
+              "agent"
+            ],
+            "title": "Role",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "phone",
+          "role",
+          "active",
+          "created_at"
+        ],
+        "title": "AdminUserOut",
+        "type": "object"
+      },
+      "AgentToday": {
+        "properties": {
+          "calls": {
+            "title": "Calls",
+            "type": "integer"
+          },
+          "found_vacant": {
+            "title": "Found Vacant",
+            "type": "integer"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "in_queue": {
+            "title": "In Queue",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "working_on": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Working On"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "in_queue",
+          "calls",
+          "found_vacant",
+          "working_on"
+        ],
+        "title": "AgentToday",
+        "type": "object"
+      },
       "AvailabilityOut": {
         "properties": {
           "at": {
@@ -159,6 +250,39 @@
           "title"
         ],
         "title": "Body_add_listing_by_form_api_v1_listings_manual_form_post",
+        "type": "object"
+      },
+      "BotReplies": {
+        "properties": {
+          "answered": {
+            "title": "Answered",
+            "type": "integer"
+          },
+          "sent": {
+            "title": "Sent",
+            "type": "integer"
+          },
+          "taken": {
+            "title": "Taken",
+            "type": "integer"
+          },
+          "unclear": {
+            "title": "Unclear",
+            "type": "integer"
+          },
+          "vacant": {
+            "title": "Vacant",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "sent",
+          "answered",
+          "vacant",
+          "taken",
+          "unclear"
+        ],
+        "title": "BotReplies",
         "type": "object"
       },
       "CallConditionsIn": {
@@ -404,6 +528,57 @@
           "error"
         ],
         "title": "CrawlRunOut",
+        "type": "object"
+      },
+      "DashboardOut": {
+        "properties": {
+          "agents": {
+            "items": {
+              "$ref": "#/components/schemas/AgentToday"
+            },
+            "title": "Agents",
+            "type": "array"
+          },
+          "auto_distribute": {
+            "title": "Auto Distribute",
+            "type": "boolean"
+          },
+          "bot_replies": {
+            "$ref": "#/components/schemas/BotReplies"
+          },
+          "new_listings": {
+            "$ref": "#/components/schemas/NewListings"
+          },
+          "recheck_items": {
+            "items": {
+              "$ref": "#/components/schemas/RecheckItem"
+            },
+            "title": "Recheck Items",
+            "type": "array"
+          },
+          "recheck_total": {
+            "title": "Recheck Total",
+            "type": "integer"
+          },
+          "status_counts": {
+            "$ref": "#/components/schemas/StatusCounts"
+          },
+          "unassigned": {
+            "title": "Unassigned",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "status_counts",
+          "new_listings",
+          "bot_replies",
+          "agents",
+          "unassigned",
+          "auto_distribute",
+          "recheck_total",
+          "recheck_items"
+        ],
+        "title": "DashboardOut",
         "type": "object"
       },
       "DuplicateOut": {
@@ -771,6 +946,39 @@
           "contact_classifications"
         ],
         "title": "MetaOut",
+        "type": "object"
+      },
+      "NewListings": {
+        "properties": {
+          "duplicates": {
+            "title": "Duplicates",
+            "type": "integer"
+          },
+          "manual": {
+            "title": "Manual",
+            "type": "integer"
+          },
+          "olx": {
+            "title": "Olx",
+            "type": "integer"
+          },
+          "telegram": {
+            "title": "Telegram",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "olx",
+          "telegram",
+          "manual",
+          "duplicates",
+          "total"
+        ],
+        "title": "NewListings",
         "type": "object"
       },
       "NextCheckIn": {
@@ -1564,6 +1772,79 @@
         "title": "QueueStateOut",
         "type": "object"
       },
+      "RecheckItem": {
+        "properties": {
+          "agent": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Agent"
+          },
+          "district": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "District"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "last_checked_at": {
+            "format": "date-time",
+            "title": "Last Checked At",
+            "type": "string"
+          },
+          "price_usd": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price Usd"
+          },
+          "rooms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rooms"
+          },
+          "source_removed": {
+            "title": "Source Removed",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "district",
+          "rooms",
+          "price_usd",
+          "last_checked_at",
+          "source_removed",
+          "agent"
+        ],
+        "title": "RecheckItem",
+        "type": "object"
+      },
       "RefreshIn": {
         "properties": {
           "refresh": {
@@ -1797,6 +2078,39 @@
           "fx"
         ],
         "title": "SourcesOut",
+        "type": "object"
+      },
+      "StatusCounts": {
+        "properties": {
+          "new": {
+            "title": "New",
+            "type": "integer"
+          },
+          "taken": {
+            "title": "Taken",
+            "type": "integer"
+          },
+          "to_check_today": {
+            "title": "To Check Today",
+            "type": "integer"
+          },
+          "vacant": {
+            "title": "Vacant",
+            "type": "integer"
+          },
+          "vacant_confirmed_3d": {
+            "title": "Vacant Confirmed 3D",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "vacant",
+          "vacant_confirmed_3d",
+          "taken",
+          "new",
+          "to_check_today"
+        ],
+        "title": "StatusCounts",
         "type": "object"
       },
       "StatusEventOut": {
@@ -2153,6 +2467,52 @@
         "summary": "Refresh",
         "tags": [
           "auth"
+        ]
+      }
+    },
+    "/api/v1/dashboard": {
+      "get": {
+        "operationId": "get_dashboard_api_v1_dashboard_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DashboardOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "missing, invalid or expired token; or inactive user"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "unexpected error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Dashboard",
+        "tags": [
+          "dashboard"
         ]
       }
     },
@@ -3516,6 +3876,66 @@
         "summary": "Source Runs",
         "tags": [
           "sources"
+        ]
+      }
+    },
+    "/api/v1/users": {
+      "get": {
+        "operationId": "list_users_endpoint_api_v1_users_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AdminUserOut"
+                  },
+                  "title": "Response List Users Endpoint Api V1 Users Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "missing, invalid or expired token; or inactive user"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "admin role required"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "unexpected error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Users Endpoint",
+        "tags": [
+          "users"
         ]
       }
     }

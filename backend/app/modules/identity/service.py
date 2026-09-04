@@ -40,6 +40,12 @@ async def get_user_by_phone(session: AsyncSession, phone_e164: str) -> User | No
     return (await session.execute(stmt)).scalar_one_or_none()
 
 
+async def list_users(session: AsyncSession) -> list[User]:
+    """Every user, oldest first (id breaks ties so the order is stable)."""
+    stmt = select(User).order_by(User.created_at, User.id)
+    return list((await session.execute(stmt)).scalars().all())
+
+
 async def create_user(
     session: AsyncSession,
     *,

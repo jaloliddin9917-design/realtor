@@ -9,7 +9,17 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.problems import PROBLEM_401, PROBLEM_403, PROBLEM_500, install_problem_handlers
-from app.api.routers import auth, availability, health, listings, meta, properties, sources
+from app.api.routers import (
+    auth,
+    availability,
+    dashboard,
+    health,
+    listings,
+    meta,
+    properties,
+    sources,
+    users,
+)
 from app.core.db import make_engine, make_session_factory
 from app.core.settings import API_PREFIX, PHOTO_URL_PREFIX, Settings, get_settings
 from app.ingestion.registry import AdapterRegistry, build_registry
@@ -79,13 +89,20 @@ def create_app(
     # PROBLEM_500, health included.
     app.include_router(health.router, prefix=API_PREFIX, responses=PROBLEM_500)
     app.include_router(auth.router, prefix=API_PREFIX, responses=PROBLEM_500)
-    for router in (meta.router, properties.router, listings.router, availability.router):
+    for router in (
+        meta.router,
+        properties.router,
+        listings.router,
+        availability.router,
+        dashboard.router,
+    ):
         app.include_router(router, prefix=API_PREFIX, responses={**PROBLEM_401, **PROBLEM_500})
-    app.include_router(
-        sources.router,
-        prefix=API_PREFIX,
-        responses={**PROBLEM_401, **PROBLEM_403, **PROBLEM_500},
-    )
+    for router in (sources.router, users.router):
+        app.include_router(
+            router,
+            prefix=API_PREFIX,
+            responses={**PROBLEM_401, **PROBLEM_403, **PROBLEM_500},
+        )
     # photos are keyed <listing uuid>/<position>.jpg — unguessable, so no auth in M0
     app.mount(
         PHOTO_URL_PREFIX,
