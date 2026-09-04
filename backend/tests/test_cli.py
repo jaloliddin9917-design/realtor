@@ -12,9 +12,11 @@ client-wrapper level with its underlying Telethon client stubbed out.
 import asyncio
 import os
 from collections.abc import AsyncIterator
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
+from decimal import Decimal
 from pathlib import Path
 
+import httpx
 import pytest
 from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
@@ -26,7 +28,7 @@ from app.ingestion.adapters.telegram import TelegramAdapter
 from app.ingestion.adapters.telegram.client import TgMessage
 from app.ingestion.registry import AdapterRegistry
 from app.modules.identity.models import User
-from app.modules.listings.models import RawListing, Source
+from app.modules.listings.models import FxRate, RawListing, Source
 from tests.fakes import FakeTelegramClient
 
 runner = CliRunner()
@@ -38,6 +40,7 @@ CLI_TEST_TELEGRAM_SOURCE = "@cli_test"
 CLI_TEST_OLX_SOURCE = "olx-cli"
 CLI_TEST_REPARSE_SOURCE = "cli-reparse-test"
 CLI_TEST_OLX_DEFAULT_NAME = "arenda-dolgosrochnaya-tashkent"
+FX_TEST_DATE = date(2020, 1, 1)  # sentinel row refresh-fx test writes + cleans up
 CLI_TEST_SOURCE_NAMES = [
     CLI_TEST_TELEGRAM_SOURCE,
     CLI_TEST_OLX_SOURCE,
@@ -50,6 +53,7 @@ async def _delete_cli_test_rows(engine: AsyncEngine) -> None:
     async with AsyncSession(engine) as session:
         await session.execute(delete(User).where(User.phone_e164 == CLI_TEST_PHONE))
         await session.execute(delete(Source).where(Source.name.in_(CLI_TEST_SOURCE_NAMES)))
+        await session.execute(delete(FxRate).where(FxRate.date == FX_TEST_DATE))
         await session.commit()
 
 
@@ -345,3 +349,16 @@ async def test_telethon_client_login_interactive_calls_client_start(tmp_path: Pa
     client._client.start = fake_start  # type: ignore[method-assign]
     await client.login_interactive()
     assert started
+
+
+def test_refresh_fx(cli_env: None, monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.cli import app
+
+    async def fake_fetch(_client: httpx.AsyncClient) -> tuple[date, Decimal]:
+        return FX_TEST_DATE, Decimal("11800.00")
+
+    # patch the network call the command reaches through refresh_rate — no CBU request
+    monkeypatch.setattr("app.modules.listings.fx.fetch_cbu_rate", fake_fetch)
+    result = runner.invoke(app, ["refresh-fx"])
+    assert result.exit_code == 0, result.output
+    assert "11800.00" in result.output

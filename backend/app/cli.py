@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 from typing import Any
 from urllib.parse import urlsplit
 
+import httpx
 import typer
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -22,6 +23,7 @@ from app.ingestion.registry import AdapterRegistry, build_registry
 from app.modules.dedupe.config import load_config
 from app.modules.identity.models import User
 from app.modules.identity.service import create_user as create_user_service
+from app.modules.listings.fx import refresh_rate
 from app.modules.listings.models import RawListing, Source
 
 app = typer.Typer(help="Realtor CRM operator commands", no_args_is_help=True)
@@ -346,6 +348,23 @@ def add_listing(url: str = typer.Option(..., "--url")) -> None:
         typer.echo(
             f"property {result.property.id} ({result.decision}); listing {result.listing.id}"
         )
+
+    _run(go)
+
+
+@app.command("refresh-fx")
+def refresh_fx() -> None:
+    """Fetch today's USD/UZS rate from the Central Bank of Uzbekistan and store it.
+
+    The worker refreshes this daily; run it by hand to load the rate on a fresh
+    database so UZS listing prices convert to USD and the web "rate not loaded"
+    banner clears.
+    """
+
+    async def go(session: AsyncSession) -> None:
+        async with httpx.AsyncClient(timeout=30) as http:
+            rate = await refresh_rate(session, http)
+        typer.echo(f"USD/UZS = {rate.usd_uzs} ({rate.date})")
 
     _run(go)
 
