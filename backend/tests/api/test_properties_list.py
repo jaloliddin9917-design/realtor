@@ -1,7 +1,7 @@
 """GET /properties — seeded through the real pipeline so rows carry listings and contacts."""
 
 import uuid
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import httpx
@@ -15,7 +15,7 @@ from app.modules.contacts.scoring import rescore_contact, update_probable_owner
 from app.modules.contacts.service import contacts_for_listing
 from app.modules.dedupe.config import load_config
 from app.modules.identity.models import User
-from app.modules.listings.models import Listing, Source
+from app.modules.listings.models import Listing, ListingPhoto, Source
 from app.modules.properties.models import Property
 from app.modules.properties.service import attach, set_status
 from tests.api.conftest import auth_headers
@@ -400,3 +400,61 @@ async def test_pins_returns_only_located_matches(
     assert all(p["latitude"] is not None and p["longitude"] is not None for p in pins)
     r2 = await client.get("/api/v1/properties/pins", params={"building_type": "brick"}, headers=h)
     assert len(r2.json()) == 1
+
+
+async def test_filters_by_furnished(
+    client: httpx.AsyncClient,
+    settings: Settings,
+    agent: User,
+    sources: tuple[Source, Source],
+    db: AsyncSession,
+) -> None:
+    _tg, olx = sources
+    await seed(db, settings, olx, "fu_yes", "Сдаётся +998900000023", {"is_furnished": True})
+    await seed(db, settings, olx, "fu_no", "Сдаётся +998900000024", {"is_furnished": False})
+    r = await client.get(
+        "/api/v1/properties", params={"furnished": "true"}, headers=auth_headers(settings, agent)
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["total"] == 1
+    assert r.json()["items"][0]["is_furnished"] is True
+
+
+async def test_filters_by_has_photos(
+    client: httpx.AsyncClient,
+    settings: Settings,
+    agent: User,
+    sources: tuple[Source, Source],
+    db: AsyncSession,
+) -> None:
+    _tg, olx = sources
+    with_photo = await seed(db, settings, olx, "hp_yes", "Сдаётся +998900000025", {"rooms": 2})
+    await seed(db, settings, olx, "hp_no", "Сдаётся +998900000026", {"rooms": 2})
+    listing = await listing_of(db, with_photo)
+    db.add(ListingPhoto(listing_id=listing.id, position=0, storage_key="hp/0.jpg"))
+    await db.flush()
+    r = await client.get(
+        "/api/v1/properties", params={"has_photos": "true"}, headers=auth_headers(settings, agent)
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["total"] == 1
+    assert r.json()["items"][0]["id"] == str(with_photo.id)
+
+
+async def test_filters_by_posted_within(
+    client: httpx.AsyncClient,
+    settings: Settings,
+    agent: User,
+    sources: tuple[Source, Source],
+    db: AsyncSession,
+) -> None:
+    _tg, olx = sources
+    recent = datetime.now(UTC) - timedelta(hours=1)
+    old = datetime.now(UTC) - timedelta(days=10)
+    await seed(db, settings, olx, "pw_new", "Сдаётся +998900000027", {"rooms": 2}, posted=recent)
+    await seed(db, settings, olx, "pw_old", "Сдаётся +998900000028", {"rooms": 2}, posted=old)
+    r = await client.get(
+        "/api/v1/properties", params={"posted_within": "7d"}, headers=auth_headers(settings, agent)
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["total"] == 1
