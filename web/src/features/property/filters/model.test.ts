@@ -2,10 +2,10 @@ import { allSettled, fork, scopeBind } from "effector";
 import { createMemoryHistory } from "history";
 import { toast } from "sonner";
 import { $tokens, sessionRestored } from "@/entities/session";
-import { fetchPropertiesFx } from "@/entities/property";
+import { fetchPinsFx, fetchPropertiesFx } from "@/entities/property";
 import { i18n, i18nReady } from "@/shared/i18n";
 import { controls, router, routes } from "@/shared/router";
-import { $district, $pageCount, $query, $rooms, districtToggled, filtersCleared, pageChanged, roomsToggled, searchChanged } from "./model";
+import { $advancedCount, $district, $hoveredId, $page, $pageCount, $q, $query, $rooms, $view, advancedReset, areaChanged, boundsChanged, buildingTypeToggled, districtToggled, filtersCleared, floorChanged, furnishedChanged, hasPhotosToggled, hovered, notFirstFloorToggled, notTopFloorToggled, pageChanged, postedWithinChanged, renovationToggled, roomsToggled, searchAreaToggled, searchChanged, viewChanged } from "./model";
 
 vi.mock("sonner", () => ({ toast: { error: vi.fn() } }));
 
@@ -147,5 +147,109 @@ describe("filters ↔ URL", () => {
     await allSettled(router.setHistory, { scope, params: history });
     await allSettled(sessionRestored, { scope, params: null });
     expect(calls).toHaveLength(0);
+  });
+
+  it("maps advanced filters into $query and counts them in $advancedCount", async () => {
+    const scope = fork({ values: [[$tokens, { access: "a", refresh: "r" }]] });
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ items: [], total: 0, page: 1, page_size: 20 }), { status: 200, headers: { "content-type": "application/json" } })));
+    await openList(scope);
+    await allSettled(areaChanged, { scope, params: { min: "40", max: "" } });
+    await allSettled(buildingTypeToggled, { scope, params: "brick" });
+    await allSettled(postedWithinChanged, { scope, params: "7d" });
+    const query = scope.getState($query);
+    expect(query.area_min).toBe(40);
+    expect(query.area_max).toBeUndefined();
+    expect(query.building_type).toEqual(["brick"]);
+    expect(query.posted_within).toBe("7d");
+    expect(scope.getState($advancedCount)).toBe(3);
+  });
+
+  it("resets only the advanced filters on advancedReset, leaving district and search intact", async () => {
+    const scope = fork({ values: [[$tokens, { access: "a", refresh: "r" }]] });
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ items: [], total: 0, page: 1, page_size: 20 }), { status: 200, headers: { "content-type": "application/json" } })));
+    await openList(scope);
+    await allSettled(districtToggled, { scope, params: "chilonzor" });
+    await allSettled(searchChanged, { scope, params: "chil" });
+    await allSettled(areaChanged, { scope, params: { min: "40", max: "80" } });
+    await allSettled(floorChanged, { scope, params: { min: "2", max: "9" } });
+    await allSettled(notFirstFloorToggled, { scope });
+    await allSettled(notTopFloorToggled, { scope });
+    await allSettled(buildingTypeToggled, { scope, params: "brick" });
+    await allSettled(furnishedChanged, { scope, params: "1" });
+    await allSettled(renovationToggled, { scope, params: "euro" });
+    await allSettled(postedWithinChanged, { scope, params: "7d" });
+    await allSettled(hasPhotosToggled, { scope });
+    // all 11 advanced stores populated
+    expect(scope.getState($advancedCount)).toBe(11);
+    await allSettled(advancedReset, { scope });
+    expect(scope.getState($advancedCount)).toBe(0);
+    expect(scope.getState($query).building_type).toBeUndefined();
+    expect(scope.getState($query).posted_within).toBeUndefined();
+    expect(scope.getState($district)).toBe("chilonzor");
+    expect(scope.getState($q)).toBe("chil");
+  });
+
+  it("returns to page 1 on advancedReset too, like every other filter change", async () => {
+    const scope = fork({ values: [[$tokens, { access: "a", refresh: "r" }]] });
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ items: [], total: 0, page: 1, page_size: 20 }), { status: 200, headers: { "content-type": "application/json" } })));
+    await openList(scope);
+    await allSettled(pageChanged, { scope, params: 3 });
+    expect(scope.getState($page)).toBe("3");
+    await allSettled(advancedReset, { scope });
+    expect(scope.getState($page)).toBe("");
+  });
+});
+
+describe("map view", () => {
+  beforeAll(() => i18nReady);
+
+  it("defaults $view to list and serializes a switch to map into the URL", async () => {
+    const scope = fork({ values: [[$tokens, { access: "a", refresh: "r" }]] });
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ items: [], total: 0, page: 1, page_size: 20 }), { status: 200, headers: { "content-type": "application/json" } })));
+    const history = await openList(scope);
+    expect(scope.getState($view)).toBe("list");
+    // the default is never written into the address bar, same as every other filter's default
+    expect(history.location.search).toBe("");
+    await allSettled(viewChanged, { scope, params: "map" });
+    expect(scope.getState($view)).toBe("map");
+    expect(history.location.search).toContain("view=map");
+  });
+
+  it("fetches pins only in map view, on route-open and on filter-settle", async () => {
+    const pinCalls: unknown[] = [];
+    const scope = fork({
+      values: [[$tokens, { access: "a", refresh: "r" }]],
+      handlers: [[fetchPinsFx, async (q: unknown) => { pinCalls.push(q); return []; }]],
+    });
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ items: [], total: 0, page: 1, page_size: 20 }), { status: 200, headers: { "content-type": "application/json" } })));
+    await openList(scope); // still list view — no pins fetch on open
+    expect(pinCalls).toHaveLength(0);
+    await allSettled(viewChanged, { scope, params: "map" });
+    expect(pinCalls).toHaveLength(1); // switching to map fetches once
+    await allSettled(districtToggled, { scope, params: "chilonzor" });
+    expect(pinCalls).toHaveLength(2); // filters settling while in map view fetches again
+    await allSettled(viewChanged, { scope, params: "list" });
+    await allSettled(roomsToggled, { scope, params: "2" });
+    expect(pinCalls).toHaveLength(2); // back in list view — settling filters must not fetch pins
+  });
+
+  it("sets $hoveredId on hovered", async () => {
+    const scope = fork();
+    await allSettled(hovered, { scope, params: "p1" });
+    expect(scope.getState($hoveredId)).toBe("p1");
+  });
+
+  it("feeds the search-area bounding box into $query only once both are set", async () => {
+    const scope = fork({ values: [[$tokens, { access: "a", refresh: "r" }]] });
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ items: [], total: 0, page: 1, page_size: 20 }), { status: 200, headers: { "content-type": "application/json" } })));
+    await openList(scope);
+    await allSettled(boundsChanged, { scope, params: { minLat: 41, minLon: 69, maxLat: 42, maxLon: 70 } });
+    expect(scope.getState($query).min_lat).toBeUndefined(); // "search this area" still off
+    await allSettled(searchAreaToggled, { scope });
+    const query = scope.getState($query);
+    expect(query.min_lat).toBe(41);
+    expect(query.min_lon).toBe(69);
+    expect(query.max_lat).toBe(42);
+    expect(query.max_lon).toBe(70);
   });
 });

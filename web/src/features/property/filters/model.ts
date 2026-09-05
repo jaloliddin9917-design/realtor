@@ -9,7 +9,7 @@ import { querySync } from "atomic-router";
 import { combine, createEffect, createEvent, createStore, sample } from "effector";
 import { debounce } from "patronum";
 import { toast } from "sonner";
-import { $total, fetchPropertiesFx, type PropertyQuery, type PropertyStatus, type SortKey } from "@/entities/property";
+import { $total, fetchPinsFx, fetchPropertiesFx, type PropertyQuery, type PropertyStatus, type SortKey } from "@/entities/property";
 import { $isAuthorized } from "@/entities/session";
 import { isApiProblem } from "@/shared/api";
 import { i18n, problemKey } from "@/shared/i18n";
@@ -22,6 +22,7 @@ const SORTS: SortKey[] = ["last_seen", "first_seen", "price_asc", "price_desc"];
 const STATUSES: PropertyStatus[] = ["new", "active", "inactive"];
 const SOURCES = ["olx", "telegram", "manual"] as const;
 type SourceKind = (typeof SOURCES)[number];
+const POSTED_WITHIN = ["24h", "3d", "7d"] as const;
 
 export const districtToggled = createEvent<string>();
 export const roomsToggled = createEvent<"1" | "2" | "3" | "4">();
@@ -34,6 +35,19 @@ export const searchChanged = createEvent<string>();
 export const sortChanged = createEvent<string>();
 export const pageChanged = createEvent<number>();
 export const filtersCleared = createEvent();
+
+// "Advanced" filters live behind the "More filters" dialog rather than the primary bar; they
+// get their own reset (`advancedReset`) so clearing them never touches district/q/rooms/etc.
+export const areaChanged = createEvent<{ min: string; max: string }>();
+export const floorChanged = createEvent<{ min: string; max: string }>();
+export const notFirstFloorToggled = createEvent();
+export const notTopFloorToggled = createEvent();
+export const buildingTypeToggled = createEvent<string>();
+export const furnishedChanged = createEvent<string>();
+export const renovationToggled = createEvent<string>();
+export const postedWithinChanged = createEvent<string>();
+export const hasPhotosToggled = createEvent();
+export const advancedReset = createEvent();
 
 const toggle = (csv: string, key: string): string => {
   const set = new Set(csv ? csv.split(",") : []);
@@ -59,12 +73,71 @@ export const $q = createStore("").on(searchChanged, (_, q) => q).reset([filtersC
 export const $sort = createStore("").on(sortChanged, (_, s) => s).reset([filtersCleared, routes.properties.closed]);
 export const $page = createStore("").on(pageChanged, (_, p) => (p > 1 ? String(p) : "")).reset([filtersCleared, routes.properties.closed]);
 
+// The advanced filters (behind "More filters") reset on `advancedReset` too, on top of the
+// same clear-list/leave-list resets every filter gets — `advancedReset` never touches the
+// primary stores above, so clearing them from the dialog cannot surprise-clear the search bar.
+export const $areaMin = createStore("").on(areaChanged, (_, p) => p.min).reset([filtersCleared, routes.properties.closed, advancedReset]);
+export const $areaMax = createStore("").on(areaChanged, (_, p) => p.max).reset([filtersCleared, routes.properties.closed, advancedReset]);
+export const $floorMin = createStore("").on(floorChanged, (_, p) => p.min).reset([filtersCleared, routes.properties.closed, advancedReset]);
+export const $floorMax = createStore("").on(floorChanged, (_, p) => p.max).reset([filtersCleared, routes.properties.closed, advancedReset]);
+export const $notFirstFloor = createStore("").on(notFirstFloorToggled, (v) => (v ? "" : "1")).reset([filtersCleared, routes.properties.closed, advancedReset]);
+export const $notTopFloor = createStore("").on(notTopFloorToggled, (v) => (v ? "" : "1")).reset([filtersCleared, routes.properties.closed, advancedReset]);
+export const $buildingType = createStore("").on(buildingTypeToggled, toggle).reset([filtersCleared, routes.properties.closed, advancedReset]);
+export const $furnished = createStore("").on(furnishedChanged, (_, v) => v).reset([filtersCleared, routes.properties.closed, advancedReset]);
+export const $renovation = createStore("").on(renovationToggled, toggle).reset([filtersCleared, routes.properties.closed, advancedReset]);
+export const $postedWithin = createStore("").on(postedWithinChanged, (_, v) => v).reset([filtersCleared, routes.properties.closed, advancedReset]);
+export const $hasPhotos = createStore("").on(hasPhotosToggled, (v) => (v ? "" : "1")).reset([filtersCleared, routes.properties.closed, advancedReset]);
+
+/** Shown as a badge on the "More filters" button — how many advanced filters are set. */
+export const $advancedCount = combine(
+  { areaMin: $areaMin, areaMax: $areaMax, floorMin: $floorMin, floorMax: $floorMax, notFirstFloor: $notFirstFloor, notTopFloor: $notTopFloor, buildingType: $buildingType, furnished: $furnished, renovation: $renovation, postedWithin: $postedWithin, hasPhotos: $hasPhotos },
+  (f) => Object.values(f).filter((v) => v !== "").length,
+);
+
 // any filter change returns to page 1 — page 7 of the old result set means nothing in the new one
 sample({
-  clock: [districtToggled, roomsToggled, priceChanged, statusChanged, sourceChanged, ownerOnlyToggled, removedToggled, searchChanged, sortChanged],
+  clock: [districtToggled, roomsToggled, priceChanged, statusChanged, sourceChanged, ownerOnlyToggled, removedToggled, searchChanged, sortChanged, areaChanged, floorChanged, notFirstFloorToggled, notTopFloorToggled, buildingTypeToggled, furnishedChanged, renovationToggled, postedWithinChanged, hasPhotosToggled, advancedReset],
   fn: () => 1,
   target: pageChanged,
 });
+
+/**
+ * Map view: a List⇄Map toggle, hover sync between a card and its pin, and an optional
+ * "search this area" bounding box. None of these reach the API on their own — `$view` and
+ * `$hoveredId` are pure UI state — except the bbox, which `$query` folds in below, and only
+ * once "search this area" is switched on.
+ */
+
+/** A map viewport in plain lat/lon corners — the same shape `MapView`'s `onBoundsChange`
+ * reports; kept local so this feature does not import the map widget (and its maplibre-gl
+ * dependency) just for a type. */
+export interface Bounds { minLat: number; minLon: number; maxLat: number; maxLon: number }
+
+export const viewChanged = createEvent<"list" | "map">();
+export const hovered = createEvent<string | null>();
+export const searchAreaToggled = createEvent();
+export const boundsChanged = createEvent<Bounds>();
+
+/** Set by whichever panel the pointer is over (a card in the list, wired in `pages/properties`)
+ * and read by `PropertyMap` to glow the matching pin. Resets with the rest of the list's
+ * transient state when the route closes. */
+export const $hoveredId = createStore<string | null>(null).on(hovered, (_, id) => id).reset(routes.properties.closed);
+
+/**
+ * Stored as `""`/`"map"` rather than `"list"`/`"map"` so a plain visit never writes `view=list`
+ * into the address bar — `querySync`'s `empty` cleanup below drops a key whose value is falsy,
+ * exactly like every boolean filter above (`$ownerOnly`, `$removed`, …). `$view` is the public,
+ * typed (`"list"|"map"`) view of this that the rest of the app reads; it can't carry the
+ * reducer itself, because a `.map()`-derived store can't be a `querySync` `source` entry (that
+ * needs a plain store it can `.on()` for the URL-to-store direction).
+ */
+const $viewParam = createStore("").on(viewChanged, (_, v) => (v === "map" ? "map" : "")).reset(routes.properties.closed);
+export const $view = $viewParam.map((v): "list" | "map" => (v === "map" ? "map" : "list"));
+
+// "Search this area" is off (and the bbox below ignored) by default, like every other filter —
+// switching it on re-queries with whatever the map's current viewport happens to be.
+export const $searchArea = createStore("").on(searchAreaToggled, (v) => (v ? "" : "1")).reset([filtersCleared, routes.properties.closed]);
+export const $bounds = createStore<Bounds | null>(null).on(boundsChanged, (_, b) => b).reset(routes.properties.closed);
 
 /**
  * A room-count token from the URL: "4" is the UI's "4+" and expands to a range; anything
@@ -97,8 +170,21 @@ const pageNum = (s: string): number => {
   return Number.isInteger(n) && n >= 1 ? n : 1;
 };
 
+/**
+ * A floor bound: unlike a price or an area, a floor may legitimately be negative (a basement
+ * level), so — unlike `uint` — only non-integers and blanks are dropped, not negative numbers.
+ */
+const int = (s: string): number | undefined => {
+  const n = Math.trunc(Number(s));
+  return s !== "" && Number.isFinite(n) ? n : undefined;
+};
+
 export const $query = combine(
-  { district: $district, rooms: $rooms, priceMin: $priceMin, priceMax: $priceMax, status: $status, source: $source, ownerOnly: $ownerOnly, removed: $removed, q: $q, sort: $sort, page: $page },
+  {
+    district: $district, rooms: $rooms, priceMin: $priceMin, priceMax: $priceMax, status: $status, source: $source, ownerOnly: $ownerOnly, removed: $removed, q: $q, sort: $sort, page: $page,
+    areaMin: $areaMin, areaMax: $areaMax, floorMin: $floorMin, floorMax: $floorMax, notFirstFloor: $notFirstFloor, notTopFloor: $notTopFloor, buildingType: $buildingType, furnished: $furnished, renovation: $renovation, postedWithin: $postedWithin, hasPhotos: $hasPhotos,
+    searchArea: $searchArea, bounds: $bounds,
+  },
   (f): PropertyQuery => ({
     district: f.district ? f.district.split(",") : [],
     rooms: (f.rooms ? f.rooms.split(",") : []).flatMap(roomTokens),
@@ -111,6 +197,24 @@ export const $query = combine(
     // trimmed and capped at 200 chars — belt-and-braces with the input's own `maxLength`,
     // since a URL or a shared link can carry whatever the address bar allows
     q: f.q.trim().slice(0, 200) || undefined,
+    area_min: uint(f.areaMin),
+    area_max: uint(f.areaMax),
+    floor_min: int(f.floorMin),
+    floor_max: int(f.floorMax),
+    not_first_floor: f.notFirstFloor === "1" ? true : undefined,
+    not_top_floor: f.notTopFloor === "1" ? true : undefined,
+    building_type: f.buildingType ? f.buildingType.split(",") : undefined,
+    furnished: f.furnished === "1" ? true : f.furnished === "0" ? false : undefined,
+    renovation: f.renovation ? f.renovation.split(",") : undefined,
+    posted_within: (POSTED_WITHIN as readonly string[]).includes(f.postedWithin) ? (f.postedWithin as PropertyQuery["posted_within"]) : undefined,
+    has_photos: f.hasPhotos === "1" ? true : undefined,
+    // meaningful only once the user has both switched "search this area" on and the map has
+    // reported a viewport — otherwise every field here must stay `undefined`, the same
+    // "no filter" signal the rest of this object relies on
+    min_lat: f.searchArea === "1" ? f.bounds?.minLat : undefined,
+    min_lon: f.searchArea === "1" ? f.bounds?.minLon : undefined,
+    max_lat: f.searchArea === "1" ? f.bounds?.maxLat : undefined,
+    max_lon: f.searchArea === "1" ? f.bounds?.maxLon : undefined,
     sort: (SORTS as string[]).includes(f.sort) ? (f.sort as SortKey) : "last_seen",
     page: pageNum(f.page),
     page_size: PAGE_SIZE,
@@ -128,8 +232,14 @@ export const $query = combine(
 const filtersSettled = debounce({ source: $query, timeout: 300 });
 
 querySync({
-  source: { district: $district, rooms: $rooms, price_min: $priceMin, price_max: $priceMax, status: $status, source: $source, owner_only: $ownerOnly, removed: $removed, q: $q, sort: $sort, page: $page },
-  clock: filtersSettled,
+  source: {
+    district: $district, rooms: $rooms, price_min: $priceMin, price_max: $priceMax, status: $status, source: $source, owner_only: $ownerOnly, removed: $removed, q: $q, sort: $sort, page: $page,
+    area_min: $areaMin, area_max: $areaMax, floor_min: $floorMin, floor_max: $floorMax, not_first_floor: $notFirstFloor, not_top_floor: $notTopFloor, building_type: $buildingType, furnished: $furnished, renovation: $renovation, posted_within: $postedWithin, has_photos: $hasPhotos,
+    view: $viewParam,
+  },
+  // `view` never appears in `$query`, so it never rides `filtersSettled` — a bare `viewChanged`
+  // has to write it too, or toggling the view alone would never reach the URL.
+  clock: [filtersSettled, viewChanged],
   controls,
   route: routes.properties,
   cleanup: { irrelevant: true, empty: true, preserve: [] },
@@ -156,6 +266,28 @@ sample({
   filter: ({ query, last, opened, isAuthorized }) => isAuthorized && opened && JSON.stringify(query) !== last,
   fn: ({ query }) => query,
   target: fetchPropertiesFx,
+});
+
+/**
+ * Pins share `$query` with the list — same filters, same bbox — but are fetched separately and
+ * only in map view: the list view never needs marker coordinates, and fetching them on every
+ * visit regardless would be a wasted request. `$lastPinsQuery` mirrors `$lastQuery`'s dedup
+ * trick one for one. `$view` sits in the clock alongside the usual two triggers so switching
+ * from list to map with no filter change also fetches — as a store, its own update already
+ * carries the new value by the time this sample reads it, unlike the `viewChanged` *event*,
+ * which would race `$view`'s own `.on(viewChanged, …)` update for who runs first on the same
+ * tick.
+ */
+const $lastPinsQuery = createStore<string | null>(null)
+  .on(fetchPinsFx, (_, q) => JSON.stringify(q))
+  .reset([routes.properties.closed, fetchPinsFx.fail]);
+
+sample({
+  clock: [routes.properties.opened, filtersSettled, $view],
+  source: { query: $query, last: $lastPinsQuery, opened: routes.properties.$isOpened, isAuthorized: $isAuthorized, view: $view },
+  filter: ({ query, last, opened, isAuthorized, view }) => isAuthorized && opened && view === "map" && JSON.stringify(query) !== last,
+  fn: ({ query }) => query,
+  target: fetchPinsFx,
 });
 
 /**
