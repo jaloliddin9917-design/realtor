@@ -12,21 +12,28 @@
   "properties": {
     "title": "Квартиры", "count": "{{count}} квартир", "addManual": "Добавить вручную", "prev": "Назад", "next": "Далее", "page": "{{page}} / {{pages}}",
     "rooms": "{{count}}-комн.", "floor": "{{floor}}/{{total}} этаж", "area": "{{area}} м²", "removedBadge": "удалено в источнике", "needsRecheck": "Нужна перепроверка",
-    "filters": { "district": "Район", "all": "все", "rooms": "Комнаты", "roomsPlus": "4+", "price": "Цена, $", "priceMin": "от", "priceMax": "до", "status": "Статус", "source": "Источник", "ownerOnly": "Только от хозяина", "removed": "Показывать удалённые", "search": "Поиск по адресу или описанию", "clear": "Сбросить фильтры", "sort": "Сортировка" },
+    "filters": { "district": "Район", "all": "все", "rooms": "Комнаты", "roomsPlus": "4+", "price": "Цена, $", "priceMin": "от", "priceMax": "до", "status": "Статус", "source": "Источник", "ownerOnly": "Только от хозяина", "removed": "Показывать удалённые", "search": "Поиск по адресу или описанию", "clear": "Сбросить фильтры", "sort": "Сортировка", "more": "Ещё", "moreCount": "Ещё {{count}}", "area": "Площадь, м²", "areaMin": "от", "areaMax": "до", "floorMin": "Этаж, от", "floorMax": "Этаж, до", "notFirstFloor": "Не первый этаж", "notTopFloor": "Не последний этаж", "buildingType": "Тип дома", "furnished": "С мебелью", "renovation": "Ремонт", "postedWithin": "Дата размещения", "hasPhotos": "Только с фото", "resetAdvanced": "Сбросить дополнительные фильтры", "postedWithinOpts": { "24h": "За 24 часа", "3d": "За 3 дня", "7d": "За 7 дней" } },
     "sort": { "last_seen": "Сначала новые", "first_seen": "По дате появления", "price_asc": "Дешевле → дороже", "price_desc": "Дороже → дешевле" },
-    "columns": { "property": "Квартира", "price": "Цена", "status": "Статус", "owner": "Вероятный хозяин", "listings": "Объявления", "lastEvent": "Последнее изменение", "seen": "Последний раз видели" }
+    "columns": { "property": "Квартира", "price": "Цена", "status": "Статус", "owner": "Вероятный хозяин", "listings": "Объявления", "lastEvent": "Последнее изменение", "seen": "Последний раз видели" },
+    "map": { "list": "Список", "map": "Карта", "searchArea": "Искать в этой области", "pinsCount": "{{count}} на карте", "noCoords": "Нет координат" }
   },
   "property": {
     "back": "Квартиры", "photos": "{{count}} фото", "noPhotos": "Нет фото", "photoAlt": "Фото квартиры", "openGallery": "Открыть фото", "prevPhoto": "Предыдущее фото", "nextPhoto": "Следующее фото", "perMonth": "/ мес", "statusTitle": "Статус", "setActive": "Свободна", "setInactive": "Сдана", "note": "Комментарий", "notePlaceholder": "Необязательный комментарий", "statusChanged": "Статус обновлён",
     "owner": "Вероятный хозяин", "confidence": "уверенность {{value}}", "noOwner": "Хозяин не определён", "contacts": "Другие контакты", "noContacts": "Контактов нет",
     "listings": "Объявления", "openSource": "Открыть в источнике", "sourceRemoved": "удалено в источнике", "duplicate": "Возможный дубликат", "duplicateOf": "Эта квартира похожа на другую (сходство {{score}})",
-    "timeline": "История", "notFound": "Квартира не найдена", "attrs": { "rooms": "Комнаты", "floor": "Этаж", "area": "Площадь", "district": "Район" }
+    "timeline": "История", "notFound": "Квартира не найдена", "attrs": { "rooms": "Комнаты", "floor": "Этаж", "area": "Площадь", "district": "Район" },
+    "description": "Описание", "location": "Расположение", "approximateArea": "Приблизительная зона", "postedAt": "Дата публикации", "specs": "Характеристики",
+    "spec": { "buildingType": "Тип дома", "furnished": "Меблирована", "renovation": "Ремонт", "yearBuilt": "Год постройки", "bathroom": "Санузел" },
+    "yes": "Да", "no": "Нет"
   },
   "status": { "new": "Новая", "active": "Свободна", "inactive": "Сдана" },
   "kind": { "olx": "OLX", "telegram": "Telegram", "manual": "Вручную" },
   "classification": { "owner": "Хозяин", "agent": "Риелтор", "unknown": "Неизвестно" },
   "actor": { "crawler": "Система", "agent": "Агент", "admin": "Админ", "bot": "Бот" },
   "district": { "bektemir": "Бектемир", "chilonzor": "Чиланзар", "mirobod": "Мирабад", "mirzo_ulugbek": "Мирзо-Улугбек", "olmazor": "Алмазар", "sergeli": "Сергели", "shayxontohur": "Шайхантахур", "uchtepa": "Учтепа", "yakkasaroy": "Яккасарай", "yangihayot": "Янгихаёт", "yashnobod": "Яшнабад", "yunusobod": "Юнусабад" },
+  "buildingType": { "brick": "Кирпичный", "panel": "Панельный", "monolith": "Монолитный", "block": "Блочный", "other": "Другой" },
+  "renovation": { "euro": "Евроремонт", "designer": "Дизайнерский ремонт", "cosmetic": "Косметический ремонт", "average": "Средний ремонт", "needs_repair": "Нужен ремонт", "other": "Другой" },
+  "bathroomType": { "combined": "Совмещённый", "separate": "Раздельный", "multiple": "Несколько" },
   "sources": {
     "title": "Источники", "add": "Добавить канал", "runNow": "Запустить", "runQueued": "Поставлено в очередь", "peer": "Канал (@username или ссылка t.me)", "name": "Название (необязательно)", "interval": "Интервал проверки, сек", "added": "Канал добавлен", "runs": "Запуски", "never": "ещё не было", "enabled": "включён", "disabled": "выключен",
     "columns": { "name": "Название", "kind": "Тип", "enabled": "Включён", "status": "Статус", "lastRun": "Последний запуск", "nextRun": "Следующий", "failures": "Ошибки", "error": "Последняя ошибка", "found": "Найдено", "new": "Новых", "action": "Действие" },

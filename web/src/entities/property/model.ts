@@ -1,17 +1,22 @@
 import { createEffect, createEvent, createStore, sample } from "effector";
 import { toast } from "sonner";
-import { fetchProperties, fetchProperty, type PropertyDetail, type PropertyPage, type PropertyQuery, type PropertyStatus, type StatusEvent } from "./api";
+import { fetchPins, fetchProperties, fetchProperty, type Pin, type PropertyDetail, type PropertyPage, type PropertyQuery, type PropertyStatus, type StatusEvent } from "./api";
 import { isApiProblem } from "@/shared/api";
 import { i18n, problemKey } from "@/shared/i18n";
 import { routes } from "@/shared/router";
 
 export const fetchPropertiesFx = createEffect(fetchProperties);
 export const fetchPropertyFx = createEffect(fetchProperty);
+export const fetchPinsFx = createEffect(fetchPins);
 
 export const $page = createStore<PropertyPage | null>(null).on(fetchPropertiesFx.doneData, (_, p) => p);
 export const $rows = $page.map((p) => p?.items ?? []);
 export const $total = $page.map((p) => p?.total ?? 0);
 export const $listPending = fetchPropertiesFx.pending;
+
+/** Lightweight rows for the map view — same query as the list, minus sort/paging. */
+export const $pins = createStore<Pin[]>([]).on(fetchPinsFx.doneData, (_, p) => p);
+export const $pinsPending = fetchPinsFx.pending;
 
 /** A status change accepted by the API, so the open detail can show it without a refetch. */
 export const statusUpdated = createEvent<{ id: string; event: StatusEvent }>();

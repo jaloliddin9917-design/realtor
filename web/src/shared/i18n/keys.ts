@@ -5,6 +5,9 @@ export const statusKey = (s: string) => `status.${s}`;
 export const kindKey = (k: string) => `kind.${k}`;
 export const classificationKey = (c: string) => `classification.${c}`;
 export const districtKey = (d: string) => `district.${d}`;
+export const buildingTypeKey = (v: string) => `buildingType.${v}`;
+export const renovationKey = (v: string) => `renovation.${v}`;
+export const bathroomTypeKey = (v: string) => `bathroomType.${v}`;
 export const actorKey = (a: string) => `actor.${a}`;
 export const sourceStatusKey = (s: string) => `sources.status.${s}`;
 

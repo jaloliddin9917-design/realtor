@@ -1,7 +1,7 @@
 import { allSettled, fork } from "effector";
 import { toast } from "sonner";
 import { i18n } from "@/shared/i18n";
-import { $rows, $total, fetchPropertiesFx, fetchPropertyFx } from "./model";
+import { $pins, $rows, $total, fetchPinsFx, fetchPropertiesFx, fetchPropertyFx } from "./model";
 
 vi.mock("sonner", () => ({ toast: { error: vi.fn() } }));
 
@@ -42,4 +42,11 @@ describe("property detail load errors", () => {
     await allSettled(fetchPropertyFx, { scope, params: "p1" });
     expect(toast.error).toHaveBeenCalledWith(i18n.t("errors.internal_error"));
   });
+});
+
+test("$pins holds the fetched pins", async () => {
+  const pins = [{ id: "p1", latitude: 41.3, longitude: 69.2, price_usd_min_minor: 40000, rooms: 2, status: "new", source_removed: false }];
+  const scope = fork({ handlers: [[fetchPinsFx, async () => pins]] });
+  await allSettled(fetchPinsFx, { scope, params: { district: [], rooms: [], status: [], owner_only: false, removed: false, sort: "last_seen", page: 1, page_size: 20 } });
+  expect(scope.getState($pins)).toEqual(pins);
 });

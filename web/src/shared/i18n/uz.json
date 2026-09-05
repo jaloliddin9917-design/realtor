@@ -12,21 +12,28 @@
   "properties": {
     "title": "Uylar", "count": "{{count}} ta uy", "addManual": "Qo'lda qo'shish", "prev": "Oldingi", "next": "Keyingi", "page": "{{page}} / {{pages}}",
     "rooms": "{{count}}-xonali", "floor": "{{floor}}/{{total}} qavat", "area": "{{area}} m²", "removedBadge": "manbadan o'chirilgan", "needsRecheck": "Qayta tekshirish kerak",
-    "filters": { "district": "Tuman", "all": "hammasi", "rooms": "Xonalar", "roomsPlus": "4+", "price": "Narx, $", "priceMin": "dan", "priceMax": "gacha", "status": "Holat", "source": "Manba", "ownerOnly": "Faqat egasidan", "removed": "O'chirilganlarni ham", "search": "Manzil yoki tavsif bo'yicha qidirish", "clear": "Filtrlarni tozalash", "sort": "Saralash" },
+    "filters": { "district": "Tuman", "all": "hammasi", "rooms": "Xonalar", "roomsPlus": "4+", "price": "Narx, $", "priceMin": "dan", "priceMax": "gacha", "status": "Holat", "source": "Manba", "ownerOnly": "Faqat egasidan", "removed": "O'chirilganlarni ham", "search": "Manzil yoki tavsif bo'yicha qidirish", "clear": "Filtrlarni tozalash", "sort": "Saralash", "more": "Yana", "moreCount": "Yana {{count}}", "area": "Maydon, m²", "areaMin": "dan", "areaMax": "gacha", "floorMin": "Qavat, dan", "floorMax": "Qavat, gacha", "notFirstFloor": "Birinchi qavat emas", "notTopFloor": "Oxirgi qavat emas", "buildingType": "Bino turi", "furnished": "Jihozlangan", "renovation": "Remont", "postedWithin": "Joylangan vaqti", "hasPhotos": "Faqat rasmli", "resetAdvanced": "Qo'shimcha filtrlarni tozalash", "postedWithinOpts": { "24h": "24 soat ichida", "3d": "3 kun ichida", "7d": "7 kun ichida" } },
     "sort": { "last_seen": "Eng yangi", "first_seen": "Birinchi ko'rilgan", "price_asc": "Arzon → qimmat", "price_desc": "Qimmat → arzon" },
-    "columns": { "property": "Uy", "price": "Narx", "status": "Holat", "owner": "Ehtimoliy egasi", "listings": "E'lonlar", "lastEvent": "So'nggi o'zgarish", "seen": "So'nggi ko'rilgan" }
+    "columns": { "property": "Uy", "price": "Narx", "status": "Holat", "owner": "Ehtimoliy egasi", "listings": "E'lonlar", "lastEvent": "So'nggi o'zgarish", "seen": "So'nggi ko'rilgan" },
+    "map": { "list": "Ro'yxat", "map": "Xarita", "searchArea": "Bu hududda qidirish", "pinsCount": "Xaritada {{count}} ta", "noCoords": "Koordinatalar yo'q" }
   },
   "property": {
     "back": "Uylar", "photos": "{{count}} rasm", "noPhotos": "Rasm yo'q", "photoAlt": "Uy rasmi", "openGallery": "Rasmlarni ochish", "prevPhoto": "Oldingi rasm", "nextPhoto": "Keyingi rasm", "perMonth": "/ oy", "statusTitle": "Holat", "setActive": "Faol", "setInactive": "Nofaol", "note": "Izoh", "notePlaceholder": "Ixtiyoriy izoh", "statusChanged": "Holat yangilandi",
     "owner": "Ehtimoliy egasi", "confidence": "ishonch {{value}}", "noOwner": "Egasi aniqlanmagan", "contacts": "Boshqa kontaktlar", "noContacts": "Kontaktlar yo'q",
     "listings": "E'lonlar", "openSource": "Manbada ochish", "sourceRemoved": "manbadan o'chirilgan", "duplicate": "Ehtimoliy dublikat", "duplicateOf": "Bu uy boshqa uyga o'xshaydi (o'xshashlik {{score}})",
-    "timeline": "Tarix", "notFound": "Uy topilmadi", "attrs": { "rooms": "Xonalar", "floor": "Qavat", "area": "Maydon", "district": "Tuman" }
+    "timeline": "Tarix", "notFound": "Uy topilmadi", "attrs": { "rooms": "Xonalar", "floor": "Qavat", "area": "Maydon", "district": "Tuman" },
+    "description": "Tavsif", "location": "Joylashuv", "approximateArea": "Taxminiy hudud", "postedAt": "E'lon sanasi", "specs": "Xususiyatlar",
+    "spec": { "buildingType": "Bino turi", "furnished": "Jihozlangan", "renovation": "Remont", "yearBuilt": "Qurilgan yili", "bathroom": "Sanuzel" },
+    "yes": "Ha", "no": "Yo'q"
   },
   "status": { "new": "Yangi", "active": "Faol", "inactive": "Nofaol" },
   "kind": { "olx": "OLX", "telegram": "Telegram", "manual": "Qo'lda" },
   "classification": { "owner": "Egasi", "agent": "Rieltor", "unknown": "Noma'lum" },
   "actor": { "crawler": "Tizim", "agent": "Agent", "admin": "Admin", "bot": "Bot" },
   "district": { "bektemir": "Bektemir", "chilonzor": "Chilonzor", "mirobod": "Mirobod", "mirzo_ulugbek": "Mirzo Ulug'bek", "olmazor": "Olmazor", "sergeli": "Sergeli", "shayxontohur": "Shayxontohur", "uchtepa": "Uchtepa", "yakkasaroy": "Yakkasaroy", "yangihayot": "Yangihayot", "yashnobod": "Yashnobod", "yunusobod": "Yunusobod" },
+  "buildingType": { "brick": "G'ishtli", "panel": "Panelli", "monolith": "Monolit", "block": "Blokli", "other": "Boshqa" },
+  "renovation": { "euro": "Evro remont", "designer": "Dizaynerlik remonti", "cosmetic": "Kosmetik remont", "average": "O'rtacha remont", "needs_repair": "Ta'mir kerak", "other": "Boshqa" },
+  "bathroomType": { "combined": "Qo'shma", "separate": "Alohida", "multiple": "Bir nechta" },
   "sources": {
     "title": "Manbalar", "add": "Kanal qo'shish", "runNow": "Ishga tushirish", "runQueued": "Yurish navbatga qo'yildi", "peer": "Kanal (@username yoki t.me havola)", "name": "Nom (ixtiyoriy)", "interval": "Tekshirish oralig'i, soniya", "added": "Kanal qo'shildi", "runs": "Yurishlar", "never": "hali yo'q", "enabled": "yoqilgan", "disabled": "o'chirilgan",
     "columns": { "name": "Nom", "kind": "Tur", "enabled": "Yoqilgan", "status": "Holat", "lastRun": "So'nggi yurish", "nextRun": "Keyingi", "failures": "Xatolar", "error": "So'nggi xato", "found": "Topildi", "new": "Yangi", "action": "Amal" },
