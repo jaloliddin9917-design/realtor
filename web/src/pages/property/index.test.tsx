@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { RouterProvider } from "atomic-router-react";
 import { fork } from "effector";
@@ -35,9 +35,10 @@ describe("PropertyPage", () => {
 
   it("renders header, owner, listings, duplicate note and timeline", () => {
     const { container } = mount(detail);
-    // the header's cheapest-listing price and listing l1's own price are both $450
+    // the sidebar price card and listing l1's own price are both $450
     expect(screen.getAllByText("$450")).toHaveLength(2);
-    expect(screen.getByText("+998 90 811 24 37")).toBeInTheDocument();
+    // the sidebar's OwnerBadge and ContactsList's owner card both show the real, unmasked number
+    expect(screen.getAllByText("+998 90 811 24 37")).toHaveLength(2);
     expect(screen.getByText("ishonch 0.8")).toBeInTheDocument();
     expect(screen.getByText("+998 93 402 18 55")).toBeInTheDocument();
     expect(screen.getAllByText("OLX").length).toBeGreaterThan(0);
@@ -46,12 +47,13 @@ describe("PropertyPage", () => {
     expect(screen.getByText("6 oy")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Faol" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Nofaol" })).toBeEnabled();
-    // two photos render: the first carries the meaningful alt, the second is decorative
+    // the main photo carries the meaningful alt; the thumbnail strip (one per photo) is decorative
     expect(screen.getAllByRole("img")[0]).toHaveAttribute("src", "/api/v1/photos/l1/0.jpg");
     const imgs = container.querySelectorAll("img");
-    expect(imgs).toHaveLength(2);
+    expect(imgs).toHaveLength(3);
     expect(imgs[0]).toHaveAttribute("alt", "Uy rasmi");
     expect(imgs[1]).toHaveAttribute("alt", "");
+    expect(imgs[2]).toHaveAttribute("alt", "");
   });
 
   it("lists the status events newest first, with the actor", () => {
@@ -69,16 +71,18 @@ describe("PropertyPage", () => {
     expect(screen.queryByRole("button", { name: "Nofaol" })).not.toBeInTheDocument();
   });
 
-  it("opens a lightbox to browse every photo from the '+N' tile", async () => {
+  it("opens a lightbox to browse every photo, navigable from the thumbnail strip", async () => {
     const l0 = detail.listings[0]!;
     const four = { ...detail, listings: [{ ...l0, photos: [0, 1, 2, 3].map((n) => ({ position: n, url: `/api/v1/photos/l1/${n}.jpg`, width: 300, height: 200 })) }, detail.listings[1]!] } as PropertyDetail;
     mount(four);
-    // the preview shows the first two photos and a "+2" tile for the remaining two
-    await userEvent.click(screen.getByText("+2"));
-    // the lightbox opens at the third photo, with a position counter and next/prev controls
-    expect(screen.getByText("3 / 4")).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: "Keyingi rasm" }));
-    expect(screen.getByText("4 / 4")).toBeInTheDocument();
+    // picking the third thumbnail makes it the main photo...
+    await userEvent.click(screen.getByRole("button", { name: "Uy rasmi 3" }));
+    // ...and clicking the main photo opens the lightbox at that same position
+    await userEvent.click(screen.getByRole("button", { name: "Rasmlarni ochish" }));
+    const dialog = within(screen.getByRole("dialog"));
+    expect(dialog.getByText("3 / 4")).toBeInTheDocument();
+    await userEvent.click(dialog.getByRole("button", { name: "Keyingi rasm" }));
+    expect(dialog.getByText("4 / 4")).toBeInTheDocument();
   });
 
 });
