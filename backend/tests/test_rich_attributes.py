@@ -132,8 +132,14 @@ async def test_persist_writes_location_and_attributes(db):
     listing = await persist_parsed(
         db, raw, parsed, posted_at=None, now=datetime.now(UTC), usd_rate=None,
     )
+    await db.refresh(listing)  # real read-back from Postgres, not the mutated in-memory object
     assert listing.latitude == pytest.approx(41.5)
+    assert listing.longitude == pytest.approx(69.1)
+    assert listing.location_radius_m == 2000
+    assert listing.location_precise is False
+    assert listing.location_label == "Tashkent"
     assert listing.building_type == "brick"
     assert listing.is_furnished is True
+    assert listing.renovation == "euro"
     assert listing.year_built == 2017
     assert listing.attributes == {"bathroom_type": "combined"}
