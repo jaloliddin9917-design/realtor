@@ -35,10 +35,10 @@ export function PropertyCardList({ rows, className }: { rows: PropertyRow[]; cla
             params={{ id: row.id }}
             className="flex flex-col overflow-hidden rounded-card border border-line bg-surface text-ink transition hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-lg"
           >
-            <div className="relative aspect-[4/3] bg-surface-soft">
+            <div className="relative aspect-[4/3] w-full shrink-0 overflow-hidden bg-surface-soft">
               {row.photo_url
-                ? <img src={row.photo_url} alt="" className="size-full object-cover" />
-                : <div className="flex size-full items-center justify-center text-muted-foreground"><ImageOff className="size-8" aria-hidden="true" /></div>}
+                ? <img src={row.photo_url} alt="" loading="lazy" className="absolute inset-0 size-full object-cover" />
+                : <div className="absolute inset-0 flex items-center justify-center text-muted-foreground"><ImageOff className="size-8" aria-hidden="true" /></div>}
               {/* purely decorative legibility gradient for the overlaid chips below */}
               <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/15 via-transparent to-black/15" />
               {source && <span className="absolute bottom-2 left-2 rounded bg-surface/90 px-1.5 py-0.5 text-[10px] font-extrabold uppercase tracking-wide text-ink">{t(kindKey(source))}</span>}

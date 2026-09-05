@@ -35,7 +35,10 @@ export function PropertiesPage() {
           them so the rail stacks *under* the results on mobile while staying visually first
           (left) from `lg:` up, without duplicating either in the markup. */}
       <div className="grid gap-4 lg:grid-cols-[264px_1fr] lg:items-start">
-        <aside className="order-2 lg:sticky lg:top-6 lg:order-1"><FilterBar /></aside>
+        {/* The rail is taller than the viewport, so on lg+ it sticks and scrolls *within itself*
+            (max-height = viewport minus the topbar + top offset), keeping its scroll from chaining
+            to the results column. On mobile it just flows in the page (order-2, below the results). */}
+        <aside className="order-2 lg:sticky lg:top-6 lg:order-1 lg:max-h-[calc(100vh-7rem)] lg:overflow-y-auto lg:overscroll-contain"><FilterBar /></aside>
         <div id={RESULTS_ANCHOR_ID} className="order-1 flex min-w-0 flex-col gap-3 lg:order-2">
           <ResultsBar />
           {view === "map"
