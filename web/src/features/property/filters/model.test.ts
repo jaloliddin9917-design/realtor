@@ -149,7 +149,7 @@ describe("filters ↔ URL", () => {
     expect(calls).toHaveLength(0);
   });
 
-  it("maps advanced filters into $query and counts them in $advancedCount", async () => {
+  it("maps advanced filters into $query, but $advancedCount counts only the dialog's own fields", async () => {
     const scope = fork({ values: [[$tokens, { access: "a", refresh: "r" }]] });
     vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ items: [], total: 0, page: 1, page_size: 20 }), { status: 200, headers: { "content-type": "application/json" } })));
     await openList(scope);
@@ -161,10 +161,12 @@ describe("filters ↔ URL", () => {
     expect(query.area_max).toBeUndefined();
     expect(query.building_type).toEqual(["brick"]);
     expect(query.posted_within).toBe("7d");
-    expect(scope.getState($advancedCount)).toBe(3);
+    // buildingType reaches $query like any filter, but it lives in the rail now (not the "More
+    // filters" dialog) — only areaMin and postedWithin are the dialog's own, so the count is 2
+    expect(scope.getState($advancedCount)).toBe(2);
   });
 
-  it("resets only the advanced filters on advancedReset, leaving district and search intact", async () => {
+  it("resets only the dialog's own advanced filters on advancedReset, leaving district/search and the rail's promoted filters intact", async () => {
     const scope = fork({ values: [[$tokens, { access: "a", refresh: "r" }]] });
     vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ items: [], total: 0, page: 1, page_size: 20 }), { status: 200, headers: { "content-type": "application/json" } })));
     await openList(scope);
@@ -179,14 +181,25 @@ describe("filters ↔ URL", () => {
     await allSettled(renovationToggled, { scope, params: "euro" });
     await allSettled(postedWithinChanged, { scope, params: "7d" });
     await allSettled(hasPhotosToggled, { scope });
-    // all 11 advanced stores populated
-    expect(scope.getState($advancedCount)).toBe(11);
+    // only the dialog's own 7 fields count toward the badge — buildingType/notFirstFloor/
+    // notTopFloor/hasPhotos are set too but, living in the rail now, don't inflate it
+    expect(scope.getState($advancedCount)).toBe(7);
     await allSettled(advancedReset, { scope });
     expect(scope.getState($advancedCount)).toBe(0);
-    expect(scope.getState($query).building_type).toBeUndefined();
-    expect(scope.getState($query).posted_within).toBeUndefined();
+    const query = scope.getState($query);
+    expect(query.area_min).toBeUndefined();
+    expect(query.floor_min).toBeUndefined();
+    expect(query.furnished).toBeUndefined();
+    expect(query.renovation).toBeUndefined();
+    expect(query.posted_within).toBeUndefined();
     expect(scope.getState($district)).toBe("chilonzor");
     expect(scope.getState($q)).toBe("chil");
+    // the rail's promoted filters are not the dialog's to reset — advancedReset must not
+    // silently clear them out from under the always-visible rail
+    expect(query.building_type).toEqual(["brick"]);
+    expect(query.not_first_floor).toBe(true);
+    expect(query.not_top_floor).toBe(true);
+    expect(query.has_photos).toBe(true);
   });
 
   it("returns to page 1 on advancedReset too, like every other filter change", async () => {

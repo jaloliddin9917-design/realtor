@@ -36,8 +36,13 @@ export const sortChanged = createEvent<string>();
 export const pageChanged = createEvent<number>();
 export const filtersCleared = createEvent();
 
-// "Advanced" filters live behind the "More filters" dialog rather than the primary bar; they
-// get their own reset (`advancedReset`) so clearing them never touches district/q/rooms/etc.
+// These all started out behind the "More filters" dialog. The redesign promoted
+// buildingTypeToggled/notFirstFloorToggled/notTopFloorToggled/hasPhotosToggled into the
+// always-visible filter rail (see ui.tsx) — only areaChanged/floorChanged/furnishedChanged/
+// renovationToggled/postedWithinChanged are still the dialog's own. `advancedReset` — the
+// dialog's "reset advanced" button — resets only that narrower, still-in-the-dialog set (see
+// the stores below), so it never touches district/q/rooms/etc., nor the filters the rail
+// promoted out of the dialog.
 export const areaChanged = createEvent<{ min: string; max: string }>();
 export const floorChanged = createEvent<{ min: string; max: string }>();
 export const notFirstFloorToggled = createEvent();
@@ -73,24 +78,37 @@ export const $q = createStore("").on(searchChanged, (_, q) => q).reset([filtersC
 export const $sort = createStore("").on(sortChanged, (_, s) => s).reset([filtersCleared, routes.properties.closed]);
 export const $page = createStore("").on(pageChanged, (_, p) => (p > 1 ? String(p) : "")).reset([filtersCleared, routes.properties.closed]);
 
-// The advanced filters (behind "More filters") reset on `advancedReset` too, on top of the
-// same clear-list/leave-list resets every filter gets — `advancedReset` never touches the
-// primary stores above, so clearing them from the dialog cannot surprise-clear the search bar.
+// The filters still shown in the "More filters" dialog reset on `advancedReset` too, on top
+// of the same clear-list/leave-list resets every filter gets — `advancedReset` never touches
+// the primary stores above, so clearing them from the dialog cannot surprise-clear the search
+// bar.
 export const $areaMin = createStore("").on(areaChanged, (_, p) => p.min).reset([filtersCleared, routes.properties.closed, advancedReset]);
 export const $areaMax = createStore("").on(areaChanged, (_, p) => p.max).reset([filtersCleared, routes.properties.closed, advancedReset]);
 export const $floorMin = createStore("").on(floorChanged, (_, p) => p.min).reset([filtersCleared, routes.properties.closed, advancedReset]);
 export const $floorMax = createStore("").on(floorChanged, (_, p) => p.max).reset([filtersCleared, routes.properties.closed, advancedReset]);
-export const $notFirstFloor = createStore("").on(notFirstFloorToggled, (v) => (v ? "" : "1")).reset([filtersCleared, routes.properties.closed, advancedReset]);
-export const $notTopFloor = createStore("").on(notTopFloorToggled, (v) => (v ? "" : "1")).reset([filtersCleared, routes.properties.closed, advancedReset]);
-export const $buildingType = createStore("").on(buildingTypeToggled, toggle).reset([filtersCleared, routes.properties.closed, advancedReset]);
 export const $furnished = createStore("").on(furnishedChanged, (_, v) => v).reset([filtersCleared, routes.properties.closed, advancedReset]);
 export const $renovation = createStore("").on(renovationToggled, toggle).reset([filtersCleared, routes.properties.closed, advancedReset]);
 export const $postedWithin = createStore("").on(postedWithinChanged, (_, v) => v).reset([filtersCleared, routes.properties.closed, advancedReset]);
-export const $hasPhotos = createStore("").on(hasPhotosToggled, (v) => (v ? "" : "1")).reset([filtersCleared, routes.properties.closed, advancedReset]);
 
-/** Shown as a badge on the "More filters" button — how many advanced filters are set. */
+// buildingType/notFirstFloor/notTopFloor/hasPhotos used to live in the "More filters" dialog
+// too, but the redesign promoted them into the always-visible filter rail (see ui.tsx) — they
+// still reset on `filtersCleared`/leaving the list like every filter, but NOT on
+// `advancedReset`, since the dialog no longer shows (or claims to control) them; resetting them
+// from a dialog that does not display them would silently clear rail state out from under it.
+export const $notFirstFloor = createStore("").on(notFirstFloorToggled, (v) => (v ? "" : "1")).reset([filtersCleared, routes.properties.closed]);
+export const $notTopFloor = createStore("").on(notTopFloorToggled, (v) => (v ? "" : "1")).reset([filtersCleared, routes.properties.closed]);
+export const $buildingType = createStore("").on(buildingTypeToggled, toggle).reset([filtersCleared, routes.properties.closed]);
+export const $hasPhotos = createStore("").on(hasPhotosToggled, (v) => (v ? "" : "1")).reset([filtersCleared, routes.properties.closed]);
+
+/**
+ * Shown as a badge on the "More filters" button — how many of the dialog's OWN filters are
+ * set (area, floor range, furnished, renovation, posted-within). Deliberately excludes
+ * buildingType/notFirstFloor/notTopFloor/hasPhotos: those live in the rail now, the dialog
+ * doesn't render them, and a badge counting filters the dialog can't show (or clear) would be
+ * misleading.
+ */
 export const $advancedCount = combine(
-  { areaMin: $areaMin, areaMax: $areaMax, floorMin: $floorMin, floorMax: $floorMax, notFirstFloor: $notFirstFloor, notTopFloor: $notTopFloor, buildingType: $buildingType, furnished: $furnished, renovation: $renovation, postedWithin: $postedWithin, hasPhotos: $hasPhotos },
+  { areaMin: $areaMin, areaMax: $areaMax, floorMin: $floorMin, floorMax: $floorMax, furnished: $furnished, renovation: $renovation, postedWithin: $postedWithin },
   (f) => Object.values(f).filter((v) => v !== "").length,
 );
 
