@@ -2,7 +2,7 @@ import { allSettled, fork } from "effector";
 import { $detail, detailCleared, type PropertyDetail } from "@/entities/property";
 import { $note, noteChanged, statusRequested } from "./model";
 
-const detail = { id: "p1", status: "new", district: "chilonzor", rooms: 2, floor: 3, total_floors: 9, area_sqm: 54, price_usd_min_minor: 45000, source_removed: false, needs_recheck: false, first_seen_at: "2026-08-12T09:00:00Z", last_seen_at: "2026-08-29T12:40:00Z", listing_count: 1, source_kinds: ["olx"], probable_owner: null, photo_url: null, last_status_event: null, listings: [], status_events: [{ id: 1, from_status: null, to_status: "new", actor_type: "crawler", actor_id: null, note: null, created_at: "2026-08-12T09:00:00Z" }], duplicates: [] } as PropertyDetail;
+const detail = { id: "p1", status: "new", district: "chilonzor", rooms: 2, floor: 3, total_floors: 9, area_sqm: 54, price_usd_min_minor: 45000, source_removed: false, needs_recheck: false, first_seen_at: "2026-08-12T09:00:00Z", last_seen_at: "2026-08-29T12:40:00Z", listing_count: 1, source_kinds: ["olx"], probable_owner: null, photo_url: null, last_status_event: null, latitude: null, longitude: null, location_radius_m: null, location_label: null, building_type: null, is_furnished: null, renovation: null, year_built: null, listings: [], status_events: [{ id: 1, from_status: null, to_status: "new", actor_type: "crawler", actor_id: null, note: null, created_at: "2026-08-12T09:00:00Z" }], duplicates: [] } as PropertyDetail;
 
 describe("set status", () => {
   it("posts the status and updates the loaded detail", async () => {

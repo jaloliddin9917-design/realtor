@@ -7,7 +7,7 @@ import { i18nReady } from "@/shared/i18n";
 import { router } from "@/shared/router";
 import { PropertyTable } from "./PropertyTable";
 
-const row: PropertyRow = { id: "p1", status: "active", district: "chilonzor", rooms: 2, floor: 3, total_floors: 9, area_sqm: 54, price_usd_min_minor: 45000, source_removed: false, needs_recheck: false, first_seen_at: "2026-08-12T09:00:00Z", last_seen_at: "2026-08-29T12:40:00Z", listing_count: 2, source_kinds: ["olx", "telegram"], probable_owner: { contact_id: "c1", kind: "phone", identifier: "+998908112437", display_name: null, classification: "owner", agency_score: 0.1, confidence: 0.8 }, photo_url: null, last_status_event: { id: 1, from_status: "new", to_status: "active", actor_type: "agent", actor_id: "u1", note: null, created_at: "2026-08-29T12:40:00Z" } };
+const row: PropertyRow = { id: "p1", status: "active", district: "chilonzor", rooms: 2, floor: 3, total_floors: 9, area_sqm: 54, price_usd_min_minor: 45000, source_removed: false, needs_recheck: false, first_seen_at: "2026-08-12T09:00:00Z", last_seen_at: "2026-08-29T12:40:00Z", listing_count: 2, source_kinds: ["olx", "telegram"], probable_owner: { contact_id: "c1", kind: "phone", identifier: "+998908112437", display_name: null, classification: "owner", agency_score: 0.1, confidence: 0.8 }, photo_url: null, last_status_event: { id: 1, from_status: "new", to_status: "active", actor_type: "agent", actor_id: "u1", note: null, created_at: "2026-08-29T12:40:00Z" }, latitude: null, longitude: null, location_radius_m: null, location_label: null, building_type: null, is_furnished: null, renovation: null, year_built: null };
 
 describe("PropertyTable", () => {
   beforeAll(() => i18nReady);
