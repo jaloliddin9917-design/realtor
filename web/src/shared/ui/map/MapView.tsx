@@ -132,9 +132,19 @@ export function MapView({ points = [], center, zoom, radiusMeters = null, onPinC
     const map = new MapLibreMap({ container, style: MAP_STYLE_URL, center: initialCenter, zoom: zoom ?? (single ? 15 : 12) });
     mapRef.current = map;
     map.addControl(new NavigationControl(), "top-right");
+    // surface tile/style/WebGL failures instead of silently rendering a blank canvas
+    map.on("error", (e) => console.error("[MapView] map error:", (e as { error?: { message?: string } }).error?.message ?? e));
+    // The map is usually created while its container is still settling — lazy-mounted behind a
+    // Suspense fallback and revealed by the List/Map toggle. If MapLibre measured the box before
+    // it reached its final size, the WebGL drawing buffer stays wrong and the canvas renders
+    // blank even though the element is full-size. Resize on load and on every container resize so
+    // the buffer always matches the box.
+    const resizeObserver = new ResizeObserver(() => map.resize());
+    resizeObserver.observe(container);
 
     map.on("load", () => {
       loadedRef.current = true;
+      map.resize();
       if (!single) addClusterLayers(map);
       syncData(map, single, true, latest.current.points, latest.current.radiusMeters, markerRef);
     });
@@ -158,6 +168,7 @@ export function MapView({ points = [], center, zoom, radiusMeters = null, onPinC
     });
 
     return () => {
+      resizeObserver.disconnect();
       markerRef.current?.remove();
       markerRef.current = null;
       map.remove();

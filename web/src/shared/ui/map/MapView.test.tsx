@@ -73,7 +73,7 @@ vi.mock("maplibre-gl", () => ({
       addControl, on, off, remove,
       getSource, addSource, removeSource,
       getLayer, addLayer, removeLayer,
-      setCenter, setZoom, setFeatureState, easeTo, queryRenderedFeatures, getBounds,
+      setCenter, setZoom, setFeatureState, easeTo, queryRenderedFeatures, getBounds, resize: vi.fn(),
     };
   }),
   NavigationControl: vi.fn(),
