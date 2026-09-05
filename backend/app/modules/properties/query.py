@@ -8,6 +8,7 @@ the web as an unmodelled string.
 
 import uuid
 from dataclasses import dataclass, field
+from datetime import timedelta
 from typing import Any, cast
 
 from sqlalchemy import Select, func, select
@@ -49,6 +50,18 @@ class PropertyFilters:
     source: str | None = None
     owner_only: bool = False
     removed: bool = False
+    area_min: float | None = None
+    area_max: float | None = None
+    floor_min: int | None = None
+    floor_max: int | None = None
+    not_first_floor: bool = False
+    not_top_floor: bool = False
+    building_type: list[str] = field(default_factory=list)
+    furnished: bool | None = None
+    renovation: list[str] = field(default_factory=list)
+    posted_within: str | None = None
+    has_photos: bool = False
+    bbox: tuple[float, float, float, float] | None = None
     q: str | None = None
     sort: SortKey = "last_seen"
     page: int = 1
@@ -155,6 +168,50 @@ def select_rows(f: PropertyFilters, *, count: bool) -> Select[Any]:
     if f.q:
         query = func.plainto_tsquery("simple", func.unaccent(f.q))
         stmt = stmt.where(Property.search_vector.op("@@")(query))
+    if f.area_min is not None:
+        stmt = stmt.where(Property.area_sqm >= f.area_min)
+    if f.area_max is not None:
+        stmt = stmt.where(Property.area_sqm <= f.area_max)
+    if f.floor_min is not None:
+        stmt = stmt.where(Property.floor >= f.floor_min)
+    if f.floor_max is not None:
+        stmt = stmt.where(Property.floor <= f.floor_max)
+    if f.not_first_floor:
+        stmt = stmt.where(Property.floor.is_not(None), Property.floor > 1)
+    if f.not_top_floor:
+        stmt = stmt.where(
+            Property.floor.is_not(None),
+            Property.total_floors.is_not(None),
+            Property.floor < Property.total_floors,
+        )
+    if f.building_type:
+        stmt = stmt.where(Property.building_type.in_(f.building_type))
+    if f.furnished is not None:
+        stmt = stmt.where(Property.is_furnished.is_(f.furnished))
+    if f.renovation:
+        stmt = stmt.where(Property.renovation.in_(f.renovation))
+    if f.posted_within:
+        cutoff = {"24h": timedelta(hours=24), "3d": timedelta(days=3), "7d": timedelta(days=7)}.get(
+            f.posted_within
+        )
+        if cutoff is not None:
+            stmt = stmt.where(Property.last_seen_at >= func.now() - cutoff)
+    if f.has_photos:
+        has_photo = (
+            select(Listing.property_id)
+            .join(ListingPhoto, ListingPhoto.listing_id == Listing.id)
+            .where(ListingPhoto.storage_key.is_not(None))
+        )
+        stmt = stmt.where(Property.id.in_(has_photo))
+    if f.bbox is not None:
+        min_lat, min_lon, max_lat, max_lon = f.bbox
+        stmt = stmt.where(
+            Property.latitude.is_not(None),
+            Property.latitude >= min_lat,
+            Property.latitude <= max_lat,
+            Property.longitude >= min_lon,
+            Property.longitude <= max_lon,
+        )
     return stmt
 
 

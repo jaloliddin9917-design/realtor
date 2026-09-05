@@ -289,3 +289,79 @@ async def test_unknown_uuid_filters_do_not_crash(
     params = {"q": str(uuid.uuid4())}
     r = await client.get("/api/v1/properties", params=params, headers=auth_headers(settings, agent))
     assert r.status_code == 200 and r.json()["total"] == 0
+
+
+async def test_filters_by_building_type_and_area(
+    client: httpx.AsyncClient,
+    settings: Settings,
+    agent: User,
+    sources: tuple[Source, Source],
+    db: AsyncSession,
+) -> None:
+    _tg, olx = sources
+    await seed(
+        db,
+        settings,
+        olx,
+        "bt1",
+        "Сдаётся +998900000001",
+        {"building_type": "brick", "area_sqm": 80.0},
+    )
+    await seed(
+        db,
+        settings,
+        olx,
+        "bt2",
+        "Сдаётся +998900000002",
+        {"building_type": "panel", "area_sqm": 40.0},
+    )
+    h = auth_headers(settings, agent)
+    r1 = await client.get("/api/v1/properties", params={"building_type": "brick"}, headers=h)
+    assert r1.status_code == 200, r1.text
+    assert r1.json()["total"] == 1
+    assert r1.json()["items"][0]["building_type"] == "brick"
+    r2 = await client.get("/api/v1/properties", params={"area_min": 60}, headers=h)
+    assert r2.json()["total"] == 1
+    assert r2.json()["items"][0]["area_sqm"] >= 60
+
+
+async def test_filters_by_bbox(
+    client: httpx.AsyncClient,
+    settings: Settings,
+    agent: User,
+    sources: tuple[Source, Source],
+    db: AsyncSession,
+) -> None:
+    _tg, olx = sources
+    await seed(
+        db, settings, olx, "in1", "Сдаётся +998900000003", {"latitude": 41.31, "longitude": 69.28}
+    )
+    await seed(
+        db, settings, olx, "out1", "Сдаётся +998900000004", {"latitude": 40.00, "longitude": 65.00}
+    )
+    r = await client.get(
+        "/api/v1/properties",
+        params={"min_lat": 41.0, "min_lon": 69.0, "max_lat": 42.0, "max_lon": 70.0},
+        headers=auth_headers(settings, agent),
+    )
+    assert r.status_code == 200
+    assert r.json()["total"] == 1
+
+
+async def test_not_first_floor(
+    client: httpx.AsyncClient,
+    settings: Settings,
+    agent: User,
+    sources: tuple[Source, Source],
+    db: AsyncSession,
+) -> None:
+    _tg, olx = sources
+    await seed(db, settings, olx, "fl1", "Сдаётся +998900000005", {"floor": 1, "total_floors": 5})
+    await seed(db, settings, olx, "fl3", "Сдаётся +998900000006", {"floor": 3, "total_floors": 5})
+    r = await client.get(
+        "/api/v1/properties",
+        params={"not_first_floor": "true"},
+        headers=auth_headers(settings, agent),
+    )
+    assert r.json()["total"] == 1
+    assert r.json()["items"][0]["floor"] == 3
