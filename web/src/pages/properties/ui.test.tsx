@@ -57,15 +57,15 @@ async function mount(opts: { page?: PropertyPage; pins?: Pin[]; view?: "list" | 
 describe("PropertiesPage", () => {
   beforeAll(() => i18nReady);
 
-  it("renders the filters, the results count and both renderings of the rows", async () => {
+  it("renders the filters, the results count and the row", async () => {
     await mount();
-    // district chips come from /meta, not from a hardcoded list
-    expect(screen.getByRole("button", { name: "Chilonzor" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Sergeli" })).toBeInTheDocument();
-    expect(screen.getByText("42 ta uy")).toBeInTheDocument();
-    // the table (≥ lg) and the cards (< lg) both render; CSS picks one
-    expect(screen.getAllByRole("link", { name: /Chilonzor/ })).toHaveLength(2);
-    expect(screen.getByRole("columnheader", { name: "Narx" })).toBeInTheDocument();
+    // district checkboxes come from /meta, not from a hardcoded list
+    expect(screen.getByRole("checkbox", { name: "Chilonzor" })).toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: "Sergeli" })).toBeInTheDocument();
+    // shown both in the results header and on the rail's primary CTA (mirrors the mockup)
+    expect(screen.getAllByText("42 ta uy")).toHaveLength(2);
+    expect(screen.getByRole("link", { name: /Chilonzor/ })).toBeInTheDocument();
+    expect(screen.getByText("$450")).toBeInTheDocument();
     // 42 rows over a page size of 20 → 3 pages, so the pager is shown
     expect(screen.getByText("1 / 3")).toBeInTheDocument();
   });
@@ -75,12 +75,12 @@ describe("PropertiesPage", () => {
     expect(screen.getByRole("button", { name: "Qo'lda qo'shish" })).toBeInTheDocument();
   });
 
-  it("puts a chip click into the URL instead of component state", async () => {
+  it("puts a district click into the URL instead of component state", async () => {
     const scope = await mount();
-    await userEvent.click(screen.getByRole("button", { name: "Sergeli" }));
+    await userEvent.click(screen.getByRole("checkbox", { name: "Sergeli" }));
     // the push to history is an effect, so give it a tick rather than assuming it is done
     await waitFor(() => expect(scope.getState(router.$query)).toEqual({ district: "sergeli" }));
-    expect(screen.getByRole("button", { name: "Sergeli" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("checkbox", { name: "Sergeli" })).toBeChecked();
   });
 
   it("defaults to the list view, with a toggle to switch to the map", async () => {
@@ -88,17 +88,15 @@ describe("PropertiesPage", () => {
     expect(scope.getState($view)).toBe("list");
     expect(screen.getByRole("button", { name: "Ro'yxat" })).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByRole("button", { name: "Xarita" })).toHaveAttribute("aria-pressed", "false");
-    // list view still renders both the table and the card renderings, unchanged
-    expect(screen.getByRole("columnheader", { name: "Narx" })).toBeInTheDocument();
+    // list view renders the card grid, unchanged
+    expect(screen.getByText("$450")).toBeInTheDocument();
   });
 
-  it("switches to a split cards+map layout when Map is chosen, hiding the table", async () => {
+  it("switches to a split cards+map layout when Map is chosen", async () => {
     const scope = await mount();
     await userEvent.click(screen.getByRole("button", { name: "Xarita" }));
     await waitFor(() => expect(scope.getState($view)).toBe("map"));
     expect(screen.getByRole("button", { name: "Xarita" })).toHaveAttribute("aria-pressed", "true");
-    // the desktop table is gone; the cards (shared with the narrow list rendering) remain
-    expect(screen.queryByRole("columnheader", { name: "Narx" })).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Chilonzor/ })).toBeInTheDocument();
     // PropertyMap's own chrome (not the lazily-loaded map itself) renders synchronously
     expect(screen.getByRole("switch", { name: "Bu hududda qidirish" })).toBeInTheDocument();
