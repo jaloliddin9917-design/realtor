@@ -45,7 +45,7 @@ const bareDetail = {
   id: "p2",
   latitude: null, longitude: null, location_radius_m: null, location_label: null,
   building_type: null, is_furnished: null, renovation: null, year_built: null,
-  floor: null, total_floors: null, area_sqm: null,
+  rooms: null, floor: null, total_floors: null, area_sqm: null,
   listings: [{ ...richListing, description: "", attributes: {} }],
 } as PropertyDetail;
 
