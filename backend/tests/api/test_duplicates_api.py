@@ -215,6 +215,117 @@ async def test_decide_records_decision_and_conflicts_on_second_call(
     assert all(p["id"] != str(review.id) for p in body["items"])
 
 
+async def test_decide_merge_reattaches_listings_and_retires_source(
+    client: httpx.AsyncClient, settings: Settings, agent: User, db: AsyncSession
+) -> None:
+    review, prop_a, prop_b = await seed_pending_review(db, settings)
+    h = auth_headers(settings, agent)
+    moved_listing_id = review.listing_id  # side A's triggering listing
+
+    r = await client.post(
+        f"/api/v1/duplicates/{review.id}/decide", json={"decision": "merge"}, headers=h
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["decision"] == "merge"
+
+    # Every listing of A now sits on B (the survivor); A holds none and is retired.
+    on_b = set(
+        (await db.execute(select(Listing.id).where(Listing.property_id == prop_b.id)))
+        .scalars()
+        .all()
+    )
+    on_a = (
+        (await db.execute(select(Listing.id).where(Listing.property_id == prop_a.id)))
+        .scalars()
+        .all()
+    )
+    assert moved_listing_id in on_b and len(on_b) == 2  # B's own listing plus A's, moved over
+    assert list(on_a) == []
+    await db.refresh(prop_a)
+    await db.refresh(prop_b)
+    assert prop_a.source_removed is True
+    assert prop_b.price_usd_min_minor == 45000  # rollups recomputed: cheapest of 450$ / 650$
+
+    # The decided pair (and any self-pair the merge created) is gone from the queue.
+    body = (await client.get("/api/v1/duplicates", headers=h)).json()
+    assert body["items"] == []
+
+    # A subsequent list / pins view does not return the retired property A.
+    listed = (await client.get("/api/v1/properties", headers=h)).json()
+    ids = {row["id"] for row in listed["items"]}
+    assert str(prop_a.id) not in ids and str(prop_b.id) in ids
+    pins = (await client.get("/api/v1/properties/pins", headers=h)).json()
+    assert all(pin["id"] != str(prop_a.id) for pin in pins)
+
+
+async def test_decide_separate_leaves_both_properties_intact(
+    client: httpx.AsyncClient, settings: Settings, agent: User, db: AsyncSession
+) -> None:
+    review, prop_a, prop_b = await seed_pending_review(db, settings)
+    h = auth_headers(settings, agent)
+
+    r = await client.post(
+        f"/api/v1/duplicates/{review.id}/decide", json={"decision": "separate"}, headers=h
+    )
+    assert r.status_code == 200 and r.json()["decision"] == "separate"
+
+    # No reattachment: each property keeps its own single listing.
+    for prop in (prop_a, prop_b):
+        count = (
+            (await db.execute(select(Listing.id).where(Listing.property_id == prop.id)))
+            .scalars()
+            .all()
+        )
+        assert len(count) == 1
+    await db.refresh(prop_a)
+    assert prop_a.source_removed is False
+
+
+async def _ingest_contact_pair(db: AsyncSession, settings: Settings) -> None:
+    """Two ads sharing one phone plus matching rooms/floors (a corroborating signal) but
+    different districts and dissimilar text — lands in the review band, so the pipeline
+    auto-creates one DedupeReview whose contact signal carries the matched phone."""
+    source = Source(kind="telegram", name="@dupchan", config={"peer": "@dupchan"})
+    db.add(source)
+    await db.flush()
+    await _ingest(
+        db,
+        settings,
+        source,
+        payload(
+            "x",
+            "Yunusobod dahasi tinch hovli, uzoq muddat oilaga beriladi. Aloqa 90 811 24 37",
+            structured={"rooms": 2, "floor": 3, "total_floors": 9, "district": "yunusobod"},
+        ),
+    )
+    await _ingest(
+        db,
+        settings,
+        source,
+        payload(
+            "y",
+            "Sergeli metro yonida yangi bino, shoshilinch. Qongiroq qiling 90 811 24 37",
+            structured={"rooms": 2, "floor": 3, "total_floors": 9, "district": "sergeli"},
+        ),
+    )
+
+
+async def test_breakdown_contact_detail_shows_matched_phone(
+    client: httpx.AsyncClient, settings: Settings, agent: User, db: AsyncSession
+) -> None:
+    await _ingest_contact_pair(db, settings)
+
+    body = (await client.get("/api/v1/duplicates", headers=auth_headers(settings, agent))).json()
+    (pair,) = body["items"]
+    contact = next(item for item in pair["breakdown"] if item["signal"] == "contact")
+    assert contact["points"] == 0.5
+    assert contact["detail"]  # Fix 3: the phone the contact actually matched on, not null
+    assert contact["detail"] == pair["a"]["owner"]["phone"]  # same shared contact identifier
+    # A signal that did not contribute keeps a null detail.
+    photo = next(item for item in pair["breakdown"] if item["signal"] == "photo")
+    assert photo["points"] == 0.0 and photo["detail"] is None
+
+
 async def test_decide_unknown_review_404(
     client: httpx.AsyncClient, settings: Settings, agent: User
 ) -> None:

@@ -16,13 +16,14 @@ from datetime import datetime, timedelta
 from typing import cast
 
 import structlog
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.api.problems import ApiError
 from app.core.settings import PHOTO_URL_PREFIX
 from app.modules.contacts.models import Contact
+from app.modules.contacts.scoring import rescore_property_contacts
 from app.modules.dedupe.config import DedupeConfig
 from app.modules.dedupe.models import DedupeReview
 from app.modules.dedupe.schemas import (
@@ -41,6 +42,7 @@ from app.modules.listings.models import Listing, RawListing
 from app.modules.listings.schemas import SourceKind
 from app.modules.properties.models import Property
 from app.modules.properties.schemas import ContactClassification, PriceOut, SourceRef
+from app.modules.properties.service import recompute
 
 RECENT_DECISION_DAYS = 30
 
@@ -48,12 +50,23 @@ log = structlog.get_logger()
 
 
 def _breakdown(raw: dict[str, object]) -> list[BreakdownItem]:
-    """The stored `{signal: points}` JSONB as an ordered, typed list (missing key -> 0)."""
+    """The stored `{signal: points}` JSONB as an ordered, typed list (missing key -> 0).
+
+    A `details` sub-map (written by the scorer alongside the points) names what a signal
+    matched on — currently the shared phone for `contact` — surfaced as `detail`.
+    """
+    raw_details = raw.get("details")
+    details = raw_details if isinstance(raw_details, dict) else {}
     items: list[BreakdownItem] = []
     for signal in SIGNAL_ORDER:
         value = raw.get(signal)
         points = float(value) if isinstance(value, (int, float)) else 0.0
-        items.append(BreakdownItem(signal=signal, points=points))
+        detail = details.get(signal)
+        items.append(
+            BreakdownItem(
+                signal=signal, points=points, detail=detail if isinstance(detail, str) else None
+            )
+        )
     return items
 
 
@@ -261,6 +274,82 @@ async def list_pending_pairs(
     )
 
 
+async def _merge_into_candidate(
+    session: AsyncSession, review: DedupeReview, user: User, now: datetime
+) -> None:
+    """Fold side A (the triggering listing's property) into side B (the pre-existing
+    candidate, the survivor).
+
+    Every listing on A is reattached to B; B's rollups and owner/contact scoring are
+    refreshed exactly as an attach in `pipeline.process_raw` would; A is retired. Pending
+    reviews are then tidied so none still points at the retired property or at itself.
+    Runs inside the request transaction (the router commits).
+    """
+    survivor_id = review.candidate_property_id  # B — the pre-existing property
+    source_id = (
+        await session.execute(select(Listing.property_id).where(Listing.id == review.listing_id))
+    ).scalar_one_or_none()  # A — the property the triggering listing currently sits on
+    if source_id is None or source_id == survivor_id:
+        return  # nothing to merge (already one property, or the listing is orphaned)
+
+    survivor = await session.get(Property, survivor_id)
+    source_prop = await session.get(Property, source_id)
+    if survivor is None or source_prop is None:
+        return
+
+    # Move every listing off A onto B, then refresh B just like an attach does.
+    await session.execute(
+        update(Listing)
+        .where(Listing.property_id == source_id)
+        .values(property_id=survivor_id)
+        .execution_options(synchronize_session=False)
+    )
+    await session.flush()
+    await recompute(session, survivor)
+    await rescore_property_contacts(session, survivor, now)
+
+    # A now has zero listings, so it already vanishes from every list/map/queue view via the
+    # stats inner-join; source_removed is belt-and-suspenders. NOT hard-deleted: the cascade
+    # to property_status_events would hit that table's append-only trigger.
+    source_prop.source_removed = True
+
+    # Keep the queue sane: repoint any still-pending review aimed at the retired property to
+    # the survivor ...
+    await session.execute(
+        update(DedupeReview)
+        .where(DedupeReview.candidate_property_id == source_id, DedupeReview.decision.is_(None))
+        .values(candidate_property_id=survivor_id)
+        .execution_options(synchronize_session=False)
+    )
+    # ... then auto-decide any pending review the move just turned into a self-pair (a listing
+    # now on B scored against candidate B), so it drops out of the queue rather than rendering
+    # a property against itself. The current review is decided by the caller below.
+    self_pair_ids = list(
+        (
+            await session.execute(
+                select(DedupeReview.id)
+                .join(Listing, Listing.id == DedupeReview.listing_id)
+                .where(
+                    DedupeReview.decision.is_(None),
+                    DedupeReview.candidate_property_id == survivor_id,
+                    Listing.property_id == survivor_id,
+                    DedupeReview.id != review.id,
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    if self_pair_ids:
+        await session.execute(
+            update(DedupeReview)
+            .where(DedupeReview.id.in_(self_pair_ids))
+            .values(decision="merge", decided_by=user.id, decided_at=now)
+            .execution_options(synchronize_session=False)
+        )
+    await session.flush()
+
+
 async def decide_review(
     session: AsyncSession,
     review_id: uuid.UUID,
@@ -270,7 +359,9 @@ async def decide_review(
 ) -> DuplicatePairOut:
     """Record a merge/separate decision. 404 if unknown; 409 if already decided.
 
-    Recording a "merge" removes the pair from the pending queue and is the deliverable here.
+    On "merge" the two properties are actually merged (A's listings reattached to the
+    surviving candidate B, A retired); on "separate" only the decision is recorded. Either
+    way the pair leaves the pending queue.
     """
     review = await session.get(DedupeReview, review_id)
     if review is None:
@@ -280,12 +371,12 @@ async def decide_review(
     review.decision = decision
     review.decided_by = user.id
     review.decided_at = now
-    # TODO(merge): when decision == "merge", actually merge the two properties — reattach
-    # candidate B's listings onto A, recompute A's rollups, and carry over B's status
-    # history — then retire B. Out of scope for this task; here we only RECORD the decision
-    # (which already drops the pair from the pending queue). Reattachment is a follow-up.
     await session.flush()
+    # Build the response from the two sides as they stood at decision time — the merge below
+    # reattaches A's listings onto B, after which both sides would render the survivor.
     pairs = await _build_pairs(session, [review])
     if not pairs:  # both sides exist under M0 invariants; guard the `-O` path anyway.
         raise RuntimeError(f"review {review_id} has an unbuildable pair")
+    if decision == "merge":
+        await _merge_into_candidate(session, review, user, now)
     return pairs[0]

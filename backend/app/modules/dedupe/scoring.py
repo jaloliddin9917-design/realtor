@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from app.modules.dedupe.config import DedupeConfig
 
@@ -11,12 +11,28 @@ class ScoreInput:
     rooms_floors_equal: bool
     area_ratio: float | None
     price_ratio: float | None
+    # The identifier (phone/telegram/olx_user) of a contact both sides share, when any —
+    # carried through so the persisted breakdown can name the phone the match was on.
+    shared_contact_value: str | None = None
 
 
 @dataclass
 class ScoreBreakdown:
     total: float
     parts: dict[str, float]
+    # signal -> human-readable detail (e.g. the matched phone for `contact`), when known.
+    details: dict[str, str] = field(default_factory=dict)
+
+    @property
+    def has_corroborating_signal(self) -> bool:
+        """Whether any NON-contact signal matched.
+
+        A shared contact alone (a landlord or agent reusing one phone across genuinely
+        different listings) is not evidence of a duplicate, so the caller requires at
+        least one corroborating signal — photo, description, rooms_floors, area or price —
+        before a pair may enter the review queue or auto-merge.
+        """
+        return any(points > 0 for signal, points in self.parts.items() if signal != "contact")
 
 
 def _within(ratio: float | None, tolerance: float) -> bool:
@@ -38,4 +54,7 @@ def score(inp: ScoreInput, cfg: DedupeConfig) -> ScoreBreakdown:
         "area": w["area"] if _within(inp.area_ratio, cfg.area_tolerance) else 0.0,
         "price": w["price"] if _within(inp.price_ratio, cfg.price_tolerance) else 0.0,
     }
-    return ScoreBreakdown(total=round(sum(parts.values()), 4), parts=parts)
+    details: dict[str, str] = {}
+    if parts["contact"] > 0 and inp.shared_contact_value:
+        details["contact"] = inp.shared_contact_value
+    return ScoreBreakdown(total=round(sum(parts.values()), 4), parts=parts, details=details)

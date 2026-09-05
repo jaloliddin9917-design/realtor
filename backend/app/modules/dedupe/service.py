@@ -50,7 +50,7 @@ async def gather_inputs(session: AsyncSession, listing: Listing, prop: Property)
     others = await _property_listings(session, prop)
     other_ids = [o.id for o in others]
 
-    my_contacts = {c.id for c in await contacts_for_listing(session, listing.id)}
+    my_contacts = {c.id: c for c in await contacts_for_listing(session, listing.id)}
     their_contacts = set(
         (
             await session.execute(
@@ -60,7 +60,13 @@ async def gather_inputs(session: AsyncSession, listing: Listing, prop: Property)
         .scalars()
         .all()
     )
-    shared_contact = bool(my_contacts & their_contacts)
+    shared_ids = set(my_contacts) & their_contacts
+    shared_contact = bool(shared_ids)
+    # Name a shared contact (a phone first, then any) so the breakdown can show what matched.
+    shared = sorted(
+        (my_contacts[cid] for cid in shared_ids), key=lambda c: (c.kind != "phone", c.identifier)
+    )
+    shared_contact_value = shared[0].identifier if shared else None
 
     my_hashes = (
         (
@@ -112,7 +118,13 @@ async def gather_inputs(session: AsyncSession, listing: Listing, prop: Property)
         else None
     )
     return ScoreInput(
-        shared_contact, min_photo_distance, similarity, rooms_floors_equal, area_ratio, price_ratio
+        shared_contact,
+        min_photo_distance,
+        similarity,
+        rooms_floors_equal,
+        area_ratio,
+        price_ratio,
+        shared_contact_value=shared_contact_value,
     )
 
 
@@ -126,23 +138,31 @@ async def assign(
         return AssignResult(prop, "attached", 1.0, None)
 
     best: tuple[float, Property, ScoreBreakdown] | None = None
+    # Rank by total, then break ties toward a candidate that has a corroborating signal, so
+    # a bare contact match can never mask an equally-scoring but genuinely-corroborated pair.
+    best_key: tuple[float, int] = (-1.0, -1)
     for candidate in await find_candidates(session, listing):
         breakdown = score(await gather_inputs(session, listing, candidate), cfg)
-        if best is None or breakdown.total > best[0]:
-            best = (breakdown.total, candidate, breakdown)
+        key = (breakdown.total, int(breakdown.has_corroborating_signal))
+        if key > best_key:
+            best_key, best = key, (breakdown.total, candidate, breakdown)
 
-    if best is not None and best[0] >= cfg.merge_threshold:
+    # A shared contact alone must not queue or auto-merge (98% of the historical review
+    # flood was one shared phone across different districts/rooms); require corroboration.
+    corroborated = best is not None and best[2].has_corroborating_signal
+
+    if best is not None and corroborated and best[0] >= cfg.merge_threshold:
         await attach(session, best[1], listing, now)
         return AssignResult(best[1], "attached", best[0], None)
 
     prop = await create_from_listing(session, listing, now)
-    if best is not None and best[0] >= cfg.review_threshold:
+    if best is not None and corroborated and best[0] >= cfg.review_threshold:
         session.add(
             DedupeReview(
                 listing_id=listing.id,
                 candidate_property_id=best[1].id,
                 score=best[0],
-                breakdown=best[2].parts,
+                breakdown={**best[2].parts, "details": best[2].details},
             )
         )
         await session.flush()

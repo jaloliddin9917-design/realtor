@@ -9,6 +9,7 @@ from app.ingestion.photos import save_listing_photo
 from app.modules.dedupe.blocking import find_candidates
 from app.modules.dedupe.config import load_config
 from app.modules.dedupe.models import DedupeReview
+from app.modules.dedupe.scoring import score
 from app.modules.dedupe.service import assign, gather_inputs, strip_for_similarity
 from app.modules.listings.models import Listing, Source
 from app.modules.listings.service import persist_parsed, upsert_raw
@@ -87,6 +88,61 @@ async def test_same_phone_alone_goes_to_review(db: AsyncSession) -> None:
         and result.candidate.id == prop.id
     )
     assert CFG.review_threshold <= result.score < CFG.merge_threshold
+
+
+# A shared phone alone (a landlord/agent reusing one number across genuinely different
+# listings) must NOT reach the review queue — it needs a corroborating non-contact signal.
+CONTACT_ONLY_A = (
+    "Yunusobod dahasi 3-xonali 5/9 qavat, tinch hovli, uzoq muddatga oilaga. Tel 90 111 22 33"
+)
+CONTACT_ONLY_B = (
+    "Sergeli shahri 4-xonali 2/5 qavat, metro yaqin, shoshilinch sotiladi. Tel 90 111 22 33"
+)
+# Same phone AND same rooms/floors (a corroborating signal), different district + text.
+CONTACT_PLUS_ATTR_A = (
+    "Yunusobod dahasi 2-xonali 3/9 qavat. Tinch hovli, uzoq muddat, faqat oilaga. Tel 90 222 33 44"
+)
+CONTACT_PLUS_ATTR_B = (
+    "Sergeli 2-xonali 3/9 qavat. Metro yonida, yangi qurilgan, shoshilinch. Qongiroq 90 222 33 44"
+)
+
+
+async def test_shared_contact_alone_does_not_queue(db: AsyncSession) -> None:
+    s = await _source(db)
+    a = await _listing(db, s, "1", CONTACT_ONLY_A)
+    prop = await create_from_listing(db, a, NOW)
+    b = await _listing(db, s, "2", CONTACT_ONLY_B)
+    assert [p.id for p in await find_candidates(db, b)] == [prop.id]  # blocked via the phone
+
+    bd = score(await gather_inputs(db, b, prop), CFG)
+    assert bd.parts["contact"] == 0.5 and not bd.has_corroborating_signal  # nothing else matched
+
+    result = await assign(db, b, CFG, NOW)
+    assert result.decision == "new"  # contact alone must not create a review or merge
+    assert (
+        await db.execute(select(DedupeReview).where(DedupeReview.listing_id == b.id))
+    ).scalar_one_or_none() is None
+
+
+async def test_shared_contact_plus_corroborating_signal_still_queues(db: AsyncSession) -> None:
+    s = await _source(db)
+    a = await _listing(db, s, "1", CONTACT_PLUS_ATTR_A)
+    prop = await create_from_listing(db, a, NOW)
+    b = await _listing(db, s, "2", CONTACT_PLUS_ATTR_B)
+
+    bd = score(await gather_inputs(db, b, prop), CFG)
+    assert bd.parts["contact"] == 0.5 and bd.parts["rooms_floors"] == 0.1
+    assert bd.has_corroborating_signal
+
+    result = await assign(db, b, CFG, NOW)
+    assert result.decision == "review" and result.candidate is not None
+    assert CFG.review_threshold <= result.score < CFG.merge_threshold
+    review = (
+        await db.execute(select(DedupeReview).where(DedupeReview.listing_id == b.id))
+    ).scalar_one()
+    assert review.candidate_property_id == prop.id
+    # Fix 3: the matched phone is carried into the persisted breakdown.
+    assert review.breakdown["details"]["contact"]
 
 
 async def test_review_range_creates_separate_property_and_review_row(
