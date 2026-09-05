@@ -15,6 +15,8 @@ export interface MapViewProps {
   onPinClick?: (id: string) => void;
   onBoundsChange?: (bounds: MapBounds) => void;
   hoveredId?: string | null;
+  /** Explicit mode switch: one Marker (+ optional radius circle) instead of the clustered GeoJSON source/layers. Fixed per instance — never toggled at runtime. Default false. */
+  singleMarker?: boolean;
   className?: string;
 }
 
@@ -88,7 +90,13 @@ function syncData(map: MapLibreMap, single: boolean, loaded: boolean, points: Ma
     if (!p) return;
     if (markerRef.current) markerRef.current.setLngLat([p.lon, p.lat]);
     else markerRef.current = new Marker({ color: TEAL }).setLngLat([p.lon, p.lat]).addTo(map);
-    if (!loaded || !radiusMeters) return;
+    if (!loaded) return;
+    if (!radiusMeters) {
+      // Set -> null/0 transition: erase a previously-drawn circle instead of leaving it stale.
+      if (map.getLayer(RADIUS_LAYER)) map.removeLayer(RADIUS_LAYER);
+      if (map.getSource(RADIUS_SOURCE_ID)) map.removeSource(RADIUS_SOURCE_ID);
+      return;
+    }
     const data = circleFeatureCollection(p.lon, p.lat, radiusMeters);
     const source = map.getSource<GeoJSONSource>(RADIUS_SOURCE_ID);
     if (source) source.setData(data);
@@ -102,14 +110,16 @@ function syncData(map: MapLibreMap, single: boolean, loaded: boolean, points: Ma
   map.getSource<GeoJSONSource>(SOURCE_ID)?.setData(toFeatureCollection(points));
 }
 
-/** Thin MapLibre GL wrapper: one point -> a Marker mini-map; 0 or many points -> a clustered GeoJSON map. */
-export function MapView({ points = [], center, zoom, radiusMeters = null, onPinClick, onBoundsChange, hoveredId = null, className }: MapViewProps) {
+/** Thin MapLibre GL wrapper: `singleMarker` renders one Marker (+ optional radius circle) mini-map; otherwise renders a clustered GeoJSON map, even for a single point. */
+export function MapView({ points = [], center, zoom, radiusMeters = null, onPinClick, onBoundsChange, hoveredId = null, singleMarker = false, className }: MapViewProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const markerRef = useRef<Marker | null>(null);
   const loadedRef = useRef(false);
   const hoveredRef = useRef<string | null>(null);
-  const single = points.length === 1;
+  // `singleMarker` is fixed per instance (never toggled at runtime), so this closure value
+  // stays valid for the lifetime of the mount effect below — no 1-vs-many boundary to cross.
+  const single = singleMarker;
 
   const latest = useRef({ points, radiusMeters, onPinClick, onBoundsChange });
   latest.current = { points, radiusMeters, onPinClick, onBoundsChange };
