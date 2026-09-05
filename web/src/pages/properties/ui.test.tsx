@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { RouterProvider } from "atomic-router-react";
 import { allSettled, fork } from "effector";
@@ -7,7 +7,7 @@ import { createMemoryHistory } from "history";
 import { $meta } from "@/entities/meta";
 import { $page, $pins, type Pin, type PropertyPage, type PropertyRow } from "@/entities/property";
 import { sessionRestored } from "@/entities/session";
-import { $hoveredId, $view, viewChanged } from "@/features/property/filters";
+import { $view, viewChanged } from "@/features/property/filters";
 import { i18nReady } from "@/shared/i18n";
 import { router } from "@/shared/router";
 import { PropertiesPage } from "./ui";
@@ -92,35 +92,25 @@ describe("PropertiesPage", () => {
     expect(screen.getByText("$450")).toBeInTheDocument();
   });
 
-  it("switches to a split cards+map layout when Map is chosen", async () => {
+  it("switches to a full-width map (no card column) when Map is chosen", async () => {
     const scope = await mount();
     await userEvent.click(screen.getByRole("button", { name: "Xarita" }));
     await waitFor(() => expect(scope.getState($view)).toBe("map"));
     expect(screen.getByRole("button", { name: "Xarita" })).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByRole("link", { name: /Chilonzor/ })).toBeInTheDocument();
+    // map mode shows only the map (with the filter rail alongside) — no property cards
+    expect(screen.queryByRole("link", { name: /Chilonzor/ })).not.toBeInTheDocument();
     // PropertyMap's own chrome (not the lazily-loaded map itself) renders synchronously
     expect(screen.getByRole("switch", { name: "Bu hududda qidirish" })).toBeInTheDocument();
   });
 
-  it("hovering a card in the map view sets $hoveredId, clearing it when the pointer leaves the panel", async () => {
-    const scope = await mount();
-    await userEvent.click(screen.getByRole("button", { name: "Xarita" }));
-    const card = await screen.findByRole("link", { name: /Chilonzor/ });
-    fireEvent.mouseOver(card);
-    await waitFor(() => expect(scope.getState($hoveredId)).toBe("p1"));
-    fireEvent.mouseOut(card, { relatedTarget: document.body });
-    await waitFor(() => expect(scope.getState($hoveredId)).toBeNull());
-  });
-
-  it("keeps the map visible in map view when the rows page is empty but pins exist", async () => {
-    // $rows (paginated) and $pins (unpaged) are decoupled: paginating past the last page, or
-    // panning "search this area" to a sparse spot, can leave $rows empty while $pins is not —
-    // the split layout (and the map itself) must not collapse into the plain empty state.
+  it("shows the map in map view regardless of the rows page (pins are unpaged)", async () => {
+    // $rows (paginated) and $pins (unpaged) are decoupled: map mode renders only the map, so an
+    // empty rows page never hides it.
     const pin: Pin = { id: "p1", latitude: 41.3, longitude: 69.2, price_usd_min_minor: 45000, rooms: 2, status: "active", source_removed: false };
     await mount({ view: "map", page: { items: [], total: 0, page: 1, page_size: 20 }, pins: [pin] });
     // PropertyMap's own chrome renders — the map is not hidden behind the empty-rows state
     expect(screen.getByRole("switch", { name: "Bu hududda qidirish" })).toBeInTheDocument();
-    // only the left cards column falls back to the shared empty note, not the whole page
-    expect(screen.getByText("Hech narsa topilmadi")).toBeInTheDocument();
+    // map mode has no card column, so the plain empty-rows note is not shown
+    expect(screen.queryByText("Hech narsa topilmadi")).not.toBeInTheDocument();
   });
 });
