@@ -83,7 +83,7 @@ export default defineConfig([
     // They stay separate widgets because either one is a self-contained block of markup that
     // the page merely places; folding both into pages/properties would make that one file the
     // whole list UI. "warn" keeps the report honest without failing the gate.
-    files: ["src/widgets/property-table/**", "src/widgets/property-card-list/**", "src/widgets/property-map/**"],
+    files: ["src/widgets/property-card-list/**", "src/widgets/property-map/**"],
     rules: {
       "fsd/insignificant-slice": "warn",
     },
