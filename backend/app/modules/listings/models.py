@@ -119,6 +119,18 @@ class Listing(IdMixin, TimestampMixin, Base):
     owner_marker: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     agent_marker: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     parse_confidence: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    latitude: Mapped[float | None] = mapped_column(Float)
+    longitude: Mapped[float | None] = mapped_column(Float)
+    location_radius_m: Mapped[int | None] = mapped_column(Integer)
+    location_precise: Mapped[bool | None] = mapped_column(Boolean)
+    location_label: Mapped[str | None] = mapped_column(Text)
+    building_type: Mapped[str | None] = mapped_column(String(16))
+    is_furnished: Mapped[bool | None] = mapped_column(Boolean)
+    renovation: Mapped[str | None] = mapped_column(String(16))
+    year_built: Mapped[int | None] = mapped_column(Integer)
+    attributes: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default=text("'{}'::jsonb")
+    )
 
     raw: Mapped[RawListing] = relationship()
     photos: Mapped[list["ListingPhoto"]] = relationship(
