@@ -42,7 +42,7 @@ export function PropertyHeader({ detail }: { detail: PropertyDetail }) {
       <PhotoGallery photos={photos} alt={t("property.photoAlt")} />
 
       <div className="flex flex-col gap-1.5 rounded-card border border-line bg-surface p-3.5">
-        <h1 className="text-balance text-lg font-bold tracking-tight">{title}</h1>
+        <h2 className="text-balance text-lg font-bold tracking-tight">{title}</h2>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
           {location && <span className="inline-flex items-center gap-1"><MapPin className="size-3.5" />{location}</span>}
           {postedAt && <span className="inline-flex items-center gap-1"><Calendar className="size-3.5" />{t("property.postedAt")}: {formatDate(postedAt, i18n.language)}</span>}

@@ -67,16 +67,16 @@ describe("PropertySidebar", () => {
     expect(screen.getByRole("link", { name: /Hozir qo'ng'iroq qilish/ })).toHaveAttribute("href", "tel:+998908112437");
   });
 
-  it("offers a take-and-call action wired to the resolved phone", () => {
+  it("does not offer a take-and-call action (that label belongs to the real queue take/lock flow, which this page can't wire up)", () => {
     mount(base);
-    expect(screen.getByRole("link", { name: /Olish va qo'ng'iroq qilish/ })).toHaveAttribute("href", "tel:+998908112437");
+    expect(screen.queryByRole("link", { name: /Olish va qo'ng'iroq qilish/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Olish va qo'ng'iroq qilish/ })).not.toBeInTheDocument();
   });
 
-  it("disables the phone actions when the property has no resolvable contact", () => {
+  it("disables the phone action when the property has no resolvable contact", () => {
     mount({ ...base, probable_owner: null, listings: [] });
     expect(screen.getByText("Egasi aniqlanmagan")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Telefonni ko'rsatish" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: /Olish va qo'ng'iroq qilish/ })).toBeDisabled();
   });
 
   it("shows the source, first-seen date and listing count in the meta list", () => {

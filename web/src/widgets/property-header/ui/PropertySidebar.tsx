@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "atomic-router-react";
 import { useUnit } from "effector-react";
-import { AlertTriangle, Check, Phone } from "lucide-react";
+import { AlertTriangle, Phone } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { $meta } from "@/entities/meta";
 import { OwnerBadge, StatusPill, type PropertyDetail } from "@/entities/property";
@@ -85,16 +85,6 @@ export function PropertySidebar({ detail, className }: { detail: PropertyDetail;
           ) : (
             <Button type="button" size="lg" disabled={!phone} onClick={() => setRevealed(true)}>
               <Phone className="size-4" />{t("properties.showPhone")}
-            </Button>
-          )}
-
-          {phone ? (
-            <Button asChild size="lg" className="bg-primary-dark hover:bg-primary-dark/90">
-              <a href={`tel:${phone}`} onClick={() => setRevealed(true)}><Check className="size-4" />{t("queue.takeButton")}</a>
-            </Button>
-          ) : (
-            <Button type="button" size="lg" className="bg-primary-dark hover:bg-primary-dark/90" disabled>
-              <Check className="size-4" />{t("queue.takeButton")}
             </Button>
           )}
 
