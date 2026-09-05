@@ -3,8 +3,9 @@ from datetime import UTC, datetime
 import pytest
 
 from app.ingestion.adapters.olx.state import ad_to_payload, detail_ad, extract_state
-from app.ingestion.parse import parse_text
-from app.modules.listings.models import Listing
+from app.ingestion.parse import ParsedListing, parse_text
+from app.modules.listings.models import Listing, RawListing, Source
+from app.modules.listings.service import persist_parsed
 from app.modules.properties.models import Property
 
 
@@ -110,3 +111,29 @@ def test_parse_text_threads_structured_attributes():
     assert parsed.is_furnished is False
     assert parsed.year_built == 2010
     assert parsed.attributes == {"bathroom_type": "separate"}
+
+
+async def test_persist_writes_location_and_attributes(db):
+    source = Source(kind="olx", name="olx-test", config={}, state={})
+    db.add(source)
+    await db.flush()
+    raw = RawListing(
+        source_id=source.id, external_id="e1", url="u", payload={"ad": {}},
+        content_hash="h", fetched_at=datetime.now(UTC),
+    )
+    db.add(raw)
+    await db.flush()
+    parsed = ParsedListing(
+        title="T", description="d", latitude=41.5, longitude=69.1,
+        location_radius_m=2000, location_precise=False, location_label="Tashkent",
+        building_type="brick", is_furnished=True, renovation="euro", year_built=2017,
+        attributes={"bathroom_type": "combined"},
+    )
+    listing = await persist_parsed(
+        db, raw, parsed, posted_at=None, now=datetime.now(UTC), usd_rate=None,
+    )
+    assert listing.latitude == pytest.approx(41.5)
+    assert listing.building_type == "brick"
+    assert listing.is_furnished is True
+    assert listing.year_built == 2017
+    assert listing.attributes == {"bathroom_type": "combined"}

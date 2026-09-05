@@ -105,6 +105,15 @@ async def persist_parsed(
         parsed.total_floors,
     )
     listing.area_sqm, listing.district = parsed.area_sqm, parsed.district
+    listing.latitude, listing.longitude = parsed.latitude, parsed.longitude
+    listing.location_radius_m = parsed.location_radius_m
+    listing.location_precise = parsed.location_precise
+    listing.location_label = parsed.location_label
+    listing.building_type = parsed.building_type
+    listing.is_furnished = parsed.is_furnished
+    listing.renovation = parsed.renovation
+    listing.year_built = parsed.year_built
+    listing.attributes = parsed.attributes
     listing.posted_at = posted_at
     if seen:
         listing.last_seen_at = now
