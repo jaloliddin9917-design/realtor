@@ -20,7 +20,7 @@ export function OwnerBadge({ owner }: { owner: Owner | null }) {
   return (
     <div className="flex flex-col gap-1">
       <span className="num font-mono whitespace-nowrap">{formatPhone(owner.identifier)}</span>
-      <span className={cn("inline-flex h-5 w-fit items-center rounded-full px-2 text-xs font-semibold", STYLES[owner.classification])}>{label}</span>
+      <span className={cn("inline-flex w-fit items-center rounded-md px-2 py-0.5 text-[11px] font-bold leading-none", STYLES[owner.classification])}>{label}</span>
     </div>
   );
 }

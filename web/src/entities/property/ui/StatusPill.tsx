@@ -12,8 +12,8 @@ const STYLES: Record<PropertyStatus, string> = {
 export function StatusPill({ status, className }: { status: PropertyStatus; className?: string }) {
   const { t } = useTranslation();
   return (
-    <span className={cn("inline-flex h-6 items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 text-xs font-semibold", STYLES[status], className)}>
-      <span className="size-[7px] rounded-full bg-current" />{t(statusKey(status))}
+    <span className={cn("inline-flex items-center whitespace-nowrap rounded-md px-2 py-0.5 text-[11px] font-bold leading-none", STYLES[status], className)}>
+      {t(statusKey(status))}
     </span>
   );
 }
