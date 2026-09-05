@@ -27,6 +27,13 @@ async def recompute(session: AsyncSession, prop: Property) -> None:
     )
     prop.district, prop.rooms, prop.floor = best.district, best.rooms, best.floor
     prop.total_floors, prop.area_sqm = best.total_floors, best.area_sqm
+    prop.latitude, prop.longitude = best.latitude, best.longitude
+    prop.location_radius_m = best.location_radius_m
+    prop.location_label = best.location_label
+    prop.building_type = best.building_type
+    prop.is_furnished = best.is_furnished
+    prop.renovation = best.renovation
+    prop.year_built = best.year_built
     prices = [x.price_usd_minor for x in listings if x.price_usd_minor is not None]
     prop.price_usd_min_minor = min(prices) if prices else None
     prop.first_seen_at = min(x.first_seen_at for x in listings)

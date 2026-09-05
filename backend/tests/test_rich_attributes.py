@@ -7,6 +7,7 @@ from app.ingestion.parse import ParsedListing, parse_text
 from app.modules.listings.models import Listing, RawListing, Source
 from app.modules.listings.service import persist_parsed
 from app.modules.properties.models import Property
+from app.modules.properties.service import recompute
 
 
 def test_models_have_new_columns():
@@ -143,3 +144,40 @@ async def test_persist_writes_location_and_attributes(db):
     assert listing.renovation == "euro"
     assert listing.year_built == 2017
     assert listing.attributes == {"bathroom_type": "combined"}
+
+
+async def test_recompute_rolls_location_up_to_property(db):
+    source = Source(kind="olx", name="olx-roll", config={}, state={})
+    db.add(source)
+    await db.flush()
+    raw = RawListing(
+        source_id=source.id, external_id="r1", url="u", payload={"ad": {}},
+        content_hash="h", fetched_at=datetime.now(UTC),
+    )
+    db.add(raw)
+    await db.flush()
+    prop = Property(
+        status="new", first_seen_at=datetime.now(UTC), last_seen_at=datetime.now(UTC)
+    )
+    db.add(prop)
+    await db.flush()
+    parsed = ParsedListing(
+        title="T", description="d", parse_confidence=0.9,
+        latitude=41.9, longitude=69.9, location_radius_m=3000, location_label="Loc",
+        building_type="panel", is_furnished=False, renovation="cosmetic", year_built=2005,
+    )
+    listing = await persist_parsed(
+        db, raw, parsed, posted_at=None, now=datetime.now(UTC), usd_rate=None,
+    )
+    listing.property_id = prop.id
+    await db.flush()
+    await recompute(db, prop)
+    await db.refresh(prop)  # real read-back from Postgres, not the mutated in-memory object
+    assert prop.latitude == pytest.approx(41.9)
+    assert prop.longitude == pytest.approx(69.9)
+    assert prop.location_radius_m == 3000
+    assert prop.location_label == "Loc"
+    assert prop.building_type == "panel"
+    assert prop.is_furnished is False
+    assert prop.renovation == "cosmetic"
+    assert prop.year_built == 2005
