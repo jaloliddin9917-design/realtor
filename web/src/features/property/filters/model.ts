@@ -22,6 +22,7 @@ const SORTS: SortKey[] = ["last_seen", "first_seen", "price_asc", "price_desc"];
 const STATUSES: PropertyStatus[] = ["new", "active", "inactive"];
 const SOURCES = ["olx", "telegram", "manual"] as const;
 type SourceKind = (typeof SOURCES)[number];
+const POSTED_WITHIN = ["24h", "3d", "7d"] as const;
 
 export const districtToggled = createEvent<string>();
 export const roomsToggled = createEvent<"1" | "2" | "3" | "4">();
@@ -34,6 +35,19 @@ export const searchChanged = createEvent<string>();
 export const sortChanged = createEvent<string>();
 export const pageChanged = createEvent<number>();
 export const filtersCleared = createEvent();
+
+// "Advanced" filters live behind the "More filters" dialog rather than the primary bar; they
+// get their own reset (`advancedReset`) so clearing them never touches district/q/rooms/etc.
+export const areaChanged = createEvent<{ min: string; max: string }>();
+export const floorChanged = createEvent<{ min: string; max: string }>();
+export const notFirstFloorToggled = createEvent();
+export const notTopFloorToggled = createEvent();
+export const buildingTypeToggled = createEvent<string>();
+export const furnishedChanged = createEvent<string>();
+export const renovationToggled = createEvent<string>();
+export const postedWithinChanged = createEvent<string>();
+export const hasPhotosToggled = createEvent();
+export const advancedReset = createEvent();
 
 const toggle = (csv: string, key: string): string => {
   const set = new Set(csv ? csv.split(",") : []);
@@ -59,9 +73,30 @@ export const $q = createStore("").on(searchChanged, (_, q) => q).reset([filtersC
 export const $sort = createStore("").on(sortChanged, (_, s) => s).reset([filtersCleared, routes.properties.closed]);
 export const $page = createStore("").on(pageChanged, (_, p) => (p > 1 ? String(p) : "")).reset([filtersCleared, routes.properties.closed]);
 
+// The advanced filters (behind "More filters") reset on `advancedReset` too, on top of the
+// same clear-list/leave-list resets every filter gets — `advancedReset` never touches the
+// primary stores above, so clearing them from the dialog cannot surprise-clear the search bar.
+export const $areaMin = createStore("").on(areaChanged, (_, p) => p.min).reset([filtersCleared, routes.properties.closed, advancedReset]);
+export const $areaMax = createStore("").on(areaChanged, (_, p) => p.max).reset([filtersCleared, routes.properties.closed, advancedReset]);
+export const $floorMin = createStore("").on(floorChanged, (_, p) => p.min).reset([filtersCleared, routes.properties.closed, advancedReset]);
+export const $floorMax = createStore("").on(floorChanged, (_, p) => p.max).reset([filtersCleared, routes.properties.closed, advancedReset]);
+export const $notFirstFloor = createStore("").on(notFirstFloorToggled, (v) => (v ? "" : "1")).reset([filtersCleared, routes.properties.closed, advancedReset]);
+export const $notTopFloor = createStore("").on(notTopFloorToggled, (v) => (v ? "" : "1")).reset([filtersCleared, routes.properties.closed, advancedReset]);
+export const $buildingType = createStore("").on(buildingTypeToggled, toggle).reset([filtersCleared, routes.properties.closed, advancedReset]);
+export const $furnished = createStore("").on(furnishedChanged, (_, v) => v).reset([filtersCleared, routes.properties.closed, advancedReset]);
+export const $renovation = createStore("").on(renovationToggled, toggle).reset([filtersCleared, routes.properties.closed, advancedReset]);
+export const $postedWithin = createStore("").on(postedWithinChanged, (_, v) => v).reset([filtersCleared, routes.properties.closed, advancedReset]);
+export const $hasPhotos = createStore("").on(hasPhotosToggled, (v) => (v ? "" : "1")).reset([filtersCleared, routes.properties.closed, advancedReset]);
+
+/** Shown as a badge on the "More filters" button — how many advanced filters are set. */
+export const $advancedCount = combine(
+  { areaMin: $areaMin, areaMax: $areaMax, floorMin: $floorMin, floorMax: $floorMax, notFirstFloor: $notFirstFloor, notTopFloor: $notTopFloor, buildingType: $buildingType, furnished: $furnished, renovation: $renovation, postedWithin: $postedWithin, hasPhotos: $hasPhotos },
+  (f) => Object.values(f).filter((v) => v !== "").length,
+);
+
 // any filter change returns to page 1 — page 7 of the old result set means nothing in the new one
 sample({
-  clock: [districtToggled, roomsToggled, priceChanged, statusChanged, sourceChanged, ownerOnlyToggled, removedToggled, searchChanged, sortChanged],
+  clock: [districtToggled, roomsToggled, priceChanged, statusChanged, sourceChanged, ownerOnlyToggled, removedToggled, searchChanged, sortChanged, areaChanged, floorChanged, notFirstFloorToggled, notTopFloorToggled, buildingTypeToggled, furnishedChanged, renovationToggled, postedWithinChanged, hasPhotosToggled],
   fn: () => 1,
   target: pageChanged,
 });
@@ -97,8 +132,20 @@ const pageNum = (s: string): number => {
   return Number.isInteger(n) && n >= 1 ? n : 1;
 };
 
+/**
+ * A floor bound: unlike a price or an area, a floor may legitimately be negative (a basement
+ * level), so — unlike `uint` — only non-integers and blanks are dropped, not negative numbers.
+ */
+const int = (s: string): number | undefined => {
+  const n = Math.trunc(Number(s));
+  return s !== "" && Number.isFinite(n) ? n : undefined;
+};
+
 export const $query = combine(
-  { district: $district, rooms: $rooms, priceMin: $priceMin, priceMax: $priceMax, status: $status, source: $source, ownerOnly: $ownerOnly, removed: $removed, q: $q, sort: $sort, page: $page },
+  {
+    district: $district, rooms: $rooms, priceMin: $priceMin, priceMax: $priceMax, status: $status, source: $source, ownerOnly: $ownerOnly, removed: $removed, q: $q, sort: $sort, page: $page,
+    areaMin: $areaMin, areaMax: $areaMax, floorMin: $floorMin, floorMax: $floorMax, notFirstFloor: $notFirstFloor, notTopFloor: $notTopFloor, buildingType: $buildingType, furnished: $furnished, renovation: $renovation, postedWithin: $postedWithin, hasPhotos: $hasPhotos,
+  },
   (f): PropertyQuery => ({
     district: f.district ? f.district.split(",") : [],
     rooms: (f.rooms ? f.rooms.split(",") : []).flatMap(roomTokens),
@@ -111,6 +158,17 @@ export const $query = combine(
     // trimmed and capped at 200 chars — belt-and-braces with the input's own `maxLength`,
     // since a URL or a shared link can carry whatever the address bar allows
     q: f.q.trim().slice(0, 200) || undefined,
+    area_min: uint(f.areaMin),
+    area_max: uint(f.areaMax),
+    floor_min: int(f.floorMin),
+    floor_max: int(f.floorMax),
+    not_first_floor: f.notFirstFloor === "1" ? true : undefined,
+    not_top_floor: f.notTopFloor === "1" ? true : undefined,
+    building_type: f.buildingType ? f.buildingType.split(",") : undefined,
+    furnished: f.furnished === "1" ? true : f.furnished === "0" ? false : undefined,
+    renovation: f.renovation ? f.renovation.split(",") : undefined,
+    posted_within: (POSTED_WITHIN as readonly string[]).includes(f.postedWithin) ? (f.postedWithin as PropertyQuery["posted_within"]) : undefined,
+    has_photos: f.hasPhotos === "1" ? true : undefined,
     sort: (SORTS as string[]).includes(f.sort) ? (f.sort as SortKey) : "last_seen",
     page: pageNum(f.page),
     page_size: PAGE_SIZE,
@@ -128,7 +186,10 @@ export const $query = combine(
 const filtersSettled = debounce({ source: $query, timeout: 300 });
 
 querySync({
-  source: { district: $district, rooms: $rooms, price_min: $priceMin, price_max: $priceMax, status: $status, source: $source, owner_only: $ownerOnly, removed: $removed, q: $q, sort: $sort, page: $page },
+  source: {
+    district: $district, rooms: $rooms, price_min: $priceMin, price_max: $priceMax, status: $status, source: $source, owner_only: $ownerOnly, removed: $removed, q: $q, sort: $sort, page: $page,
+    area_min: $areaMin, area_max: $areaMax, floor_min: $floorMin, floor_max: $floorMax, not_first_floor: $notFirstFloor, not_top_floor: $notTopFloor, building_type: $buildingType, furnished: $furnished, renovation: $renovation, posted_within: $postedWithin, has_photos: $hasPhotos,
+  },
   clock: filtersSettled,
   controls,
   route: routes.properties,

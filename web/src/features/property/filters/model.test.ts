@@ -5,7 +5,7 @@ import { $tokens, sessionRestored } from "@/entities/session";
 import { fetchPropertiesFx } from "@/entities/property";
 import { i18n, i18nReady } from "@/shared/i18n";
 import { controls, router, routes } from "@/shared/router";
-import { $district, $pageCount, $query, $rooms, districtToggled, filtersCleared, pageChanged, roomsToggled, searchChanged } from "./model";
+import { $advancedCount, $district, $pageCount, $q, $query, $rooms, advancedReset, areaChanged, buildingTypeToggled, districtToggled, filtersCleared, floorChanged, furnishedChanged, hasPhotosToggled, notFirstFloorToggled, notTopFloorToggled, pageChanged, postedWithinChanged, renovationToggled, roomsToggled, searchChanged } from "./model";
 
 vi.mock("sonner", () => ({ toast: { error: vi.fn() } }));
 
@@ -147,5 +147,45 @@ describe("filters ↔ URL", () => {
     await allSettled(router.setHistory, { scope, params: history });
     await allSettled(sessionRestored, { scope, params: null });
     expect(calls).toHaveLength(0);
+  });
+
+  it("maps advanced filters into $query and counts them in $advancedCount", async () => {
+    const scope = fork({ values: [[$tokens, { access: "a", refresh: "r" }]] });
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ items: [], total: 0, page: 1, page_size: 20 }), { status: 200, headers: { "content-type": "application/json" } })));
+    await openList(scope);
+    await allSettled(areaChanged, { scope, params: { min: "40", max: "" } });
+    await allSettled(buildingTypeToggled, { scope, params: "brick" });
+    await allSettled(postedWithinChanged, { scope, params: "7d" });
+    const query = scope.getState($query);
+    expect(query.area_min).toBe(40);
+    expect(query.area_max).toBeUndefined();
+    expect(query.building_type).toEqual(["brick"]);
+    expect(query.posted_within).toBe("7d");
+    expect(scope.getState($advancedCount)).toBe(3);
+  });
+
+  it("resets only the advanced filters on advancedReset, leaving district and search intact", async () => {
+    const scope = fork({ values: [[$tokens, { access: "a", refresh: "r" }]] });
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ items: [], total: 0, page: 1, page_size: 20 }), { status: 200, headers: { "content-type": "application/json" } })));
+    await openList(scope);
+    await allSettled(districtToggled, { scope, params: "chilonzor" });
+    await allSettled(searchChanged, { scope, params: "chil" });
+    await allSettled(areaChanged, { scope, params: { min: "40", max: "80" } });
+    await allSettled(floorChanged, { scope, params: { min: "2", max: "9" } });
+    await allSettled(notFirstFloorToggled, { scope });
+    await allSettled(notTopFloorToggled, { scope });
+    await allSettled(buildingTypeToggled, { scope, params: "brick" });
+    await allSettled(furnishedChanged, { scope, params: "1" });
+    await allSettled(renovationToggled, { scope, params: "euro" });
+    await allSettled(postedWithinChanged, { scope, params: "7d" });
+    await allSettled(hasPhotosToggled, { scope });
+    // all 11 advanced stores populated
+    expect(scope.getState($advancedCount)).toBe(11);
+    await allSettled(advancedReset, { scope });
+    expect(scope.getState($advancedCount)).toBe(0);
+    expect(scope.getState($query).building_type).toBeUndefined();
+    expect(scope.getState($query).posted_within).toBeUndefined();
+    expect(scope.getState($district)).toBe("chilonzor");
+    expect(scope.getState($q)).toBe("chil");
   });
 });

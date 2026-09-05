@@ -9,6 +9,7 @@ import { Input } from "@/shared/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/shared/ui/select";
 import { Switch } from "@/shared/ui/switch";
 import { $district, $ownerOnly, $page, $pageCount, $priceMax, $priceMin, $q, $removed, $rooms, $sort, $source, $status, districtToggled, filtersCleared, ownerOnlyToggled, pageChanged, priceChanged, removedToggled, roomsToggled, searchChanged, sortChanged, sourceChanged, statusChanged } from "./model";
+import { MoreFilters } from "./ui/MoreFilters";
 
 const chip = (on: boolean) =>
   cn("inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-[13px] font-medium", on ? "border-primary bg-primary text-white" : "border-input bg-surface");
@@ -47,6 +48,7 @@ export function FilterBar() {
       </Select>
       <label className="flex items-center gap-2 text-[13px]"><Switch checked={ownerOnly === "1"} onCheckedChange={() => onOwner()} />{t("properties.filters.ownerOnly")}</label>
       <label className="flex items-center gap-2 text-[13px]"><Switch checked={removed === "1"} onCheckedChange={() => onRemoved()} />{t("properties.filters.removed")}</label>
+      <MoreFilters />
       <Button variant="ghost" size="sm" className="ml-auto" onClick={() => onClear()}>{t("properties.filters.clear")}</Button>
     </div>
   );
