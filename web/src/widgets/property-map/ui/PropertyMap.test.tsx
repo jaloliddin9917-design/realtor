@@ -10,53 +10,98 @@ import { $bounds, $searchArea, hovered } from "@/features/property/filters";
 import { i18nReady } from "@/shared/i18n";
 import { router, routes } from "@/shared/router";
 
-// maplibre-gl needs WebGL, which jsdom doesn't have — mock it so no real map is constructed.
-// Trimmed copy of the mock in shared/ui/map/MapView.test.tsx (cluster mode only — PropertyMap
-// never passes `singleMarker`), kept local since that file exports none of it.
+// OpenLayers renders to a real <canvas>, which jsdom can't paint — mock it so no real map is
+// constructed. Trimmed copy of the mock in shared/ui/map/MapView.test.tsx (cluster mode only —
+// PropertyMap never passes `singleMarker`), kept local since that file exports none of it. Every
+// ol/* submodule MapView.tsx imports still needs a stub here too, even ones this file's own
+// scenarios never exercise (e.g. `ol/geom/Circle`), since those imports run unconditionally.
 type Handler = (arg?: unknown) => void;
-interface MockSource { setData: Mock }
+interface MockFeature {
+  setId: Mock;
+  getId: Mock;
+  getGeometry: Mock;
+  setGeometry: Mock;
+  get: Mock;
+  set: Mock;
+}
 
 let handlers: Record<string, Handler> = {};
-let sources = new Map<string, MockSource>();
-let layers = new Set<string>();
+let features: MockFeature[] = [];
 
-const addControl = vi.fn();
-const off = vi.fn();
-const remove = vi.fn();
-const setFeatureState = vi.fn();
-const easeTo = vi.fn();
-const getBounds = vi.fn(() => ({ getSouth: () => 1, getWest: () => 2, getNorth: () => 3, getEast: () => 4 }));
+const getSize = vi.fn(() => [800, 600]);
+const calculateExtent = vi.fn(() => [2, 1, 4, 3]);
+const fit = vi.fn();
+const changed = vi.fn();
+const forEachFeatureAtPixel = vi.fn();
+const mockView = { calculateExtent, fit, setCenter: vi.fn(), setZoom: vi.fn() };
 
-const on = vi.fn((type: string, layerOrCb: unknown, cb?: Handler) => {
-  if (typeof layerOrCb === "function") handlers[type] = layerOrCb as Handler;
-  else if (typeof layerOrCb === "string" && typeof cb === "function") handlers[`${type}:${layerOrCb}`] = cb;
+const clear = vi.fn(() => { features = []; });
+const addFeature = vi.fn((f: MockFeature) => { features.push(f); });
+const addFeatures = vi.fn((fs: MockFeature[]) => { features.push(...fs); });
+const removeFeature = vi.fn((f: MockFeature) => { features = features.filter((x) => x !== f); });
+const getFeatureById = vi.fn((id: string) => features.find((f) => f.getId() === id) ?? null);
+const getFeatures = vi.fn(() => features);
+
+const on = vi.fn((type: string, cb: Handler) => {
+  handlers[type] = cb;
 });
-const addSource = vi.fn((id: string) => { sources.set(id, { setData: vi.fn() }); });
-const removeSource = vi.fn((id: string) => { sources.delete(id); });
-const getSource = vi.fn((id: string) => sources.get(id));
-const addLayer = vi.fn((layer: { id: string }) => { layers.add(layer.id); });
-const removeLayer = vi.fn((id: string) => { layers.delete(id); });
-const getLayer = vi.fn((id: string) => (layers.has(id) ? { id } : undefined));
 
-vi.mock("maplibre-gl", () => ({
-  Map: vi.fn(function MockMap() {
+vi.mock("ol/Map", () => ({
+  default: vi.fn(function MockMap() {
     handlers = {};
-    sources = new Map();
-    layers = new Set();
-    return {
-      addControl, on, off, remove,
-      getSource, addSource, removeSource,
-      getLayer, addLayer, removeLayer,
-      setFeatureState, easeTo, getBounds, resize: vi.fn(),
-      setCenter: vi.fn(), setZoom: vi.fn(), queryRenderedFeatures: vi.fn(),
-    };
-  }),
-  NavigationControl: vi.fn(),
-  Marker: vi.fn(function Marker() {
-    const marker = { setLngLat: vi.fn(() => marker), addTo: vi.fn(() => marker), remove: vi.fn() };
-    return marker;
+    return { on, forEachFeatureAtPixel, getSize, getView: () => mockView, updateSize: vi.fn(), setTarget: vi.fn() };
   }),
 }));
+vi.mock("ol/View", () => ({ default: vi.fn(function MockView(opts: unknown) { return opts; }) }));
+vi.mock("ol/layer/Tile", () => ({ default: vi.fn(function MockTileLayer() { return {}; }) }));
+vi.mock("ol/source/OSM", () => ({ default: vi.fn(function MockOSM() { return { on: vi.fn() }; }) }));
+vi.mock("ol/layer/Vector", () => ({ default: vi.fn(function MockVectorLayer() { return { changed }; }) }));
+vi.mock("ol/source/Vector", () => ({
+  default: vi.fn(function MockVectorSource() {
+    features = [];
+    return { clear, addFeature, addFeatures, removeFeature, getFeatureById, getFeatures };
+  }),
+}));
+vi.mock("ol/source/Cluster", () => ({ default: vi.fn(function MockCluster(opts: unknown) { return opts; }) }));
+vi.mock("ol/Feature", () => ({
+  default: vi.fn(function MockFeatureCtor(opts?: { geometry?: unknown }) {
+    let id: string | number | undefined;
+    let geometry = opts?.geometry;
+    const props: Record<string, unknown> = {};
+    const feature: MockFeature = {
+      setId: vi.fn((v: string | number | undefined) => { id = v; }),
+      getId: vi.fn(() => id),
+      getGeometry: vi.fn(() => geometry),
+      setGeometry: vi.fn((g: unknown) => { geometry = g; }),
+      get: vi.fn((key: string) => props[key]),
+      set: vi.fn((key: string, value: unknown) => { props[key] = value; }),
+    };
+    return feature;
+  }),
+}));
+vi.mock("ol/geom/Point", () => ({
+  default: vi.fn(function MockPoint(coordinates: [number, number]) {
+    let c = coordinates;
+    return { getCoordinates: () => c, setCoordinates: (next: [number, number]) => { c = next; } };
+  }),
+}));
+vi.mock("ol/geom/Circle", () => ({
+  default: vi.fn(function MockCircleGeom(center: [number, number], radius: number) {
+    return { getCenter: () => center, getRadius: () => radius, setCenterAndRadius: vi.fn() };
+  }),
+}));
+vi.mock("ol/proj", () => ({
+  fromLonLat: vi.fn((c: [number, number]) => c),
+  toLonLat: vi.fn((c: [number, number]) => c),
+}));
+vi.mock("ol/style", () => ({
+  Style: vi.fn(() => ({})),
+  Fill: vi.fn(() => ({})),
+  Stroke: vi.fn(() => ({})),
+  Circle: vi.fn(() => ({})),
+  Text: vi.fn(() => ({})),
+}));
+vi.mock("ol/control/defaults", () => ({ defaults: vi.fn(() => []) }));
 
 function getHandler(key: string): Handler {
   const handler = handlers[key];
@@ -64,10 +109,10 @@ function getHandler(key: string): Handler {
   return handler;
 }
 
-/** Waits for the lazily-imported MapView to mount its (mocked) maplibre map. */
+/** Waits for the lazily-imported MapView to mount its (mocked) OpenLayers map. */
 async function waitForMap() {
-  const maplibre = await import("maplibre-gl");
-  await waitFor(() => expect(maplibre.Map).toHaveBeenCalled());
+  const { default: OlMap } = await import("ol/Map");
+  await waitFor(() => expect(OlMap).toHaveBeenCalled());
 }
 
 const PIN_A: Pin = { id: "p1", latitude: 41.3, longitude: 69.2, price_usd_min_minor: 45000, rooms: 2, status: "active", source_removed: false };
@@ -89,25 +134,22 @@ beforeEach(() => {
 test("renders the pins as map points once the lazily-loaded map mounts", async () => {
   await mount();
   await waitForMap();
-  getHandler("load")();
 
-  const source = sources.get("rp-points");
-  expect(source?.setData).toHaveBeenCalledWith(
-    expect.objectContaining({
-      features: [
-        expect.objectContaining({ properties: expect.objectContaining({ pointId: "p1", label: "$450" }) }),
-        expect.objectContaining({ properties: expect.objectContaining({ pointId: "p2", label: "$800" }) }),
-      ],
-    }),
-  );
+  expect(getFeatures().map((f) => f.getId())).toEqual(["p1", "p2"]);
+  expect(getFeatures().map((f) => f.get("label"))).toEqual(["$450", "$800"]);
 });
 
 test("clicking a pin navigates straight to that property", async () => {
   const scope = await mount();
   await waitForMap();
-  getHandler("load")();
 
-  getHandler("click:rp-point")({ features: [{ properties: { pointId: "p1" } }] });
+  // OL's `Cluster` source wraps every point in a cluster feature, even a lone one — a "cluster"
+  // of exactly one underlying feature is how an unclustered pin actually renders/hit-tests.
+  const innerFeature = { getId: () => "p1" };
+  forEachFeatureAtPixel.mockImplementation((_pixel: unknown, cb: (f: unknown) => unknown) =>
+    cb({ get: (key: string) => (key === "features" ? [innerFeature] : undefined) }),
+  );
+  getHandler("click")({ pixel: [10, 10] });
 
   await waitFor(() => expect(scope.getState(routes.property.$isOpened)).toBe(true));
   expect(scope.getState(routes.property.$params)).toEqual({ id: "p1" });
@@ -125,7 +167,6 @@ test("the search-this-area switch toggles $searchArea", async () => {
 test("panning the map feeds the new viewport into $bounds", async () => {
   const scope = await mount();
   await waitForMap();
-  getHandler("load")();
 
   getHandler("moveend")();
 
@@ -135,13 +176,17 @@ test("panning the map feeds the new viewport into $bounds", async () => {
 test("forwards $hoveredId into the map so the matching pin glows", async () => {
   const scope = await mount();
   await waitForMap();
-  getHandler("load")();
+  // the mount-time hover-sync effect already calls `changed()` once (for the initial, unset
+  // hoveredId) — clear that so the assertion below actually proves the *update* triggered it.
+  changed.mockClear();
 
   // the hover store update re-renders PropertyMap outside of any user-event/RTL helper, so it
   // must be wrapped explicitly to keep React's act() warning quiet
   await act(async () => { await allSettled(hovered, { scope, params: "p1" }); });
 
-  await waitFor(() => expect(setFeatureState).toHaveBeenCalledWith({ source: "rp-points", id: "p1" }, { hovered: true }));
+  // OpenLayers has no MapLibre-style feature-state — re-styling on hover means forcing the
+  // vector layer to re-run its style function, which is what makes the matching pin glow.
+  await waitFor(() => expect(changed).toHaveBeenCalled());
 });
 
 test("shows the no-coordinates state once pins have loaded empty", async () => {

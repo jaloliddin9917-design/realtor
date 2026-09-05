@@ -12,28 +12,54 @@ import { i18nReady } from "@/shared/i18n";
 import { router } from "@/shared/router";
 import { PropertiesPage } from "./ui";
 
-// The map view mounts `PropertyMap`, which lazily loads `MapView` — maplibre-gl needs WebGL,
-// which jsdom doesn't have, so it is mocked here too (trimmed copy of the mock in
-// shared/ui/map/MapView.test.tsx and widgets/property-map/ui/PropertyMap.test.tsx). None of
-// this file's assertions look at the map's internals, so the mock only needs to make mounting
-// safe, not to track handlers/sources.
-vi.mock("maplibre-gl", () => ({
-  Map: vi.fn(function MockMap() {
-    return {
-      addControl: vi.fn(), on: vi.fn(), off: vi.fn(), remove: vi.fn(),
-      getSource: vi.fn(), addSource: vi.fn(), removeSource: vi.fn(),
-      getLayer: vi.fn(), addLayer: vi.fn(), removeLayer: vi.fn(),
-      setFeatureState: vi.fn(), easeTo: vi.fn(),
-      getBounds: vi.fn(() => ({ getSouth: () => 0, getWest: () => 0, getNorth: () => 0, getEast: () => 0 })),
-      setCenter: vi.fn(), setZoom: vi.fn(), queryRenderedFeatures: vi.fn(),
-    };
-  }),
-  NavigationControl: vi.fn(),
-  Marker: vi.fn(function Marker() {
-    const marker = { setLngLat: vi.fn(() => marker), addTo: vi.fn(() => marker), remove: vi.fn() };
-    return marker;
+// The map view mounts `PropertyMap`, which lazily loads `MapView` — OpenLayers renders to a real
+// <canvas>, which jsdom can't paint, so every ol/* submodule MapView.tsx imports is mocked here
+// too (trimmed copy of the mock in shared/ui/map/MapView.test.tsx and
+// widgets/property-map/ui/PropertyMap.test.tsx). None of this file's assertions look at the
+// map's internals, so the mock only needs to make mounting safe, not to track handlers/sources.
+const mockView = { calculateExtent: vi.fn(() => [0, 0, 0, 0]), fit: vi.fn(), setCenter: vi.fn(), setZoom: vi.fn() };
+vi.mock("ol/Map", () => ({
+  default: vi.fn(function MockMap() {
+    return { on: vi.fn(), forEachFeatureAtPixel: vi.fn(), getSize: () => [800, 600], getView: () => mockView, updateSize: vi.fn(), setTarget: vi.fn() };
   }),
 }));
+vi.mock("ol/View", () => ({ default: vi.fn(function MockView(opts: unknown) { return opts; }) }));
+vi.mock("ol/layer/Tile", () => ({ default: vi.fn(function MockTileLayer() { return {}; }) }));
+vi.mock("ol/source/OSM", () => ({ default: vi.fn(function MockOSM() { return { on: vi.fn() }; }) }));
+vi.mock("ol/layer/Vector", () => ({ default: vi.fn(function MockVectorLayer() { return { changed: vi.fn() }; }) }));
+vi.mock("ol/source/Vector", () => ({
+  default: vi.fn(function MockVectorSource() {
+    return { clear: vi.fn(), addFeature: vi.fn(), addFeatures: vi.fn(), removeFeature: vi.fn(), getFeatureById: vi.fn(), getFeatures: vi.fn(() => []) };
+  }),
+}));
+vi.mock("ol/source/Cluster", () => ({ default: vi.fn(function MockCluster(opts: unknown) { return opts; }) }));
+vi.mock("ol/Feature", () => ({
+  default: vi.fn(function MockFeatureCtor() {
+    return { setId: vi.fn(), getId: vi.fn(), getGeometry: vi.fn(), setGeometry: vi.fn(), get: vi.fn(), set: vi.fn() };
+  }),
+}));
+vi.mock("ol/geom/Point", () => ({
+  default: vi.fn(function MockPoint(coordinates: [number, number]) {
+    return { getCoordinates: () => coordinates, setCoordinates: vi.fn() };
+  }),
+}));
+vi.mock("ol/geom/Circle", () => ({
+  default: vi.fn(function MockCircleGeom(center: [number, number], radius: number) {
+    return { getCenter: () => center, getRadius: () => radius, setCenterAndRadius: vi.fn() };
+  }),
+}));
+vi.mock("ol/proj", () => ({
+  fromLonLat: vi.fn((c: [number, number]) => c),
+  toLonLat: vi.fn((c: [number, number]) => c),
+}));
+vi.mock("ol/style", () => ({
+  Style: vi.fn(() => ({})),
+  Fill: vi.fn(() => ({})),
+  Stroke: vi.fn(() => ({})),
+  Circle: vi.fn(() => ({})),
+  Text: vi.fn(() => ({})),
+}));
+vi.mock("ol/control/defaults", () => ({ defaults: vi.fn(() => []) }));
 
 const row: PropertyRow = { id: "p1", status: "active", district: "chilonzor", rooms: 2, floor: 3, total_floors: 9, area_sqm: 54, price_usd_min_minor: 45000, source_removed: false, needs_recheck: false, first_seen_at: "2026-08-12T09:00:00Z", last_seen_at: "2026-08-29T12:40:00Z", listing_count: 2, source_kinds: ["olx", "telegram"], probable_owner: null, photo_url: null, last_status_event: null, latitude: null, longitude: null, location_radius_m: null, location_label: null, building_type: null, is_furnished: null, renovation: null, year_built: null };
 

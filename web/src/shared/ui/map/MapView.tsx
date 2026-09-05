@@ -1,8 +1,21 @@
-import "maplibre-gl/dist/maplibre-gl.css";
+import "ol/ol.css";
 import { useEffect, useRef } from "react";
-import { Map as MapLibreMap, Marker, NavigationControl } from "maplibre-gl";
-import type { GeoJSONSource } from "maplibre-gl";
-import { MAP_STYLE_URL, TASHKENT_CENTER } from "./style";
+import OlMap from "ol/Map";
+import View from "ol/View";
+import TileLayer from "ol/layer/Tile";
+import OSM from "ol/source/OSM";
+import VectorLayer from "ol/layer/Vector";
+import VectorSource from "ol/source/Vector";
+import Cluster from "ol/source/Cluster";
+import Feature from "ol/Feature";
+import type { FeatureLike } from "ol/Feature";
+import Point from "ol/geom/Point";
+import CircleGeom from "ol/geom/Circle";
+import { fromLonLat, toLonLat } from "ol/proj";
+import { boundingExtent } from "ol/extent";
+import { Circle as CircleStyle, Fill, Stroke, Style, Text } from "ol/style";
+import { defaults as defaultControls } from "ol/control/defaults";
+import { TASHKENT_CENTER } from "./style";
 
 export interface MapPoint { id: string; lat: number; lon: number; label?: string }
 export interface MapBounds { minLat: number; minLon: number; maxLat: number; maxLon: number }
@@ -15,108 +28,117 @@ export interface MapViewProps {
   onPinClick?: (id: string) => void;
   onBoundsChange?: (bounds: MapBounds) => void;
   hoveredId?: string | null;
-  /** Explicit mode switch: one Marker (+ optional radius circle) instead of the clustered GeoJSON source/layers. Fixed per instance — never toggled at runtime. Default false. */
+  /** Explicit mode switch: one marker (+ optional radius circle) instead of the clustered source/layer. Fixed per instance — never toggled at runtime. Default false. */
   singleMarker?: boolean;
   className?: string;
 }
 
-// Minimal local GeoJSON shapes (not the ambient `GeoJSON` global maplibre-gl's own types assume).
-interface PointFeatureCollection {
-  type: "FeatureCollection";
-  features: { type: "Feature"; id: string; properties: { pointId: string; label: string }; geometry: { type: "Point"; coordinates: [number, number] } }[];
-}
-interface RadiusFeatureCollection {
-  type: "FeatureCollection";
-  features: { type: "Feature"; properties: Record<string, never>; geometry: { type: "Polygon"; coordinates: [number, number][][] } }[];
-}
-
-const SOURCE_ID = "rp-points";
-const CLUSTER_LAYER = "rp-clusters";
-const CLUSTER_COUNT_LAYER = "rp-cluster-count";
-const POINT_LAYER = "rp-point";
-const RADIUS_SOURCE_ID = "rp-radius";
-const RADIUS_LAYER = "rp-radius-fill";
 const TEAL = "#0f6e63";
+const TEAL_DARK = "#0b5349";
+const TEAL_CLUSTER_FILL = "rgba(15, 110, 99, 0.88)";
+const TEAL_RADIUS_FILL = "rgba(15, 110, 99, 0.12)";
+/** Feature id for the single-marker mode's optional radius-circle feature — distinct from any real point id, which lets the marker and the circle share one VectorSource. */
+const RADIUS_FEATURE_ID = "__radius__";
 
-function toFeatureCollection(points: MapPoint[]): PointFeatureCollection {
-  return {
-    type: "FeatureCollection",
-    features: points.map((p) => ({
-      type: "Feature",
-      id: p.id,
-      properties: { pointId: p.id, label: p.label ?? "" },
-      geometry: { type: "Point", coordinates: [p.lon, p.lat] },
-    })),
+function clusterRadius(size: number): number {
+  return size >= 50 ? 28 : size >= 10 ? 22 : 16;
+}
+
+/**
+ * Cluster-mode style function: with `distance`-based clustering every point is wrapped in a
+ * cluster feature, even a lone one, so "cluster of exactly one" *is* how an unclustered pin is
+ * represented — it draws a small dot instead of a numbered circle. `hoveredRef` is read live
+ * (not captured once) so the closure stays correct across hover changes without recreating the
+ * layer; pair with a `.changed()` call on the layer to force a re-style when it updates.
+ */
+function clusterStyleFn(hoveredRef: { current: string | null }) {
+  return (feature: FeatureLike) => {
+    const inner = (feature.get("features") as Feature[] | undefined) ?? [];
+    if (inner.length > 1) {
+      return new Style({
+        image: new CircleStyle({
+          radius: clusterRadius(inner.length),
+          fill: new Fill({ color: TEAL_CLUSTER_FILL }),
+          stroke: new Stroke({ color: "#ffffff", width: 1 }),
+        }),
+        text: new Text({ text: String(inner.length), fill: new Fill({ color: "#ffffff" }), font: "600 12px sans-serif" }),
+      });
+    }
+    const hovered = inner[0]?.getId() === hoveredRef.current;
+    return new Style({
+      image: new CircleStyle({
+        radius: hovered ? 9 : 6,
+        fill: new Fill({ color: hovered ? TEAL_DARK : TEAL }),
+        stroke: new Stroke({ color: "#ffffff", width: 2 }),
+      }),
+    });
   };
 }
 
-/** Rough (non-geodesic) circle ring in degrees — good enough for a mini-map radius. */
-function circleFeatureCollection(lon: number, lat: number, radiusMeters: number): RadiusFeatureCollection {
-  const steps = 64;
-  const latRad = (lat * Math.PI) / 180;
-  const ring: [number, number][] = [];
-  for (let i = 0; i <= steps; i++) {
-    const angle = (i / steps) * 2 * Math.PI;
-    ring.push([lon + (radiusMeters * Math.cos(angle)) / (111_320 * Math.cos(latRad)), lat + (radiusMeters * Math.sin(angle)) / 110_540]);
+/** Single-marker mode style: the marker point is a solid teal dot; the optional radius feature
+ * (a `Circle` geometry, told apart from the point by geometry type) is a translucent teal fill. */
+function singleMarkerStyleFn(feature: FeatureLike) {
+  if (feature.getGeometry() instanceof CircleGeom) {
+    return new Style({ fill: new Fill({ color: TEAL_RADIUS_FILL }), stroke: new Stroke({ color: TEAL, width: 1.5 }) });
   }
-  return { type: "FeatureCollection", features: [{ type: "Feature", properties: {}, geometry: { type: "Polygon", coordinates: [ring] } }] };
+  return new Style({ image: new CircleStyle({ radius: 8, fill: new Fill({ color: TEAL }), stroke: new Stroke({ color: "#ffffff", width: 2 }) }) });
 }
 
-function addClusterLayers(map: MapLibreMap) {
-  map.addSource(SOURCE_ID, { type: "geojson", data: { type: "FeatureCollection", features: [] }, cluster: true, clusterMaxZoom: 16, clusterRadius: 50 });
-  map.addLayer({
-    id: CLUSTER_LAYER, type: "circle", source: SOURCE_ID, filter: ["has", "point_count"],
-    paint: { "circle-color": TEAL, "circle-opacity": 0.85, "circle-radius": ["step", ["get", "point_count"], 16, 10, 22, 50, 28] },
-  });
-  map.addLayer({
-    id: CLUSTER_COUNT_LAYER, type: "symbol", source: SOURCE_ID, filter: ["has", "point_count"],
-    layout: { "text-field": "{point_count_abbreviated}", "text-size": 12 }, paint: { "text-color": "#ffffff" },
-  });
-  map.addLayer({
-    id: POINT_LAYER, type: "circle", source: SOURCE_ID, filter: ["!", ["has", "point_count"]],
-    paint: {
-      "circle-color": ["case", ["boolean", ["feature-state", "hovered"], false], "#0b5349", TEAL],
-      "circle-radius": ["case", ["boolean", ["feature-state", "hovered"], false], 9, 6],
-      "circle-stroke-width": 2,
-      "circle-stroke-color": "#ffffff",
-    },
-  });
+/** Cluster mode: replace the raw (pre-cluster) source's features to match `points` — the OL
+ * equivalent of `setData` on a GeoJSON source. The `Cluster` source wrapping it listens for this
+ * and re-clusters automatically. */
+function syncClusterPoints(source: VectorSource<Feature>, points: MapPoint[]) {
+  source.clear();
+  source.addFeatures(
+    points.map((p) => {
+      const feature = new Feature({ geometry: new Point(fromLonLat([p.lon, p.lat])) });
+      feature.setId(p.id);
+      feature.set("label", p.label ?? "");
+      return feature;
+    }),
+  );
 }
 
-/** Pushes points/radius into the map: single mode creates/moves a Marker (+ optional radius fill layer); cluster mode updates the GeoJSON source. */
-function syncData(map: MapLibreMap, single: boolean, loaded: boolean, points: MapPoint[], radiusMeters: number | null | undefined, markerRef: { current: Marker | null }) {
-  if (single) {
-    const p = points[0];
-    if (!p) return;
-    if (markerRef.current) markerRef.current.setLngLat([p.lon, p.lat]);
-    else markerRef.current = new Marker({ color: TEAL }).setLngLat([p.lon, p.lat]).addTo(map);
-    if (!loaded) return;
-    if (!radiusMeters) {
-      // Set -> null/0 transition: erase a previously-drawn circle instead of leaving it stale.
-      if (map.getLayer(RADIUS_LAYER)) map.removeLayer(RADIUS_LAYER);
-      if (map.getSource(RADIUS_SOURCE_ID)) map.removeSource(RADIUS_SOURCE_ID);
-      return;
-    }
-    const data = circleFeatureCollection(p.lon, p.lat, radiusMeters);
-    const source = map.getSource<GeoJSONSource>(RADIUS_SOURCE_ID);
-    if (source) source.setData(data);
-    else {
-      map.addSource(RADIUS_SOURCE_ID, { type: "geojson", data });
-      map.addLayer({ id: RADIUS_LAYER, type: "fill", source: RADIUS_SOURCE_ID, paint: { "fill-color": TEAL, "fill-opacity": 0.12 } });
-    }
+/** Single-marker mode: move-or-create the one marker feature, and add/update/remove the optional
+ * radius circle (cleared outright on a set -> null/0 transition instead of left stale). */
+function syncSingleMarker(source: VectorSource<Feature>, point: MapPoint | undefined, radiusMeters: number | null | undefined) {
+  if (!point) return;
+  const center = fromLonLat([point.lon, point.lat]);
+  const marker = source.getFeatureById(point.id);
+  if (marker) (marker.getGeometry() as Point | undefined)?.setCoordinates(center);
+  else {
+    const next = new Feature({ geometry: new Point(center) });
+    next.setId(point.id);
+    source.addFeature(next);
+  }
+
+  const existingRadius = source.getFeatureById(RADIUS_FEATURE_ID);
+  if (!radiusMeters) {
+    if (existingRadius) source.removeFeature(existingRadius);
     return;
   }
-  if (!loaded) return;
-  map.getSource<GeoJSONSource>(SOURCE_ID)?.setData(toFeatureCollection(points));
+  // Circle geometries live in the map projection (EPSG:3857): the radius needs the Web Mercator
+  // secant-scale correction, or a circle drawn away from the equator would render too large.
+  const projectedRadius = radiusMeters / Math.cos((point.lat * Math.PI) / 180);
+  if (existingRadius) (existingRadius.getGeometry() as CircleGeom | undefined)?.setCenterAndRadius(center, projectedRadius);
+  else {
+    const radiusFeature = new Feature({ geometry: new CircleGeom(center, projectedRadius) });
+    radiusFeature.setId(RADIUS_FEATURE_ID);
+    source.addFeature(radiusFeature);
+  }
 }
 
-/** Thin MapLibre GL wrapper: `singleMarker` renders one Marker (+ optional radius circle) mini-map; otherwise renders a clustered GeoJSON map, even for a single point. */
+/** Thin OpenLayers wrapper over OSM raster tiles: `singleMarker` renders one marker (+ optional
+ * radius circle) mini-map; otherwise renders a clustered point map, even for a single point. */
 export function MapView({ points = [], center, zoom, radiusMeters = null, onPinClick, onBoundsChange, hoveredId = null, singleMarker = false, className }: MapViewProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const mapRef = useRef<MapLibreMap | null>(null);
-  const markerRef = useRef<Marker | null>(null);
-  const loadedRef = useRef(false);
-  const hoveredRef = useRef<string | null>(null);
+  const mapRef = useRef<OlMap | null>(null);
+  const vectorSourceRef = useRef<VectorSource<Feature> | null>(null);
+  // `any`: cluster mode's layer wraps a `Cluster` source, single-marker mode's wraps a plain
+  // `VectorSource` — two different `VectorLayer<...>` generic instantiations. Only `.changed()`
+  // is ever called through this ref, which doesn't depend on the source's type.
+  const vectorLayerRef = useRef<VectorLayer<any> | null>(null);
+  const hoveredRef = useRef<string | null>(hoveredId);
   // `singleMarker` is fixed per instance (never toggled at runtime), so this closure value
   // stays valid for the lifetime of the mount effect below — no 1-vs-many boundary to cross.
   const single = singleMarker;
@@ -127,79 +149,107 @@ export function MapView({ points = [], center, zoom, radiusMeters = null, onPinC
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
-    let map: MapLibreMap | null = null;
+    let map: OlMap | null = null;
     let resizeObserver: ResizeObserver | null = null;
-    // React StrictMode (dev) runs effects mount → cleanup → mount synchronously, and MapLibre does
-    // not survive being torn down mid-initialisation — the recreated map renders a blank canvas
-    // and never requests tiles. Deferring creation one frame lets the throwaway first mount's
-    // cleanup cancel it (cancelAnimationFrame), so exactly one map is ever built.
+    // React StrictMode (dev) runs effects mount -> cleanup -> mount synchronously. Unlike
+    // MapLibre's WebGL canvas, OpenLayers' Canvas 2D map tears down and rebuilds cleanly either
+    // way — this one-frame defer is now just cheap belt-and-suspenders, not a load-bearing fix.
     const raf = requestAnimationFrame(() => {
       const first = latest.current.points[0];
       const initialCenter = center ?? (single && first ? ([first.lon, first.lat] as [number, number]) : TASHKENT_CENTER);
-      const m = new MapLibreMap({ container, style: MAP_STYLE_URL, center: initialCenter, zoom: zoom ?? (single ? 15 : 12) });
+
+      const osmSource = new OSM();
+      osmSource.on("tileloaderror", () => console.error("[MapView] tile load error"));
+
+      const rawSource = new VectorSource<Feature>();
+      vectorSourceRef.current = rawSource;
+
+      let overlayLayer: VectorLayer<any>; // see vectorLayerRef above re: the `any`
+      if (single) {
+        overlayLayer = new VectorLayer({ source: rawSource, style: singleMarkerStyleFn });
+      } else {
+        overlayLayer = new VectorLayer({ source: new Cluster({ distance: 44, source: rawSource }), style: clusterStyleFn(hoveredRef) });
+      }
+      vectorLayerRef.current = overlayLayer;
+
+      const m = new OlMap({
+        target: container,
+        controls: defaultControls(),
+        layers: [new TileLayer({ source: osmSource }), overlayLayer],
+        view: new View({ center: fromLonLat(initialCenter), zoom: zoom ?? (single ? 15 : 12) }),
+      });
       map = m;
       mapRef.current = m;
-      m.addControl(new NavigationControl(), "top-right");
-      // surface tile/style/WebGL failures instead of silently rendering a blank canvas
-      m.on("error", (e) => console.error("[MapView] map error:", (e as { error?: { message?: string } }).error?.message ?? e));
-      // keep the WebGL drawing buffer matched to the container as it settles / resizes
-      resizeObserver = new ResizeObserver(() => m.resize());
+      m.updateSize();
+
+      m.on("moveend", () => {
+        const size = m.getSize();
+        if (!size) return;
+        // `Extent` is typed as a plain `number[]`, so cast to the tuple it always actually is
+        // (`[minX, minY, maxX, maxY]`) rather than fighting `noUncheckedIndexedAccess` on every index.
+        const [minX, minY, maxX, maxY] = m.getView().calculateExtent(size) as [number, number, number, number];
+        // `toLonLat` also returns a plain `number[]` (`Coordinate`) — same cast, same reason.
+        const [minLon, minLat] = toLonLat([minX, minY]) as [number, number];
+        const [maxLon, maxLat] = toLonLat([maxX, maxY]) as [number, number];
+        latest.current.onBoundsChange?.({ minLat, minLon, maxLat, maxLon });
+      });
+
+      if (!single) {
+        m.on("click", (e) => {
+          m.forEachFeatureAtPixel(e.pixel, (feature) => {
+            const inner = feature.get("features") as Feature[] | undefined;
+            if (!inner) return false;
+            if (inner.length === 1) {
+              const id = inner[0]?.getId();
+              if (typeof id === "string") latest.current.onPinClick?.(id);
+              return true;
+            }
+            m.getView().fit(boundingExtent(inner.map((f) => (f.getGeometry() as Point).getCoordinates())), { duration: 300, maxZoom: 16 });
+            return true;
+          });
+        });
+      }
+
+      resizeObserver = new ResizeObserver(() => m.updateSize());
       resizeObserver.observe(container);
 
-      m.on("load", () => {
-        loadedRef.current = true;
-        m.resize();
-        if (!single) addClusterLayers(m);
-        syncData(m, single, true, latest.current.points, latest.current.radiusMeters, markerRef);
-      });
-      m.on("moveend", () => {
-        const b = m.getBounds();
-        latest.current.onBoundsChange?.({ minLat: b.getSouth(), minLon: b.getWest(), maxLat: b.getNorth(), maxLon: b.getEast() });
-      });
-      m.on("click", CLUSTER_LAYER, (e) => {
-        const feature = e.features?.[0];
-        const clusterId = feature?.properties?.["cluster_id"];
-        const geometry = feature?.geometry;
-        const source = m.getSource<GeoJSONSource>(SOURCE_ID);
-        if (source && typeof clusterId === "number" && geometry?.type === "Point") {
-          const [lon, lat] = geometry.coordinates;
-          source.getClusterExpansionZoom(clusterId).then((z) => m.easeTo({ center: [lon, lat], zoom: z }));
-        }
-      });
-      m.on("click", POINT_LAYER, (e) => {
-        const id = e.features?.[0]?.properties?.["pointId"];
-        if (typeof id === "string") latest.current.onPinClick?.(id);
-      });
+      // OpenLayers has no MapLibre-style "load" gate — a source can be populated the instant
+      // it's created — so the initial sync happens right here. The props-sync effect below is a
+      // no-op on this same initial render (the ref above is still null until this rAF runs) and
+      // takes over for every subsequent points/radius change.
+      if (single) syncSingleMarker(rawSource, latest.current.points[0], latest.current.radiusMeters);
+      else syncClusterPoints(rawSource, latest.current.points);
     });
 
     return () => {
       cancelAnimationFrame(raf);
       resizeObserver?.disconnect();
-      markerRef.current?.remove();
-      markerRef.current = null;
-      map?.remove();
+      map?.setTarget(undefined);
       mapRef.current = null;
-      loadedRef.current = false;
+      vectorSourceRef.current = null;
+      vectorLayerRef.current = null;
     };
   }, []); // map is created once, on mount; props sync via the effects below (refs keep them fresh)
 
-  // also covers the initial sync: this runs right after the mount effect above on first render
   useEffect(() => {
-    const map = mapRef.current;
-    if (map) syncData(map, single, loadedRef.current, points, radiusMeters, markerRef);
+    const source = vectorSourceRef.current;
+    if (!source) return;
+    if (single) syncSingleMarker(source, points[0], radiusMeters);
+    else syncClusterPoints(source, points);
   }, [points, radiusMeters, single]);
 
   useEffect(() => {
-    if (center) mapRef.current?.setCenter(center);
-    if (zoom != null) mapRef.current?.setZoom(zoom);
+    const view = mapRef.current?.getView();
+    if (!view) return;
+    if (center) view.setCenter(fromLonLat(center));
+    if (zoom != null) view.setZoom(zoom);
   }, [center, zoom]);
 
   useEffect(() => {
-    const map = mapRef.current;
-    if (!map || single || !loadedRef.current) return;
-    if (hoveredRef.current) map.setFeatureState({ source: SOURCE_ID, id: hoveredRef.current }, { hovered: false });
-    if (hoveredId) map.setFeatureState({ source: SOURCE_ID, id: hoveredId }, { hovered: true });
     hoveredRef.current = hoveredId;
+    // OpenLayers has no MapLibre-style feature-state — re-styling on hover means forcing the
+    // layer to re-run its style function, which reads the ref above.
+    if (!single) vectorLayerRef.current?.changed();
   }, [hoveredId, single]);
 
   return <div ref={containerRef} className={className ?? "h-full w-full min-h-64 rounded-card"} />;
