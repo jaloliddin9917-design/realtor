@@ -2,7 +2,7 @@
 
 import uuid
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -47,6 +47,14 @@ class PropertyRow(BaseModel):
     floor: int | None
     total_floors: int | None
     area_sqm: float | None
+    latitude: float | None
+    longitude: float | None
+    location_radius_m: int | None
+    location_label: str | None
+    building_type: str | None
+    is_furnished: bool | None
+    renovation: str | None
+    year_built: int | None
     price_usd_min_minor: int | None
     source_removed: bool
     needs_recheck: bool
@@ -64,6 +72,16 @@ class PropertyPage(BaseModel):
     total: int
     page: int
     page_size: int
+
+
+class PinOut(BaseModel):
+    id: uuid.UUID
+    latitude: float
+    longitude: float
+    price_usd_min_minor: int | None
+    rooms: int | None
+    status: PropertyStatus
+    source_removed: bool
 
 
 class PhotoOut(BaseModel):
@@ -101,6 +119,16 @@ class ListingOut(BaseModel):
     floor: int | None
     total_floors: int | None
     district: str | None
+    latitude: float | None
+    longitude: float | None
+    location_radius_m: int | None
+    location_precise: bool | None
+    location_label: str | None
+    building_type: str | None
+    is_furnished: bool | None
+    renovation: str | None
+    year_built: int | None
+    attributes: dict[str, Any]
     address_text: str | None
     posted_at: datetime | None
     first_seen_at: datetime

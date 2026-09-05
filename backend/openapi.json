@@ -1128,6 +1128,22 @@
             ],
             "title": "Area Sqm"
           },
+          "attributes": {
+            "additionalProperties": true,
+            "title": "Attributes",
+            "type": "object"
+          },
+          "building_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Building Type"
+          },
           "contacts": {
             "items": {
               "$ref": "#/components/schemas/ContactOut"
@@ -1175,10 +1191,76 @@
             "title": "Id",
             "type": "string"
           },
+          "is_furnished": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Furnished"
+          },
           "last_seen_at": {
             "format": "date-time",
             "title": "Last Seen At",
             "type": "string"
+          },
+          "latitude": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latitude"
+          },
+          "location_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location Label"
+          },
+          "location_precise": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location Precise"
+          },
+          "location_radius_m": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location Radius M"
+          },
+          "longitude": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Longitude"
           },
           "owner_marker": {
             "title": "Owner Marker",
@@ -1209,6 +1291,17 @@
           },
           "price": {
             "$ref": "#/components/schemas/PriceOut"
+          },
+          "renovation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Renovation"
           },
           "rooms": {
             "anyOf": [
@@ -1253,6 +1346,17 @@
               }
             ],
             "title": "Url"
+          },
+          "year_built": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Year Built"
           }
         },
         "required": [
@@ -1268,6 +1372,16 @@
           "floor",
           "total_floors",
           "district",
+          "latitude",
+          "longitude",
+          "location_radius_m",
+          "location_precise",
+          "location_label",
+          "building_type",
+          "is_furnished",
+          "renovation",
+          "year_built",
+          "attributes",
           "address_text",
           "posted_at",
           "first_seen_at",
@@ -1878,6 +1992,17 @@
             ],
             "title": "Area Sqm"
           },
+          "building_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Building Type"
+          },
           "district": {
             "anyOf": [
               {
@@ -1917,6 +2042,17 @@
             "title": "Id",
             "type": "string"
           },
+          "is_furnished": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Furnished"
+          },
           "last_seen_at": {
             "format": "date-time",
             "title": "Last Seen At",
@@ -1932,6 +2068,17 @@
               }
             ]
           },
+          "latitude": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latitude"
+          },
           "listing_count": {
             "title": "Listing Count",
             "type": "integer"
@@ -1942,6 +2089,39 @@
             },
             "title": "Listings",
             "type": "array"
+          },
+          "location_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location Label"
+          },
+          "location_radius_m": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location Radius M"
+          },
+          "longitude": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Longitude"
           },
           "needs_recheck": {
             "title": "Needs Recheck",
@@ -1978,6 +2158,17 @@
                 "type": "null"
               }
             ]
+          },
+          "renovation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Renovation"
           },
           "rooms": {
             "anyOf": [
@@ -2027,6 +2218,17 @@
               }
             ],
             "title": "Total Floors"
+          },
+          "year_built": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Year Built"
           }
         },
         "required": [
@@ -2037,6 +2239,14 @@
           "floor",
           "total_floors",
           "area_sqm",
+          "latitude",
+          "longitude",
+          "location_radius_m",
+          "location_label",
+          "building_type",
+          "is_furnished",
+          "renovation",
+          "year_built",
           "price_usd_min_minor",
           "source_removed",
           "needs_recheck",
@@ -2098,6 +2308,17 @@
             ],
             "title": "Area Sqm"
           },
+          "building_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Building Type"
+          },
           "district": {
             "anyOf": [
               {
@@ -2130,6 +2351,17 @@
             "title": "Id",
             "type": "string"
           },
+          "is_furnished": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Furnished"
+          },
           "last_seen_at": {
             "format": "date-time",
             "title": "Last Seen At",
@@ -2145,9 +2377,53 @@
               }
             ]
           },
+          "latitude": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latitude"
+          },
           "listing_count": {
             "title": "Listing Count",
             "type": "integer"
+          },
+          "location_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location Label"
+          },
+          "location_radius_m": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location Radius M"
+          },
+          "longitude": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Longitude"
           },
           "needs_recheck": {
             "title": "Needs Recheck",
@@ -2184,6 +2460,17 @@
                 "type": "null"
               }
             ]
+          },
+          "renovation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Renovation"
           },
           "rooms": {
             "anyOf": [
@@ -2226,6 +2513,17 @@
               }
             ],
             "title": "Total Floors"
+          },
+          "year_built": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Year Built"
           }
         },
         "required": [
@@ -2236,6 +2534,14 @@
           "floor",
           "total_floors",
           "area_sqm",
+          "latitude",
+          "longitude",
+          "location_radius_m",
+          "location_label",
+          "building_type",
+          "is_furnished",
+          "renovation",
+          "year_built",
           "price_usd_min_minor",
           "source_removed",
           "needs_recheck",

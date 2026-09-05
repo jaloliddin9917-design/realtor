@@ -3,6 +3,7 @@
 import uuid
 
 import httpx
+import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -192,3 +193,49 @@ async def test_reposting_the_same_status_writes_no_second_event(
     events = (await db.execute(stmt)).scalars().all()
     assert [e.to_status for e in events] == ["new", "active"]
     assert [e.note for e in events] == [None, "first"]
+
+
+async def test_detail_exposes_location_and_attributes(
+    client: httpx.AsyncClient, settings: Settings, agent: User, db: AsyncSession
+) -> None:
+    source = Source(kind="olx", name="olx-detail", config={"url": "https://www.olx.uz/x/"})
+    db.add(source)
+    await db.flush()
+    p = payload(
+        "loc1",
+        "Сдаётся 2-комн +998901110001",
+        structured={
+            "rooms": 2,
+            "district": "yunusobod",
+            "latitude": 41.31,
+            "longitude": 69.28,
+            "location_radius_m": 2000,
+            "location_precise": False,
+            "location_label": "Ташкент, Юнусабадский район",
+            "building_type": "brick",
+            "is_furnished": True,
+            "renovation": "euro",
+            "year_built": 2017,
+            "attributes": {"bathroom_type": "combined"},
+        },
+    )
+    result = await ingest_payload(
+        db,
+        source,
+        p,
+        adapter=FakeAdapter([p], None),
+        cfg=CFG,
+        photo_dir=settings.photo_dir,
+        now=NOW,
+    )
+    r = await client.get(
+        f"/api/v1/properties/{result.property.id}", headers=auth_headers(settings, agent)
+    )
+    assert r.status_code == 200, r.text
+    d = r.json()
+    assert d["latitude"] == pytest.approx(41.31)
+    assert d["building_type"] == "brick"
+    assert d["year_built"] == 2017
+    listing = d["listings"][0]
+    assert listing["location_precise"] is False
+    assert listing["attributes"]["bathroom_type"] == "combined"
