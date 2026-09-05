@@ -225,6 +225,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/properties/pins": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Property Pins */
+        get: operations["property_pins_api_v1_properties_pins_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/properties/{property_id}": {
         parameters: {
             query?: never;
@@ -835,6 +852,12 @@ export interface components {
             agent_marker: boolean;
             /** Area Sqm */
             area_sqm: number | null;
+            /** Attributes */
+            attributes: {
+                [key: string]: unknown;
+            };
+            /** Building Type */
+            building_type: string | null;
             /** Contacts */
             contacts: components["schemas"]["ContactOut"][];
             /** Description */
@@ -855,11 +878,23 @@ export interface components {
              * Format: uuid
              */
             id: string;
+            /** Is Furnished */
+            is_furnished: boolean | null;
             /**
              * Last Seen At
              * Format: date-time
              */
             last_seen_at: string;
+            /** Latitude */
+            latitude: number | null;
+            /** Location Label */
+            location_label: string | null;
+            /** Location Precise */
+            location_precise: boolean | null;
+            /** Location Radius M */
+            location_radius_m: number | null;
+            /** Longitude */
+            longitude: number | null;
             /** Owner Marker */
             owner_marker: boolean;
             /** Parse Confidence */
@@ -869,6 +904,8 @@ export interface components {
             /** Posted At */
             posted_at: string | null;
             price: components["schemas"]["PriceOut"];
+            /** Renovation */
+            renovation: string | null;
             /** Rooms */
             rooms: number | null;
             source: components["schemas"]["SourceRef"];
@@ -880,6 +917,8 @@ export interface components {
             total_floors: number | null;
             /** Url */
             url: string | null;
+            /** Year Built */
+            year_built: number | null;
         };
         /** LoginIn */
         LoginIn: {
@@ -1040,6 +1079,29 @@ export interface components {
             /** Width */
             width: number | null;
         };
+        /** PinOut */
+        PinOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Latitude */
+            latitude: number;
+            /** Longitude */
+            longitude: number;
+            /** Price Usd Min Minor */
+            price_usd_min_minor: number | null;
+            /** Rooms */
+            rooms: number | null;
+            /** Source Removed */
+            source_removed: boolean;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "new" | "active" | "inactive";
+        };
         /** PriceOut */
         PriceOut: {
             /** Amount Minor */
@@ -1082,6 +1144,8 @@ export interface components {
         PropertyDetail: {
             /** Area Sqm */
             area_sqm: number | null;
+            /** Building Type */
+            building_type: string | null;
             /** District */
             district: string | null;
             /** Duplicates */
@@ -1098,16 +1162,26 @@ export interface components {
              * Format: uuid
              */
             id: string;
+            /** Is Furnished */
+            is_furnished: boolean | null;
             /**
              * Last Seen At
              * Format: date-time
              */
             last_seen_at: string;
             last_status_event: components["schemas"]["StatusEventOut"] | null;
+            /** Latitude */
+            latitude: number | null;
             /** Listing Count */
             listing_count: number;
             /** Listings */
             listings: components["schemas"]["ListingOut"][];
+            /** Location Label */
+            location_label: string | null;
+            /** Location Radius M */
+            location_radius_m: number | null;
+            /** Longitude */
+            longitude: number | null;
             /** Needs Recheck */
             needs_recheck: boolean;
             /** Photo Url */
@@ -1115,6 +1189,8 @@ export interface components {
             /** Price Usd Min Minor */
             price_usd_min_minor: number | null;
             probable_owner: components["schemas"]["OwnerOut"] | null;
+            /** Renovation */
+            renovation: string | null;
             /** Rooms */
             rooms: number | null;
             /** Source Kinds */
@@ -1130,6 +1206,8 @@ export interface components {
             status_events: components["schemas"]["StatusEventOut"][];
             /** Total Floors */
             total_floors: number | null;
+            /** Year Built */
+            year_built: number | null;
         };
         /** PropertyPage */
         PropertyPage: {
@@ -1146,6 +1224,8 @@ export interface components {
         PropertyRow: {
             /** Area Sqm */
             area_sqm: number | null;
+            /** Building Type */
+            building_type: string | null;
             /** District */
             district: string | null;
             /**
@@ -1160,14 +1240,24 @@ export interface components {
              * Format: uuid
              */
             id: string;
+            /** Is Furnished */
+            is_furnished: boolean | null;
             /**
              * Last Seen At
              * Format: date-time
              */
             last_seen_at: string;
             last_status_event: components["schemas"]["StatusEventOut"] | null;
+            /** Latitude */
+            latitude: number | null;
             /** Listing Count */
             listing_count: number;
+            /** Location Label */
+            location_label: string | null;
+            /** Location Radius M */
+            location_radius_m: number | null;
+            /** Longitude */
+            longitude: number | null;
             /** Needs Recheck */
             needs_recheck: boolean;
             /** Photo Url */
@@ -1175,6 +1265,8 @@ export interface components {
             /** Price Usd Min Minor */
             price_usd_min_minor: number | null;
             probable_owner: components["schemas"]["OwnerOut"] | null;
+            /** Renovation */
+            renovation: string | null;
             /** Rooms */
             rooms: number | null;
             /** Source Kinds */
@@ -1188,6 +1280,8 @@ export interface components {
             status: "new" | "active" | "inactive";
             /** Total Floors */
             total_floors: number | null;
+            /** Year Built */
+            year_built: number | null;
         };
         /** QueueItemOut */
         QueueItemOut: {
@@ -2132,6 +2226,21 @@ export interface operations {
                 owner_only?: boolean;
                 /** @description include properties removed at the source */
                 removed?: boolean;
+                area_min?: number | null;
+                area_max?: number | null;
+                floor_min?: number | null;
+                floor_max?: number | null;
+                not_first_floor?: boolean;
+                not_top_floor?: boolean;
+                building_type?: string[] | null;
+                furnished?: boolean | null;
+                renovation?: string[] | null;
+                posted_within?: ("24h" | "3d" | "7d") | null;
+                has_photos?: boolean;
+                min_lat?: number | null;
+                min_lon?: number | null;
+                max_lat?: number | null;
+                max_lon?: number | null;
                 q?: string | null;
                 sort?: "last_seen" | "first_seen" | "price_asc" | "price_desc";
                 page?: number;
@@ -2150,6 +2259,78 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PropertyPage"];
+                };
+            };
+            /** @description missing, invalid or expired token; or inactive user */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description request validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            /** @description unexpected error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    property_pins_api_v1_properties_pins_get: {
+        parameters: {
+            query?: {
+                district?: string[] | null;
+                rooms?: number[] | null;
+                price_min?: number | null;
+                price_max?: number | null;
+                status?: ("new" | "active" | "inactive")[] | null;
+                source?: ("olx" | "telegram" | "manual") | null;
+                owner_only?: boolean;
+                removed?: boolean;
+                q?: string | null;
+                area_min?: number | null;
+                area_max?: number | null;
+                floor_min?: number | null;
+                floor_max?: number | null;
+                not_first_floor?: boolean;
+                not_top_floor?: boolean;
+                building_type?: string[] | null;
+                furnished?: boolean | null;
+                renovation?: string[] | null;
+                posted_within?: ("24h" | "3d" | "7d") | null;
+                has_photos?: boolean;
+                min_lat?: number | null;
+                min_lon?: number | null;
+                max_lat?: number | null;
+                max_lon?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PinOut"][];
                 };
             };
             /** @description missing, invalid or expired token; or inactive user */
