@@ -61,10 +61,27 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.drop_index("ix_properties_lat_lon", table_name="properties")
-    for name in ("latitude", "longitude", "location_radius_m", "location_label",
-                 "building_type", "is_furnished", "renovation", "year_built"):
+    for name in (
+        "latitude",
+        "longitude",
+        "location_radius_m",
+        "location_label",
+        "building_type",
+        "is_furnished",
+        "renovation",
+        "year_built",
+    ):
         op.drop_column("properties", name)
-    for name in ("attributes", "latitude", "longitude", "location_radius_m",
-                 "location_precise", "location_label", "building_type",
-                 "is_furnished", "renovation", "year_built"):
+    for name in (
+        "attributes",
+        "latitude",
+        "longitude",
+        "location_radius_m",
+        "location_precise",
+        "location_label",
+        "building_type",
+        "is_furnished",
+        "renovation",
+        "year_built",
+    ):
         op.drop_column("listings", name)
