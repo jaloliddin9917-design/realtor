@@ -9,8 +9,11 @@ function BreakdownRow({ item }: { item: ScoreBreakdownItem }) {
   const { t } = useTranslation();
   return (
     <div className="flex items-center justify-between gap-2 text-sm">
-      <span>{t(`duplicates.breakdown.${item.id}`)}</span>
-      <span className="num font-semibold text-primary">+{item.points.toFixed(2)}</span>
+      <span className="flex min-w-0 items-baseline gap-1.5">
+        <span className="shrink-0">{t(`duplicates.breakdown.${item.id}`)}</span>
+        {item.detail ? <span className="num truncate text-xs text-muted-foreground" title={item.detail}>{item.detail}</span> : null}
+      </span>
+      <span className="num shrink-0 font-semibold text-primary">+{item.points.toFixed(2)}</span>
     </div>
   );
 }

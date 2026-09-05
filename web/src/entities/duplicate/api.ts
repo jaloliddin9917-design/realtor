@@ -35,6 +35,9 @@ export interface DuplicateListingSide {
 export interface ScoreBreakdownItem {
   id: "phone" | "photos" | "description" | "rooms_floor" | "area" | "price";
   points: number;
+  /** A short, human-readable explanation of what actually matched — today only the phone signal
+   * carries one (the shared number, e.g. "+998908112437"); the other signals leave it undefined. */
+  detail?: string;
 }
 
 export interface DuplicatePair {
@@ -236,10 +239,11 @@ const SIGNAL_KEY: Record<BreakdownSignal, ScoreBreakdownItem["id"]> = {
   price: "price",
 };
 
-/** `detail` (a free-text explanation) is always null today — nothing to render per breakdown
- * row beyond the signal's label and its points. */
+/** `detail` is the wire's free-text explanation of the match — the API sets it only on the
+ * `contact` signal (the shared phone number); it's null for every other signal, which maps to
+ * `undefined` here so the row falls back to just its label and points. */
 function mapBreakdown(items: Schemas["BreakdownItem"][]): ScoreBreakdownItem[] {
-  return items.map((b) => ({ id: SIGNAL_KEY[b.signal], points: b.points }));
+  return items.map((b) => ({ id: SIGNAL_KEY[b.signal], points: b.points, detail: b.detail ?? undefined }));
 }
 
 function mapSide(s: DuplicateSideOut): DuplicateListingSide {

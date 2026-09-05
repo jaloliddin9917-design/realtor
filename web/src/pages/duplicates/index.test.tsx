@@ -8,13 +8,13 @@ import { i18nReady } from "@/shared/i18n";
 import { router } from "@/shared/router";
 import { DuplicatesPage } from "./index";
 
-function mount() {
+function mount(pairs = MOCK_PAIRS) {
   // Both stores start empty (see entities/duplicate) and are normally filled by the
   // duplicates.opened wiring in app/router.ts — seeded here the same way pages/dashboard's test
   // seeds its stores, with a `fetchDuplicatesFx` handler as a safety net.
   const scope = fork({
-    values: [[$pairs, MOCK_PAIRS], [$thresholds, MOCK_THRESHOLDS], [$decidedRecent, MOCK_DECIDED_RECENT]],
-    handlers: [[fetchDuplicatesFx, async () => ({ pairs: MOCK_PAIRS, thresholds: MOCK_THRESHOLDS, decidedRecent: MOCK_DECIDED_RECENT })]],
+    values: [[$pairs, pairs], [$thresholds, MOCK_THRESHOLDS], [$decidedRecent, MOCK_DECIDED_RECENT]],
+    handlers: [[fetchDuplicatesFx, async () => ({ pairs, thresholds: MOCK_THRESHOLDS, decidedRecent: MOCK_DECIDED_RECENT })]],
   });
   render(
     <Provider value={scope}>
@@ -35,6 +35,16 @@ describe("DuplicatesPage", () => {
     expect(screen.getByText("0.65")).toBeInTheDocument();
     expect(screen.getByText("Rasmlar")).toBeInTheDocument();
     expect(screen.getByText("+0.30")).toBeInTheDocument();
+  });
+
+  it("shows the matched phone next to the phone breakdown row when the API supplies it", () => {
+    // The API sets `detail` on the phone signal to the shared number; the featured pair (index 0)
+    // gets a real phone match so the compare panel has a detail to render.
+    const withPhone = MOCK_PAIRS.map((p, i) =>
+      i === 0 ? { ...p, breakdown: p.breakdown.map((b) => (b.id === "phone" ? { ...b, points: 0.5, detail: "+998908112437" } : b)) } : p,
+    );
+    mount(withPhone);
+    expect(screen.getByText("+998908112437")).toBeInTheDocument();
   });
 
   it("loads a different pair into the compare panel when its queue row is selected", async () => {
