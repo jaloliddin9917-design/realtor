@@ -5,7 +5,7 @@ import { $tokens, sessionRestored } from "@/entities/session";
 import { fetchPinsFx, fetchPropertiesFx } from "@/entities/property";
 import { i18n, i18nReady } from "@/shared/i18n";
 import { controls, router, routes } from "@/shared/router";
-import { $advancedCount, $district, $hoveredId, $page, $pageCount, $q, $query, $rooms, $view, advancedReset, areaChanged, boundsChanged, buildingTypeToggled, districtToggled, filtersCleared, floorChanged, furnishedChanged, hasPhotosToggled, hovered, notFirstFloorToggled, notTopFloorToggled, pageChanged, postedWithinChanged, renovationToggled, roomsToggled, searchAreaToggled, searchChanged, viewChanged } from "./model";
+import { $advancedCount, $bounds, $district, $hoveredId, $page, $pageCount, $q, $query, $rooms, $searchArea, $view, advancedReset, areaChanged, boundsChanged, buildingTypeToggled, districtToggled, filtersCleared, floorChanged, furnishedChanged, hasPhotosToggled, hovered, notFirstFloorToggled, notTopFloorToggled, pageChanged, postedWithinChanged, renovationToggled, roomsToggled, searchAreaToggled, searchChanged, viewChanged } from "./model";
 
 vi.mock("sonner", () => ({ toast: { error: vi.fn() } }));
 
@@ -251,5 +251,48 @@ describe("map view", () => {
     expect(query.min_lon).toBe(69);
     expect(query.max_lat).toBe(42);
     expect(query.max_lon).toBe(70);
+  });
+
+  it("returns to page 1 when search-area is toggled, like every other filter change", async () => {
+    const scope = fork({ values: [[$tokens, { access: "a", refresh: "r" }]] });
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ items: [], total: 0, page: 1, page_size: 20 }), { status: 200, headers: { "content-type": "application/json" } })));
+    await openList(scope);
+    await allSettled(pageChanged, { scope, params: 3 });
+    expect(scope.getState($page)).toBe("3");
+    await allSettled(searchAreaToggled, { scope });
+    expect(scope.getState($page)).toBe("");
+  });
+
+  it("resets the page on a bbox pan only once search-area is on — panning with it off must not touch the page", async () => {
+    const scope = fork({ values: [[$tokens, { access: "a", refresh: "r" }]] });
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ items: [], total: 0, page: 1, page_size: 20 }), { status: 200, headers: { "content-type": "application/json" } })));
+    await openList(scope);
+
+    // "search this area" is off (the default): `moveend` fires on every pan regardless, but it
+    // must not reset a page the bbox is not even filtering on
+    await allSettled(pageChanged, { scope, params: 3 });
+    await allSettled(boundsChanged, { scope, params: { minLat: 1, minLon: 2, maxLat: 3, maxLon: 4 } });
+    expect(scope.getState($page)).toBe("3");
+
+    // once "search this area" is on, the bbox is part of the effective query, so panning again
+    // must reset the page like any other filter change
+    await allSettled(searchAreaToggled, { scope });
+    await allSettled(pageChanged, { scope, params: 3 });
+    await allSettled(boundsChanged, { scope, params: { minLat: 5, minLon: 6, maxLat: 7, maxLon: 8 } });
+    expect(scope.getState($page)).toBe("");
+  });
+
+  it("clears the search-area bbox when filters are cleared, so a stale viewport cannot silently reapply", async () => {
+    const scope = fork({ values: [[$tokens, { access: "a", refresh: "r" }]] });
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ items: [], total: 0, page: 1, page_size: 20 }), { status: 200, headers: { "content-type": "application/json" } })));
+    await openList(scope);
+    await allSettled(searchAreaToggled, { scope });
+    await allSettled(boundsChanged, { scope, params: { minLat: 1, minLon: 2, maxLat: 3, maxLon: 4 } });
+    expect(scope.getState($searchArea)).toBe("1");
+    expect(scope.getState($bounds)).toEqual({ minLat: 1, minLon: 2, maxLat: 3, maxLon: 4 });
+
+    await allSettled(filtersCleared, { scope });
+    expect(scope.getState($searchArea)).toBe("");
+    expect(scope.getState($bounds)).toBeNull();
   });
 });

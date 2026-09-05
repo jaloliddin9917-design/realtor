@@ -94,13 +94,6 @@ export const $advancedCount = combine(
   (f) => Object.values(f).filter((v) => v !== "").length,
 );
 
-// any filter change returns to page 1 — page 7 of the old result set means nothing in the new one
-sample({
-  clock: [districtToggled, roomsToggled, priceChanged, statusChanged, sourceChanged, ownerOnlyToggled, removedToggled, searchChanged, sortChanged, areaChanged, floorChanged, notFirstFloorToggled, notTopFloorToggled, buildingTypeToggled, furnishedChanged, renovationToggled, postedWithinChanged, hasPhotosToggled, advancedReset],
-  fn: () => 1,
-  target: pageChanged,
-});
-
 /**
  * Map view: a List⇄Map toggle, hover sync between a card and its pin, and an optional
  * "search this area" bounding box. None of these reach the API on their own — `$view` and
@@ -137,7 +130,29 @@ export const $view = $viewParam.map((v): "list" | "map" => (v === "map" ? "map" 
 // "Search this area" is off (and the bbox below ignored) by default, like every other filter —
 // switching it on re-queries with whatever the map's current viewport happens to be.
 export const $searchArea = createStore("").on(searchAreaToggled, (v) => (v ? "" : "1")).reset([filtersCleared, routes.properties.closed]);
-export const $bounds = createStore<Bounds | null>(null).on(boundsChanged, (_, b) => b).reset(routes.properties.closed);
+// also cleared on `filtersCleared`, like every other filter store above — otherwise a stale
+// viewport could silently reapply itself the next time "search this area" is switched back on.
+export const $bounds = createStore<Bounds | null>(null).on(boundsChanged, (_, b) => b).reset([filtersCleared, routes.properties.closed]);
+
+// any filter change returns to page 1 — page 7 of the old result set means nothing in the new
+// one. `searchAreaToggled` belongs here too: flipping it always changes the effective query,
+// the same as every other filter in this clock.
+sample({
+  clock: [districtToggled, roomsToggled, priceChanged, statusChanged, sourceChanged, ownerOnlyToggled, removedToggled, searchChanged, sortChanged, areaChanged, floorChanged, notFirstFloorToggled, notTopFloorToggled, buildingTypeToggled, furnishedChanged, renovationToggled, postedWithinChanged, hasPhotosToggled, advancedReset, searchAreaToggled],
+  fn: () => 1,
+  target: pageChanged,
+});
+
+// `boundsChanged` fires on every map `moveend`, including with "search this area" off — and
+// while it's off the bbox never reaches `$query` (below), so panning must not reset the page.
+// Only reset it when the new viewport actually changes what is being asked for.
+sample({
+  clock: boundsChanged,
+  source: $searchArea,
+  filter: (searchArea) => searchArea === "1",
+  fn: () => 1,
+  target: pageChanged,
+});
 
 /**
  * A room-count token from the URL: "4" is the UI's "4+" and expands to a range; anything

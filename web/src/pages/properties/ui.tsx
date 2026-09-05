@@ -26,6 +26,7 @@ export function PropertiesPage() {
   const { t } = useTranslation();
   const [rows, pending, view] = useUnit([$rows, $listPending, $view]);
   const [onViewChanged, onHovered] = useUnit([viewChanged, hovered]);
+  const emptyNote = <p className="p-6 text-center text-muted-foreground">{t("app.empty")}</p>;
   return (
     <AppLayout title={t("properties.title")} actions={<><AddManualDialog /><LanguageSwitch /></>}>
       <FilterBar />
@@ -42,23 +43,28 @@ export function PropertiesPage() {
           </Button>
         </div>
       </div>
-      {pending && rows.length === 0
-        ? <Skeleton className="h-40 w-full" />
-        : rows.length === 0
-          ? <p className="p-6 text-center text-muted-foreground">{t("app.empty")}</p>
-          : view === "map"
-            ? (
-              <div className="grid gap-3 lg:grid-cols-2">
-                <div
-                  className="max-h-[70vh] overflow-y-auto"
-                  onMouseOver={(e) => { const id = propertyIdFromTarget(e.target); if (id) onHovered(id); }}
-                  onMouseOut={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) onHovered(null); }}
-                >
-                  <PropertyCardList rows={rows} />
-                </div>
-                <div className="min-h-[70vh]"><PropertyMap /></div>
-              </div>
-            )
+      {view === "map"
+        // $rows (paginated) and $pins (unpaged) are decoupled: the map can have pins to show
+        // even when the current rows page is empty (paginated past the last page, or "search
+        // this area" panned to a sparse spot), so the split layout — and the map itself — must
+        // never collapse just because this page's rows are empty. The map owns its own
+        // loading/empty state (see `PropertyMap`); only the left column falls back to a note.
+        ? (
+          <div className="grid gap-3 lg:grid-cols-2">
+            <div
+              className="max-h-[70vh] overflow-y-auto"
+              onMouseOver={(e) => { const id = propertyIdFromTarget(e.target); if (id) onHovered(id); }}
+              onMouseOut={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) onHovered(null); }}
+            >
+              {rows.length === 0 ? emptyNote : <PropertyCardList rows={rows} />}
+            </div>
+            <div className="min-h-[70vh]"><PropertyMap /></div>
+          </div>
+        )
+        : pending && rows.length === 0
+          ? <Skeleton className="h-40 w-full" />
+          : rows.length === 0
+            ? emptyNote
             : (
               <>
                 {/* one source of rows, two renderings: the table from lg up, cards below */}

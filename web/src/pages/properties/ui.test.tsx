@@ -5,9 +5,9 @@ import { allSettled, fork } from "effector";
 import { Provider } from "effector-react";
 import { createMemoryHistory } from "history";
 import { $meta } from "@/entities/meta";
-import { $page, type PropertyRow } from "@/entities/property";
+import { $page, $pins, type Pin, type PropertyPage, type PropertyRow } from "@/entities/property";
 import { sessionRestored } from "@/entities/session";
-import { $hoveredId, $view } from "@/features/property/filters";
+import { $hoveredId, $view, viewChanged } from "@/features/property/filters";
 import { i18nReady } from "@/shared/i18n";
 import { router } from "@/shared/router";
 import { PropertiesPage } from "./ui";
@@ -37,15 +37,19 @@ vi.mock("maplibre-gl", () => ({
 
 const row: PropertyRow = { id: "p1", status: "active", district: "chilonzor", rooms: 2, floor: 3, total_floors: 9, area_sqm: 54, price_usd_min_minor: 45000, source_removed: false, needs_recheck: false, first_seen_at: "2026-08-12T09:00:00Z", last_seen_at: "2026-08-29T12:40:00Z", listing_count: 2, source_kinds: ["olx", "telegram"], probable_owner: null, photo_url: null, last_status_event: null, latitude: null, longitude: null, location_radius_m: null, location_label: null, building_type: null, is_furnished: null, renovation: null, year_built: null };
 
-async function mount() {
+async function mount(opts: { page?: PropertyPage; pins?: Pin[]; view?: "list" | "map" } = {}) {
   const scope = fork({
     values: [
-      [$page, { items: [row], total: 42, page: 1, page_size: 20 }],
+      [$page, opts.page ?? { items: [row], total: 42, page: 1, page_size: 20 }],
+      [$pins, opts.pins ?? []],
       [$meta, { districts: ["chilonzor", "sergeli"], statuses: ["new", "active", "inactive"], source_kinds: ["olx", "telegram", "manual"], contact_classifications: ["owner", "agent", "unknown"] }],
     ],
   });
   await allSettled(sessionRestored, { scope, params: { id: "u1", phone: "+998900000001", name: "Aziz", role: "agent", locale: "uz" } });
   await allSettled(router.setHistory, { scope, params: createMemoryHistory({ initialEntries: ["/properties"] }) });
+  // $view is a `.map()`-derived store — fork's `values` only accepts writable stores, so map
+  // view is reached the same way the app itself reaches it: firing the event.
+  if (opts.view === "map") await allSettled(viewChanged, { scope, params: "map" });
   render(<Provider value={scope}><RouterProvider router={router}><PropertiesPage /></RouterProvider></Provider>);
   return scope;
 }
@@ -108,5 +112,17 @@ describe("PropertiesPage", () => {
     await waitFor(() => expect(scope.getState($hoveredId)).toBe("p1"));
     fireEvent.mouseOut(card, { relatedTarget: document.body });
     await waitFor(() => expect(scope.getState($hoveredId)).toBeNull());
+  });
+
+  it("keeps the map visible in map view when the rows page is empty but pins exist", async () => {
+    // $rows (paginated) and $pins (unpaged) are decoupled: paginating past the last page, or
+    // panning "search this area" to a sparse spot, can leave $rows empty while $pins is not —
+    // the split layout (and the map itself) must not collapse into the plain empty state.
+    const pin: Pin = { id: "p1", latitude: 41.3, longitude: 69.2, price_usd_min_minor: 45000, rooms: 2, status: "active", source_removed: false };
+    await mount({ view: "map", page: { items: [], total: 0, page: 1, page_size: 20 }, pins: [pin] });
+    // PropertyMap's own chrome renders — the map is not hidden behind the empty-rows state
+    expect(screen.getByRole("switch", { name: "Bu hududda qidirish" })).toBeInTheDocument();
+    // only the left cards column falls back to the shared empty note, not the whole page
+    expect(screen.getByText("Hech narsa topilmadi")).toBeInTheDocument();
   });
 });
