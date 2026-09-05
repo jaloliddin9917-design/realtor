@@ -1,4 +1,4 @@
-import { render } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import { beforeEach, expect, test, vi } from "vitest";
 import type { Mock } from "vitest";
 
@@ -51,10 +51,13 @@ const on = vi.fn((type: string, cb: Handler) => {
 // vi.fn() mocks are invoked with `new` (Map, Feature, ...) — that requires a real `function`
 // implementation, since arrow functions have no [[Construct]] and vitest's spy wrapper forwards
 // the `new` call straight through to whatever implementation it wraps.
+const addOverlay = vi.fn();
+const getOverlayById = vi.fn();
+
 vi.mock("ol/Map", () => ({
   default: vi.fn(function MockMap() {
     handlers = {};
-    return { on, forEachFeatureAtPixel, getSize, getView: () => mockView, updateSize, setTarget };
+    return { on, forEachFeatureAtPixel, getSize, getView: () => mockView, updateSize, setTarget, addOverlay, getOverlayById };
   }),
 }));
 vi.mock("ol/View", () => ({ default: vi.fn(function MockView(opts: unknown) { return opts; }) }));
@@ -106,8 +109,10 @@ vi.mock("ol/style", () => ({
   Stroke: vi.fn(() => ({})),
   Circle: vi.fn(() => ({})),
   Text: vi.fn(() => ({})),
+  Icon: vi.fn(() => ({})),
 }));
 vi.mock("ol/control/defaults", () => ({ defaults: vi.fn(() => []) }));
+vi.mock("ol/Overlay", () => ({ default: vi.fn(function MockOverlay() { return { setPosition: vi.fn() }; }) }));
 
 /** Fetches a handler MapView registered via `map.on(...)`; throws with what *was* recorded if missing. */
 function getHandler(key: string): Handler {
@@ -205,4 +210,48 @@ test("cluster mode zooms to fit the cluster when a multi-pin cluster is clicked"
   getHandler("click")({ pixel: [10, 10] });
 
   expect(fit).toHaveBeenCalledWith(expect.any(Array), expect.objectContaining({ duration: 300, maxZoom: 16 }));
+});
+
+test("cluster mode opens the click-popup via renderPopup for an unclustered pin, instead of calling onPinClick", async () => {
+  const { MapView } = await import("./MapView");
+  const onPinClick = vi.fn();
+  const renderPopup = vi.fn((id: string) => <div data-testid="popup">{id}</div>);
+  render(<MapView points={[{ id: "p1", lat: 41.3, lon: 69.2 }]} onPinClick={onPinClick} renderPopup={renderPopup} />);
+
+  // Same "cluster of exactly one" shape as the onPinClick test above — the click handler now
+  // also reads the outer (cluster) feature's own geometry, to position the popup overlay.
+  const innerFeature = { getId: () => "p1" };
+  const clusterFeature = {
+    get: (key: string) => (key === "features" ? [innerFeature] : undefined),
+    getGeometry: () => ({ getCoordinates: () => [7700000, 5050000] }),
+  };
+  forEachFeatureAtPixel.mockImplementation((_pixel: unknown, cb: (f: unknown) => unknown) => cb(clusterFeature));
+
+  act(() => { getHandler("click")({ pixel: [10, 10] }); });
+
+  expect(onPinClick).not.toHaveBeenCalled();
+  expect(renderPopup).toHaveBeenCalledWith("p1", expect.any(Function));
+  expect(screen.getByTestId("popup")).toHaveTextContent("p1");
+});
+
+test("a click that hits no pin closes an open popup", async () => {
+  const { MapView } = await import("./MapView");
+  const renderPopup = vi.fn((id: string) => <div data-testid="popup">{id}</div>);
+  render(<MapView points={[{ id: "p1", lat: 41.3, lon: 69.2 }]} renderPopup={renderPopup} />);
+
+  const innerFeature = { getId: () => "p1" };
+  const clusterFeature = {
+    get: (key: string) => (key === "features" ? [innerFeature] : undefined),
+    getGeometry: () => ({ getCoordinates: () => [7700000, 5050000] }),
+  };
+  forEachFeatureAtPixel.mockImplementation((_pixel: unknown, cb: (f: unknown) => unknown) => cb(clusterFeature));
+  act(() => { getHandler("click")({ pixel: [10, 10] }); });
+  expect(screen.getByTestId("popup")).toBeInTheDocument();
+
+  // No feature under this pixel — OL never invokes the callback, so forEachFeatureAtPixel
+  // returns undefined, same as the real API when nothing is hit.
+  forEachFeatureAtPixel.mockImplementation(() => undefined);
+  act(() => { getHandler("click")({ pixel: [999, 999] }); });
+
+  expect(screen.queryByTestId("popup")).not.toBeInTheDocument();
 });

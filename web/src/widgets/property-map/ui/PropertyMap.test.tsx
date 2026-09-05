@@ -46,10 +46,13 @@ const on = vi.fn((type: string, cb: Handler) => {
   handlers[type] = cb;
 });
 
+const addOverlay = vi.fn();
+const getOverlayById = vi.fn();
+
 vi.mock("ol/Map", () => ({
   default: vi.fn(function MockMap() {
     handlers = {};
-    return { on, forEachFeatureAtPixel, getSize, getView: () => mockView, updateSize: vi.fn(), setTarget: vi.fn() };
+    return { on, forEachFeatureAtPixel, getSize, getView: () => mockView, updateSize: vi.fn(), setTarget: vi.fn(), addOverlay, getOverlayById };
   }),
 }));
 vi.mock("ol/View", () => ({ default: vi.fn(function MockView(opts: unknown) { return opts; }) }));
@@ -100,8 +103,10 @@ vi.mock("ol/style", () => ({
   Stroke: vi.fn(() => ({})),
   Circle: vi.fn(() => ({})),
   Text: vi.fn(() => ({})),
+  Icon: vi.fn(() => ({})),
 }));
 vi.mock("ol/control/defaults", () => ({ defaults: vi.fn(() => []) }));
+vi.mock("ol/Overlay", () => ({ default: vi.fn(function MockOverlay() { return { setPosition: vi.fn() }; }) }));
 
 function getHandler(key: string): Handler {
   const handler = handlers[key];
@@ -115,8 +120,14 @@ async function waitForMap() {
   await waitFor(() => expect(OlMap).toHaveBeenCalled());
 }
 
-const PIN_A: Pin = { id: "p1", latitude: 41.3, longitude: 69.2, price_usd_min_minor: 45000, rooms: 2, status: "active", source_removed: false };
-const PIN_B: Pin = { id: "p2", latitude: 41.31, longitude: 69.21, price_usd_min_minor: 80000, rooms: 3, status: "new", source_removed: false };
+const PIN_A: Pin = {
+  id: "p1", latitude: 41.3, longitude: 69.2, price_usd_min_minor: 45000, rooms: 2, status: "active", source_removed: false,
+  district: "chilonzor", area_sqm: 54, floor: 3, total_floors: 9, photo_url: "https://example.com/photo.jpg", location_label: null,
+};
+const PIN_B: Pin = {
+  id: "p2", latitude: 41.31, longitude: 69.21, price_usd_min_minor: 80000, rooms: 3, status: "new", source_removed: false,
+  district: null, area_sqm: null, floor: null, total_floors: null, photo_url: null, location_label: "Yunusobod tumani",
+};
 
 async function mount(pins: Pin[] = [PIN_A, PIN_B]) {
   const { PropertyMap } = await import("./PropertyMap");
@@ -139,17 +150,28 @@ test("renders the pins as map points once the lazily-loaded map mounts", async (
   expect(getFeatures().map((f) => f.get("label"))).toEqual(["$450", "$800"]);
 });
 
-test("clicking a pin navigates straight to that property", async () => {
+test("clicking a pin opens its popup, and its Open button navigates to that property", async () => {
   const scope = await mount();
   await waitForMap();
 
   // OL's `Cluster` source wraps every point in a cluster feature, even a lone one — a "cluster"
-  // of exactly one underlying feature is how an unclustered pin actually renders/hit-tests.
+  // of exactly one underlying feature is how an unclustered pin actually renders/hit-tests. The
+  // outer (cluster) feature's own geometry is what positions the popup overlay.
   const innerFeature = { getId: () => "p1" };
-  forEachFeatureAtPixel.mockImplementation((_pixel: unknown, cb: (f: unknown) => unknown) =>
-    cb({ get: (key: string) => (key === "features" ? [innerFeature] : undefined) }),
-  );
-  getHandler("click")({ pixel: [10, 10] });
+  const clusterFeature = {
+    get: (key: string) => (key === "features" ? [innerFeature] : undefined),
+    getGeometry: () => ({ getCoordinates: () => [0, 0] }),
+  };
+  forEachFeatureAtPixel.mockImplementation((_pixel: unknown, cb: (f: unknown) => unknown) => cb(clusterFeature));
+
+  act(() => { getHandler("click")({ pixel: [10, 10] }); });
+
+  // the click opens a popup — it does not navigate straight away
+  expect(scope.getState(routes.property.$isOpened)).toBe(false);
+  expect(document.querySelector('img[src="https://example.com/photo.jpg"]')).toBeInTheDocument();
+  expect(screen.getByText("$450")).toBeInTheDocument();
+
+  await userEvent.click(screen.getByRole("button", { name: "Ochish" }));
 
   await waitFor(() => expect(scope.getState(routes.property.$isOpened)).toBe(true));
   expect(scope.getState(routes.property.$params)).toEqual({ id: "p1" });

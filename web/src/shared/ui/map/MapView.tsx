@@ -1,5 +1,5 @@
 import "ol/ol.css";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import OlMap from "ol/Map";
 import View from "ol/View";
 import TileLayer from "ol/layer/Tile";
@@ -11,9 +11,10 @@ import Feature from "ol/Feature";
 import type { FeatureLike } from "ol/Feature";
 import Point from "ol/geom/Point";
 import CircleGeom from "ol/geom/Circle";
+import Overlay from "ol/Overlay";
 import { fromLonLat, toLonLat } from "ol/proj";
 import { boundingExtent } from "ol/extent";
-import { Circle as CircleStyle, Fill, Stroke, Style, Text } from "ol/style";
+import { Circle as CircleStyle, Fill, Icon, Stroke, Style, Text } from "ol/style";
 import { defaults as defaultControls } from "ol/control/defaults";
 import { TASHKENT_CENTER } from "./style";
 
@@ -31,6 +32,11 @@ export interface MapViewProps {
   /** Explicit mode switch: one marker (+ optional radius circle) instead of the clustered source/layer. Fixed per instance — never toggled at runtime. Default false. */
   singleMarker?: boolean;
   className?: string;
+  /** Renders a click-popup's contents for the given pin id; `close` clears the selection and
+   * hides the popup overlay. When given, clicking an unclustered pin opens this popup instead of
+   * calling `onPinClick` — the two are mutually exclusive per click. Ignored in `singleMarker`
+   * mode, which registers no click handler at all. */
+  renderPopup?: (id: string, close: () => void) => React.ReactNode;
 }
 
 const TEAL = "#0f6e63";
@@ -40,6 +46,37 @@ const TEAL_RADIUS_FILL = "rgba(15, 110, 99, 0.12)";
 /** Feature id for the single-marker mode's optional radius-circle feature — distinct from any real point id, which lets the marker and the circle share one VectorSource. */
 const RADIUS_FEATURE_ID = "__radius__";
 
+const PIN_WIDTH = 28;
+const PIN_HEIGHT = 38;
+
+/** A teardrop map-pin as an inline SVG data URI (no icon font, no network request): a circular
+ * head tapering to a point at the bottom-center, matching the `anchor: [0.5, 1]` in `pinStyle`
+ * below. */
+function pinIconSrc(fillColor: string): string {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${PIN_WIDTH}" height="${PIN_HEIGHT}" viewBox="0 0 ${PIN_WIDTH} ${PIN_HEIGHT}"><path d="M14 1C7.373 1 2 6.373 2 13c0 9 12 24 12 24s12-15 12-24c0-6.627-5.373-12-12-12z" fill="${fillColor}" stroke="#ffffff" stroke-width="1.5"/><circle cx="14" cy="13" r="4" fill="#ffffff"/></svg>`;
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+}
+
+function pinStyle(fillColor: string, scale: number): Style {
+  return new Style({ image: new Icon({ src: pinIconSrc(fillColor), anchor: [0.5, 1], scale }) });
+}
+
+let pinStyleNormal: Style | undefined;
+let pinStyleHovered: Style | undefined;
+
+/**
+ * Lazily builds, then reuses, the two pin-icon `Style` instances (plain vs. hovered) — built at
+ * most once each, not inside a style *function*, which OL calls per feature on every redraw, so
+ * the icon's data URI is decoded into an `Image` a single time rather than on every repaint.
+ * Deferred (rather than built eagerly at module load) so importing this module never constructs
+ * an `Icon`/`Image` as a side effect: real construction happens only the first time OL actually
+ * calls a style function, which a fully-mocked test map never does.
+ */
+function pinStyleFor(hovered: boolean): Style {
+  if (hovered) return (pinStyleHovered ??= pinStyle(TEAL_DARK, 1.15));
+  return (pinStyleNormal ??= pinStyle(TEAL, 1));
+}
+
 function clusterRadius(size: number): number {
   return size >= 50 ? 28 : size >= 10 ? 22 : 16;
 }
@@ -47,7 +84,7 @@ function clusterRadius(size: number): number {
 /**
  * Cluster-mode style function: with `distance`-based clustering every point is wrapped in a
  * cluster feature, even a lone one, so "cluster of exactly one" *is* how an unclustered pin is
- * represented — it draws a small dot instead of a numbered circle. `hoveredRef` is read live
+ * represented — it draws a single pin icon instead of a numbered circle. `hoveredRef` is read live
  * (not captured once) so the closure stays correct across hover changes without recreating the
  * layer; pair with a `.changed()` call on the layer to force a re-style when it updates.
  */
@@ -65,23 +102,17 @@ function clusterStyleFn(hoveredRef: { current: string | null }) {
       });
     }
     const hovered = inner[0]?.getId() === hoveredRef.current;
-    return new Style({
-      image: new CircleStyle({
-        radius: hovered ? 9 : 6,
-        fill: new Fill({ color: hovered ? TEAL_DARK : TEAL }),
-        stroke: new Stroke({ color: "#ffffff", width: 2 }),
-      }),
-    });
+    return pinStyleFor(hovered);
   };
 }
 
-/** Single-marker mode style: the marker point is a solid teal dot; the optional radius feature
+/** Single-marker mode style: the marker point is a teal pin icon; the optional radius feature
  * (a `Circle` geometry, told apart from the point by geometry type) is a translucent teal fill. */
 function singleMarkerStyleFn(feature: FeatureLike) {
   if (feature.getGeometry() instanceof CircleGeom) {
     return new Style({ fill: new Fill({ color: TEAL_RADIUS_FILL }), stroke: new Stroke({ color: TEAL, width: 1.5 }) });
   }
-  return new Style({ image: new CircleStyle({ radius: 8, fill: new Fill({ color: TEAL }), stroke: new Stroke({ color: "#ffffff", width: 2 }) }) });
+  return pinStyleFor(false);
 }
 
 /** Cluster mode: replace the raw (pre-cluster) source's features to match `points` — the OL
@@ -130,9 +161,11 @@ function syncSingleMarker(source: VectorSource<Feature>, point: MapPoint | undef
 
 /** Thin OpenLayers wrapper over OSM raster tiles: `singleMarker` renders one marker (+ optional
  * radius circle) mini-map; otherwise renders a clustered point map, even for a single point. */
-export function MapView({ points = [], center, zoom, radiusMeters = null, onPinClick, onBoundsChange, hoveredId = null, singleMarker = false, className }: MapViewProps) {
+export function MapView({ points = [], center, zoom, radiusMeters = null, onPinClick, onBoundsChange, hoveredId = null, singleMarker = false, className, renderPopup }: MapViewProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const popupRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<OlMap | null>(null);
+  const overlayRef = useRef<Overlay | null>(null);
   const vectorSourceRef = useRef<VectorSource<Feature> | null>(null);
   // `any`: cluster mode's layer wraps a `Cluster` source, single-marker mode's wraps a plain
   // `VectorSource` — two different `VectorLayer<...>` generic instantiations. Only `.changed()`
@@ -142,9 +175,17 @@ export function MapView({ points = [], center, zoom, radiusMeters = null, onPinC
   // `singleMarker` is fixed per instance (never toggled at runtime), so this closure value
   // stays valid for the lifetime of the mount effect below — no 1-vs-many boundary to cross.
   const single = singleMarker;
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  const latest = useRef({ points, radiusMeters, onPinClick, onBoundsChange });
-  latest.current = { points, radiusMeters, onPinClick, onBoundsChange };
+  const latest = useRef({ points, radiusMeters, onPinClick, onBoundsChange, renderPopup });
+  latest.current = { points, radiusMeters, onPinClick, onBoundsChange, renderPopup };
+
+  /** Clears the selection and hides the popup overlay (an `Overlay` with no position is hidden
+   * by OpenLayers) — shared by the popup's own close button and by a click that hits no pin. */
+  function closePopup() {
+    setSelectedId(null);
+    overlayRef.current?.setPosition(undefined);
+  }
 
   useEffect(() => {
     const container = containerRef.current;
@@ -182,6 +223,18 @@ export function MapView({ points = [], center, zoom, radiusMeters = null, onPinC
       mapRef.current = m;
       m.updateSize();
 
+      // The click-popup overlay: created unconditionally (cheap, and inert in single-marker
+      // mode, which registers no click handler below and so never positions it) so its element
+      // is already attached to the map by the time any caller's `renderPopup` needs it.
+      const popupOverlay = new Overlay({
+        element: popupRef.current ?? undefined,
+        positioning: "bottom-center",
+        offset: [0, -40],
+        stopEvent: true,
+      });
+      m.addOverlay(popupOverlay);
+      overlayRef.current = popupOverlay;
+
       m.on("moveend", () => {
         const size = m.getSize();
         if (!size) return;
@@ -196,17 +249,27 @@ export function MapView({ points = [], center, zoom, radiusMeters = null, onPinC
 
       if (!single) {
         m.on("click", (e) => {
-          m.forEachFeatureAtPixel(e.pixel, (feature) => {
+          const hit = m.forEachFeatureAtPixel(e.pixel, (feature) => {
             const inner = feature.get("features") as Feature[] | undefined;
             if (!inner) return false;
             if (inner.length === 1) {
               const id = inner[0]?.getId();
-              if (typeof id === "string") latest.current.onPinClick?.(id);
+              if (typeof id === "string") {
+                if (latest.current.renderPopup) {
+                  setSelectedId(id);
+                  overlayRef.current?.setPosition((feature.getGeometry() as Point).getCoordinates());
+                } else {
+                  latest.current.onPinClick?.(id);
+                }
+              }
               return true;
             }
             m.getView().fit(boundingExtent(inner.map((f) => (f.getGeometry() as Point).getCoordinates())), { duration: 300, maxZoom: 16 });
             return true;
           });
+          // A click that hit nothing (empty map) closes any open popup instead of leaving it
+          // stranded over wherever the map used to be centered.
+          if (!hit) closePopup();
         });
       }
 
@@ -228,6 +291,7 @@ export function MapView({ points = [], center, zoom, radiusMeters = null, onPinC
       mapRef.current = null;
       vectorSourceRef.current = null;
       vectorLayerRef.current = null;
+      overlayRef.current = null;
     };
   }, []); // map is created once, on mount; props sync via the effects below (refs keep them fresh)
 
@@ -252,5 +316,13 @@ export function MapView({ points = [], center, zoom, radiusMeters = null, onPinC
     if (!single) vectorLayerRef.current?.changed();
   }, [hoveredId, single]);
 
-  return <div ref={containerRef} className={className ?? "h-full w-full min-h-64 rounded-card"} />;
+  return (
+    <div ref={containerRef} className={className ?? "h-full w-full min-h-64 rounded-card"}>
+      {/* Nested inside the map's own container div (rather than a sibling of it) because
+          OpenLayers physically moves this node into its internal overlay container once the
+          `Overlay` above attaches to the map — staying a descendant of `containerRef` the whole
+          time means unmounting only ever has to detach that one outer div. */}
+      <div ref={popupRef}>{selectedId && renderPopup?.(selectedId, closePopup)}</div>
+    </div>
+  );
 }

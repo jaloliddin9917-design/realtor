@@ -20,7 +20,10 @@ import { PropertiesPage } from "./ui";
 const mockView = { calculateExtent: vi.fn(() => [0, 0, 0, 0]), fit: vi.fn(), setCenter: vi.fn(), setZoom: vi.fn() };
 vi.mock("ol/Map", () => ({
   default: vi.fn(function MockMap() {
-    return { on: vi.fn(), forEachFeatureAtPixel: vi.fn(), getSize: () => [800, 600], getView: () => mockView, updateSize: vi.fn(), setTarget: vi.fn() };
+    return {
+      on: vi.fn(), forEachFeatureAtPixel: vi.fn(), getSize: () => [800, 600], getView: () => mockView,
+      updateSize: vi.fn(), setTarget: vi.fn(), addOverlay: vi.fn(), getOverlayById: vi.fn(),
+    };
   }),
 }));
 vi.mock("ol/View", () => ({ default: vi.fn(function MockView(opts: unknown) { return opts; }) }));
@@ -58,8 +61,10 @@ vi.mock("ol/style", () => ({
   Stroke: vi.fn(() => ({})),
   Circle: vi.fn(() => ({})),
   Text: vi.fn(() => ({})),
+  Icon: vi.fn(() => ({})),
 }));
 vi.mock("ol/control/defaults", () => ({ defaults: vi.fn(() => []) }));
+vi.mock("ol/Overlay", () => ({ default: vi.fn(function MockOverlay() { return { setPosition: vi.fn() }; }) }));
 
 const row: PropertyRow = { id: "p1", status: "active", district: "chilonzor", rooms: 2, floor: 3, total_floors: 9, area_sqm: 54, price_usd_min_minor: 45000, source_removed: false, needs_recheck: false, first_seen_at: "2026-08-12T09:00:00Z", last_seen_at: "2026-08-29T12:40:00Z", listing_count: 2, source_kinds: ["olx", "telegram"], probable_owner: null, photo_url: null, last_status_event: null, latitude: null, longitude: null, location_radius_m: null, location_label: null, building_type: null, is_furnished: null, renovation: null, year_built: null };
 
@@ -132,7 +137,10 @@ describe("PropertiesPage", () => {
   it("shows the map in map view regardless of the rows page (pins are unpaged)", async () => {
     // $rows (paginated) and $pins (unpaged) are decoupled: map mode renders only the map, so an
     // empty rows page never hides it.
-    const pin: Pin = { id: "p1", latitude: 41.3, longitude: 69.2, price_usd_min_minor: 45000, rooms: 2, status: "active", source_removed: false };
+    const pin: Pin = {
+      id: "p1", latitude: 41.3, longitude: 69.2, price_usd_min_minor: 45000, rooms: 2, status: "active", source_removed: false,
+      district: "chilonzor", area_sqm: 54, floor: 3, total_floors: 9, photo_url: null, location_label: null,
+    };
     await mount({ view: "map", page: { items: [], total: 0, page: 1, page_size: 20 }, pins: [pin] });
     // PropertyMap's own chrome renders — the map is not hidden behind the empty-rows state
     expect(screen.getByRole("switch", { name: "Bu hududda qidirish" })).toBeInTheDocument();
