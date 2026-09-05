@@ -9,7 +9,7 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.settings import Settings
+from app.core.settings import PHOTO_URL_PREFIX, Settings
 from app.ingestion.pipeline import ingest_payload
 from app.modules.contacts.scoring import rescore_contact, update_probable_owner
 from app.modules.contacts.service import contacts_for_listing
@@ -400,6 +400,43 @@ async def test_pins_returns_only_located_matches(
     assert all(p["latitude"] is not None and p["longitude"] is not None for p in pins)
     r2 = await client.get("/api/v1/properties/pins", params={"building_type": "brick"}, headers=h)
     assert len(r2.json()) == 1
+
+
+async def test_pins_include_photo_and_details(
+    client: httpx.AsyncClient,
+    settings: Settings,
+    agent: User,
+    sources: tuple[Source, Source],
+    db: AsyncSession,
+) -> None:
+    _tg, olx = sources
+    prop = await seed(
+        db,
+        settings,
+        olx,
+        "pin_photo1",
+        "Сдаётся +998900000015",
+        {
+            "latitude": 41.31,
+            "longitude": 69.28,
+            "district": "chilonzor",
+            "area_sqm": 54.5,
+            "floor": 3,
+            "total_floors": 9,
+        },
+    )
+    listing = await listing_of(db, prop)
+    db.add(ListingPhoto(listing_id=listing.id, position=0, storage_key="pin/0.jpg"))
+    await db.flush()
+    r = await client.get("/api/v1/properties/pins", headers=auth_headers(settings, agent))
+    assert r.status_code == 200, r.text
+    pin = next(p for p in r.json() if p["id"] == str(prop.id))
+    assert pin["photo_url"] is not None
+    assert pin["photo_url"].startswith(PHOTO_URL_PREFIX)
+    assert pin["district"] == "chilonzor"
+    assert pin["area_sqm"] == 54.5
+    assert pin["floor"] == 3
+    assert pin["total_floors"] == 9
 
 
 async def test_filters_by_furnished(

@@ -1902,6 +1902,39 @@
       },
       "PinOut": {
         "properties": {
+          "area_sqm": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Area Sqm"
+          },
+          "district": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "District"
+          },
+          "floor": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Floor"
+          },
           "id": {
             "format": "uuid",
             "title": "Id",
@@ -1911,9 +1944,31 @@
             "title": "Latitude",
             "type": "number"
           },
+          "location_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location Label"
+          },
           "longitude": {
             "title": "Longitude",
             "type": "number"
+          },
+          "photo_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Photo Url"
           },
           "price_usd_min_minor": {
             "anyOf": [
@@ -1949,6 +2004,17 @@
             ],
             "title": "Status",
             "type": "string"
+          },
+          "total_floors": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Floors"
           }
         },
         "required": [
@@ -1958,7 +2024,13 @@
           "price_usd_min_minor",
           "rooms",
           "status",
-          "source_removed"
+          "source_removed",
+          "district",
+          "area_sqm",
+          "floor",
+          "total_floors",
+          "photo_url",
+          "location_label"
         ],
         "title": "PinOut",
         "type": "object"

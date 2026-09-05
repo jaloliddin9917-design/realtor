@@ -82,6 +82,12 @@ class PinOut(BaseModel):
     rooms: int | None
     status: PropertyStatus
     source_removed: bool
+    district: str | None
+    area_sqm: float | None
+    floor: int | None
+    total_floors: int | None
+    photo_url: str | None
+    location_label: str | None
 
 
 class PhotoOut(BaseModel):

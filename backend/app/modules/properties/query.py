@@ -312,8 +312,14 @@ async def list_pins(session: AsyncSession, f: PropertyFilters, *, cap: int = 200
             rooms=prop.rooms,
             status=cast(PropertyStatus, prop.status),
             source_removed=prop.source_removed,
+            district=prop.district,
+            area_sqm=prop.area_sqm,
+            floor=prop.floor,
+            total_floors=prop.total_floors,
+            photo_url=f"{PHOTO_URL_PREFIX}/{photo_key}" if photo_key else None,
+            location_label=prop.location_label,
         )
-        for (prop, *_rest) in rows
+        for (prop, _listing_count, _source_kinds, _owner, _event, photo_key) in rows
     ]
 
 

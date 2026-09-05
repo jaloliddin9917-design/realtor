@@ -1081,6 +1081,12 @@ export interface components {
         };
         /** PinOut */
         PinOut: {
+            /** Area Sqm */
+            area_sqm: number | null;
+            /** District */
+            district: string | null;
+            /** Floor */
+            floor: number | null;
             /**
              * Id
              * Format: uuid
@@ -1088,8 +1094,12 @@ export interface components {
             id: string;
             /** Latitude */
             latitude: number;
+            /** Location Label */
+            location_label: string | null;
             /** Longitude */
             longitude: number;
+            /** Photo Url */
+            photo_url: string | null;
             /** Price Usd Min Minor */
             price_usd_min_minor: number | null;
             /** Rooms */
@@ -1101,6 +1111,8 @@ export interface components {
              * @enum {string}
              */
             status: "new" | "active" | "inactive";
+            /** Total Floors */
+            total_floors: number | null;
         };
         /** PriceOut */
         PriceOut: {
