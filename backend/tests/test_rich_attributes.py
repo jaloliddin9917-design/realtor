@@ -84,6 +84,19 @@ def test_missing_map_yields_no_coordinates():
     assert "latitude" not in s and "longitude" not in s
 
 
+def test_unmatched_attributes_are_omitted_or_other():
+    ad = {
+        "id": 9, "title": "T", "photos": [], "createdTime": "2026-09-01T10:00:00+05:00",
+        "params": [
+            {"key": "house_type", "value": "Неизвестный тип"},  # present but unmatched -> "other"
+            {"key": "comission", "value": "Возможно"},          # _yesno can't classify -> omitted
+        ],
+    }
+    s = ad_to_payload(ad, []).structured
+    assert s["building_type"] == "other"
+    assert "commission" not in s.get("attributes", {})
+
+
 def test_parse_text_threads_structured_attributes():
     parsed = parse_text(
         "T\ndesc",

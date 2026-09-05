@@ -109,8 +109,9 @@ def _attributes(ad: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
     bathroom = _match_code(BATHROOM_TYPES, p.get("wc"))
     if bathroom:
         bag["bathroom_type"] = bathroom
-    if p.get("comission") is not None:
-        bag["commission"] = _yesno(p.get("comission"))
+    commission = _yesno(p.get("comission"))
+    if commission is not None:
+        bag["commission"] = commission
     for key, out in (("kitchen_area", "kitchen_area_sqm"), ("ceiling_height", "ceiling_height_m")):
         n = _NUMBER.search(str(p.get(key) or ""))
         if n is not None:
