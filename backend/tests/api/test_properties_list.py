@@ -365,3 +365,38 @@ async def test_not_first_floor(
     )
     assert r.json()["total"] == 1
     assert r.json()["items"][0]["floor"] == 3
+
+
+async def test_pins_returns_only_located_matches(
+    client: httpx.AsyncClient,
+    settings: Settings,
+    agent: User,
+    sources: tuple[Source, Source],
+    db: AsyncSession,
+) -> None:
+    _tg, olx = sources
+    await seed(
+        db,
+        settings,
+        olx,
+        "pin1",
+        "Сдаётся +998900000011",
+        {"latitude": 41.31, "longitude": 69.28, "building_type": "brick"},
+    )
+    await seed(db, settings, olx, "pin2", "Сдаётся +998900000012", {})  # no coords -> omitted
+    await seed(
+        db,
+        settings,
+        olx,
+        "pin3",
+        "Сдаётся +998900000013",
+        {"latitude": 41.20, "longitude": 69.10, "building_type": "panel"},
+    )
+    h = auth_headers(settings, agent)
+    r = await client.get("/api/v1/properties/pins", headers=h)
+    assert r.status_code == 200, r.text
+    pins = r.json()
+    assert len(pins) == 2
+    assert all(p["latitude"] is not None and p["longitude"] is not None for p in pins)
+    r2 = await client.get("/api/v1/properties/pins", params={"building_type": "brick"}, headers=h)
+    assert len(r2.json()) == 1

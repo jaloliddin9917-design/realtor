@@ -29,6 +29,7 @@ from app.modules.properties.schemas import (
     ListingOut,
     OwnerOut,
     PhotoOut,
+    PinOut,
     PriceOut,
     PropertyDetail,
     PropertyRow,
@@ -292,6 +293,28 @@ async def list_properties(
     )
     rows = (await session.execute(stmt)).all()
     return [row_from(*row) for row in rows], int(total)
+
+
+async def list_pins(session: AsyncSession, f: PropertyFilters, *, cap: int = 2000) -> list[PinOut]:
+    stmt = (
+        select_rows(f, count=False)
+        .where(Property.latitude.is_not(None), Property.longitude.is_not(None))
+        .order_by(Property.last_seen_at.desc(), Property.id)
+        .limit(cap)
+    )
+    rows = (await session.execute(stmt)).all()
+    return [
+        PinOut(
+            id=prop.id,
+            latitude=prop.latitude,
+            longitude=prop.longitude,
+            price_usd_min_minor=prop.price_usd_min_minor,
+            rooms=prop.rooms,
+            status=cast(PropertyStatus, prop.status),
+            source_removed=prop.source_removed,
+        )
+        for (prop, *_rest) in rows
+    ]
 
 
 # --- detail (Task 5) -------------------------------------------------------------------
