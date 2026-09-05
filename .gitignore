@@ -27,3 +27,4 @@ deploy/data/
 
 # parallel task worktrees
 .worktrees/
+.dev-logs/
