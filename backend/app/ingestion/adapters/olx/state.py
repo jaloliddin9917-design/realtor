@@ -9,6 +9,7 @@ from typing import Any
 from app.ingestion.adapters.base import RawPayload
 from app.ingestion.parse import normalize_phone
 from app.ingestion.parse.districts import match_district
+from app.ingestion.parse.normalize import translit
 
 MARKER = "__PRERENDERED_STATE__"
 _JSON_STRING = re.compile(r'"(?:[^"\\]|\\.)*"', re.S)
@@ -23,6 +24,104 @@ PARAM_KEYS = {
     "total_area": "area_sqm",
 }
 CURRENCY_CODES = {"UYE": "USD", "USD": "USD", "UZS": "UZS"}
+
+# Attribute vocabularies — matched as substrings of translit(value).lower(); first wins.
+BUILDING_TYPES = {
+    "brick": ["kirpich", "g'isht"],
+    "panel": ["panel"],
+    "monolith": ["monolit"],
+    "block": ["bloch", "blok", "penoblo", "gazoblo"],
+}
+RENOVATIONS = {
+    "euro": ["evro"],
+    "designer": ["dizayn"],
+    "cosmetic": ["kosmet"],
+    "average": ["sredn", "o'rtacha"],
+    "needs_repair": ["trebuet", "chernov", "bez remont", "ta'mir talab"],
+}
+BATHROOM_TYPES = {
+    "combined": ["sovmesh", "birlashtiril"],
+    "separate": ["razdel", "alohida"],
+    "multiple": ["bolee", "2 sanuz"],
+}
+
+
+def _match_code(vocab: dict[str, list[str]], value: Any) -> str | None:
+    """First code whose alias is a substring of translit(value); 'other' if a value is
+    present but unmatched; None if there is no value."""
+    t = translit(str(value or "")).lower()
+    if not t:
+        return None
+    for code, aliases in vocab.items():
+        if any(alias in t for alias in aliases):
+            return code
+    return "other"
+
+
+def _yesno(value: Any) -> bool | None:
+    t = translit(str(value or "")).lower()
+    if not t:
+        return None
+    if any(a in t for a in ("net", "yo'q", "yoq", "bez ", "siz")):
+        return False
+    if any(a in t for a in ("da", "ha", "est", "bor", "mebel")):
+        return True
+    return None
+
+
+def _year(value: Any) -> int | None:
+    m = _NUMBER.search(str(value or ""))
+    if m is None:
+        return None
+    year = int(float(m.group(0).replace(",", ".")))
+    return year if 1800 <= year <= 2100 else None
+
+
+def _map(ad: dict[str, Any]) -> tuple[float | None, float | None, int | None, bool | None]:
+    m = ad.get("map") or {}
+    lat, lon = m.get("lat"), m.get("lon")
+    if lat is None or lon is None:
+        return None, None, None, None
+    radius = m.get("radius")
+    radius_m = int(round(float(radius) * 1000)) if radius is not None else None
+    return float(lat), float(lon), radius_m, bool(m.get("show_detailed"))
+
+
+def _location_label(ad: dict[str, Any]) -> str | None:
+    loc = ad.get("location") or {}
+    path = loc.get("pathName")
+    if path:
+        return str(path)
+    label = ", ".join(str(p) for p in (loc.get("cityName"), loc.get("districtName")) if p)
+    return label or None
+
+
+def _attributes(ad: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Return (top-level columns, display bag) parsed from ad.params."""
+    p = {str(x.get("key")): x.get("value") for x in (ad.get("params") or [])}
+    top = {
+        "building_type": _match_code(BUILDING_TYPES, p.get("house_type")),
+        "is_furnished": _yesno(p.get("furnished")),
+        "renovation": _match_code(RENOVATIONS, p.get("repairs")),
+        "year_built": _year(p.get("year_of_construction_rent")),
+    }
+    bag: dict[str, Any] = {}
+    bathroom = _match_code(BATHROOM_TYPES, p.get("wc"))
+    if bathroom:
+        bag["bathroom_type"] = bathroom
+    if p.get("comission") is not None:
+        bag["commission"] = _yesno(p.get("comission"))
+    for key, out in (("kitchen_area", "kitchen_area_sqm"), ("ceiling_height", "ceiling_height_m")):
+        n = _NUMBER.search(str(p.get(key) or ""))
+        if n is not None:
+            bag[out] = float(n.group(0).replace(",", "."))
+    for key in ("near_is", "more"):
+        val = p.get(key)
+        if isinstance(val, list) and val:
+            bag[key] = [str(v) for v in val]
+        elif isinstance(val, str) and val.strip():
+            bag[key] = [val.strip()]
+    return {k: v for k, v in top.items() if v is not None}, bag
 
 
 def extract_state(html: str) -> dict[str, Any]:
@@ -114,6 +213,17 @@ def ad_to_payload(ad: dict[str, Any], phones: list[str]) -> RawPayload:
     district = match_district(((ad.get("location") or {}).get("districtName")) or "")
     if district:
         structured["district"] = district
+    lat, lon, radius_m, precise = _map(ad)
+    if lat is not None and lon is not None:
+        structured["latitude"], structured["longitude"] = lat, lon
+        structured["location_radius_m"], structured["location_precise"] = radius_m, precise
+    label = _location_label(ad)
+    if label:
+        structured["location_label"] = label
+    top_attrs, bag = _attributes(ad)
+    structured.update(top_attrs)
+    if bag:
+        structured["attributes"] = bag
     hints: list[tuple[str, str]] = []
     user_id = (ad.get("user") or {}).get("id")
     if user_id is not None:

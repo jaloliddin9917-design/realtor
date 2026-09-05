@@ -30,6 +30,16 @@ class ParsedListing(BaseModel):
     owner_marker: bool = False
     agent_marker: bool = False
     parse_confidence: float = 0.0
+    latitude: float | None = None
+    longitude: float | None = None
+    location_radius_m: int | None = None
+    location_precise: bool | None = None
+    location_label: str | None = None
+    building_type: str | None = None
+    is_furnished: bool | None = None
+    renovation: str | None = None
+    year_built: int | None = None
+    attributes: dict[str, Any] = {}
 
 
 def _confidence(p: "ParsedListing") -> float:
@@ -82,6 +92,16 @@ def parse_text(
         district=_override(s, "district", match_district(clean)),
         phones=extract_phones(clean),
         telegram_username=extract_username(clean) or sender_username,
+        latitude=s.get("latitude"),
+        longitude=s.get("longitude"),
+        location_radius_m=s.get("location_radius_m"),
+        location_precise=s.get("location_precise"),
+        location_label=s.get("location_label"),
+        building_type=s.get("building_type"),
+        is_furnished=s.get("is_furnished"),
+        renovation=s.get("renovation"),
+        year_built=s.get("year_built"),
+        attributes=s.get("attributes") or {},
     )
     p.owner_marker, p.agent_marker = extract_markers(clean)
     p.parse_confidence = _confidence(p)

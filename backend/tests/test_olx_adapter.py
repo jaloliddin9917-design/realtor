@@ -132,6 +132,20 @@ def test_ad_to_payload_maps_structured_fields() -> None:
         "total_floors": 7,
         "area_sqm": 50.0,
         "district": "yunusobod",
+        "location_label": "Ташкентская область, Ташкент, Юнусабадский район",
+        "building_type": "brick",
+        "is_furnished": True,
+        "renovation": "euro",
+        "year_built": 2017,
+        "attributes": {
+            "bathroom_type": "combined",
+            "commission": True,
+            "kitchen_area_sqm": 16.0,
+            "more": [
+                "Интернет, Телефон, Холодильник, Телевизор, "
+                "Кондиционер, Кабельное ТВ, Стиральная машина, Кухня"
+            ],
+        },
     }
     assert ("olx_user", "100000001") in p.contact_hints and (
         "phone",
