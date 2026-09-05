@@ -144,6 +144,31 @@ async def patch_source(
     return SourceOut.from_source(source, runs.get(source.id))
 
 
+@router.post(
+    "/sources/{source_id}/run",
+    response_model=SourceOut,
+    responses={
+        404: problem_response("unknown source"),
+        409: problem_response("source disabled"),
+        **PROBLEM_422,
+    },
+)
+async def run_source_now(source_id: uuid.UUID, session: SessionDep, _: AdminUser) -> SourceOut:
+    """Queue a source to crawl on the worker's next tick — the manual "fetch now".
+
+    The API never crawls synchronously (a full walk takes minutes); it only marks the source
+    due now and clears any backoff pause, and the running worker picks it up within one tick.
+    """
+    source = await _require_source(session, source_id)
+    if not source.enabled:
+        raise ApiError(409, "source.disabled", "enable the source before running it")
+    source.next_run_at = datetime.now(UTC)
+    source.paused_until = None
+    await session.commit()
+    runs = await _last_runs(session, [source.id])
+    return SourceOut.from_source(source, runs.get(source.id))
+
+
 @router.get(
     "/sources/{source_id}/runs",
     response_model=list[CrawlRunOut],

@@ -362,6 +362,29 @@ export interface paths {
         patch: operations["patch_source_api_v1_sources__source_id__patch"];
         trace?: never;
     };
+    "/api/v1/sources/{source_id}/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run Source Now
+         * @description Queue a source to crawl on the worker's next tick — the manual "fetch now".
+         *
+         *     The API never crawls synchronously (a full walk takes minutes); it only marks the source
+         *     due now and clears any backoff pause, and the running worker picks it up within one tick.
+         */
+        post: operations["run_source_now_api_v1_sources__source_id__run_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sources/{source_id}/runs": {
         parameters: {
             query?: never;
@@ -1038,7 +1061,7 @@ export interface components {
              *     `auth.invalid_credentials`, `auth.forbidden`, `not_found`, `method_not_allowed`,
              *     `validation_error`, `internal_error`, `listing.unsupported_url`, `listing.invalid_url`,
              *     `listing.gone`, `source.misconfigured`, `source.unavailable`, `source.login_required`,
-             *     `source.peer_unresolved`, `source.exists`, `user.exists`, `queue.locked`,
+             *     `source.peer_unresolved`, `source.exists`, `source.disabled`, `user.exists`, `queue.locked`,
              *     `dedupe.already_decided`, `outreach.not_resolvable`; any other HTTP status raised by the
              *     framework becomes `http.<status>`.
              */
@@ -1477,7 +1500,7 @@ export interface components {
              *     `auth.invalid_credentials`, `auth.forbidden`, `not_found`, `method_not_allowed`,
              *     `validation_error`, `internal_error`, `listing.unsupported_url`, `listing.invalid_url`,
              *     `listing.gone`, `source.misconfigured`, `source.unavailable`, `source.login_required`,
-             *     `source.peer_unresolved`, `source.exists`, `user.exists`, `queue.locked`,
+             *     `source.peer_unresolved`, `source.exists`, `source.disabled`, `user.exists`, `queue.locked`,
              *     `dedupe.already_decided`, `outreach.not_resolvable`; any other HTTP status raised by the
              *     framework becomes `http.<status>`.
              */
@@ -2681,6 +2704,82 @@ export interface operations {
             };
             /** @description unknown source */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description request validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblem"];
+                };
+            };
+            /** @description unexpected error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    run_source_now_api_v1_sources__source_id__run_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                source_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourceOut"];
+                };
+            };
+            /** @description missing, invalid or expired token; or inactive user */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description admin role required */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description unknown source */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description source disabled */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

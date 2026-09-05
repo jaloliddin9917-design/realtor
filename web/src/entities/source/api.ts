@@ -9,3 +9,5 @@ export const fetchSources = (): Promise<SourcesOut> => unwrap(api.GET("/api/v1/s
 export const patchSource = (id: string, enabled: boolean): Promise<Source> =>
   unwrap(api.PATCH("/api/v1/sources/{source_id}", { params: { path: { source_id: id } }, body: { enabled } }));
 export const createSource = (body: SourceCreate): Promise<Source> => unwrap(api.POST("/api/v1/sources", { body }));
+export const runSourceNow = (id: string): Promise<Source> =>
+  unwrap(api.POST("/api/v1/sources/{source_id}/run", { params: { path: { source_id: id } } }));

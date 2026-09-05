@@ -46,7 +46,7 @@ export default defineConfig([
     // entity data plus a `renderToggle` render prop rather than owning a feature import
     // itself — widgets never import features. "warn" rather than "off" for the same reason
     // as the other overrides here: still visible, not a hard failure.
-    files: ["src/features/source/toggle/**", "src/features/source/add-telegram/**", "src/widgets/sources-table/**"],
+    files: ["src/features/source/toggle/**", "src/features/source/add-telegram/**", "src/features/source/run-now/**", "src/widgets/sources-table/**"],
     rules: {
       "fsd/insignificant-slice": "warn",
     },

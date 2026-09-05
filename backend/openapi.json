@@ -1834,7 +1834,7 @@
         "description": "The body of every error response, sent as `application/problem+json`.",
         "properties": {
           "code": {
-            "description": "The machine-readable error code the web translates. One of:\n`auth.missing_token`, `auth.token_expired`, `auth.token_invalid`, `auth.user_inactive`,\n`auth.invalid_credentials`, `auth.forbidden`, `not_found`, `method_not_allowed`,\n`validation_error`, `internal_error`, `listing.unsupported_url`, `listing.invalid_url`,\n`listing.gone`, `source.misconfigured`, `source.unavailable`, `source.login_required`,\n`source.peer_unresolved`, `source.exists`, `user.exists`, `queue.locked`,\n`dedupe.already_decided`, `outreach.not_resolvable`; any other HTTP status raised by the\nframework becomes `http.<status>`.",
+            "description": "The machine-readable error code the web translates. One of:\n`auth.missing_token`, `auth.token_expired`, `auth.token_invalid`, `auth.user_inactive`,\n`auth.invalid_credentials`, `auth.forbidden`, `not_found`, `method_not_allowed`,\n`validation_error`, `internal_error`, `listing.unsupported_url`, `listing.invalid_url`,\n`listing.gone`, `source.misconfigured`, `source.unavailable`, `source.login_required`,\n`source.peer_unresolved`, `source.exists`, `source.disabled`, `user.exists`, `queue.locked`,\n`dedupe.already_decided`, `outreach.not_resolvable`; any other HTTP status raised by the\nframework becomes `http.<status>`.",
             "title": "Code",
             "type": "string"
           },
@@ -3099,7 +3099,7 @@
       "ValidationProblem": {
         "properties": {
           "code": {
-            "description": "The machine-readable error code the web translates. One of:\n`auth.missing_token`, `auth.token_expired`, `auth.token_invalid`, `auth.user_inactive`,\n`auth.invalid_credentials`, `auth.forbidden`, `not_found`, `method_not_allowed`,\n`validation_error`, `internal_error`, `listing.unsupported_url`, `listing.invalid_url`,\n`listing.gone`, `source.misconfigured`, `source.unavailable`, `source.login_required`,\n`source.peer_unresolved`, `source.exists`, `user.exists`, `queue.locked`,\n`dedupe.already_decided`, `outreach.not_resolvable`; any other HTTP status raised by the\nframework becomes `http.<status>`.",
+            "description": "The machine-readable error code the web translates. One of:\n`auth.missing_token`, `auth.token_expired`, `auth.token_invalid`, `auth.user_inactive`,\n`auth.invalid_credentials`, `auth.forbidden`, `not_found`, `method_not_allowed`,\n`validation_error`, `internal_error`, `listing.unsupported_url`, `listing.invalid_url`,\n`listing.gone`, `source.misconfigured`, `source.unavailable`, `source.login_required`,\n`source.peer_unresolved`, `source.exists`, `source.disabled`, `user.exists`, `queue.locked`,\n`dedupe.already_decided`, `outreach.not_resolvable`; any other HTTP status raised by the\nframework becomes `http.<status>`.",
             "title": "Code",
             "type": "string"
           },
@@ -4874,6 +4874,105 @@
           }
         ],
         "summary": "Patch Source",
+        "tags": [
+          "sources"
+        ]
+      }
+    },
+    "/api/v1/sources/{source_id}/run": {
+      "post": {
+        "description": "Queue a source to crawl on the worker's next tick \u2014 the manual \"fetch now\".\n\nThe API never crawls synchronously (a full walk takes minutes); it only marks the source\ndue now and clears any backoff pause, and the running worker picks it up within one tick.",
+        "operationId": "run_source_now_api_v1_sources__source_id__run_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "source_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Source Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourceOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "missing, invalid or expired token; or inactive user"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "admin role required"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "unknown source"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "source disabled"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblem"
+                }
+              }
+            },
+            "description": "request validation failed"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "unexpected error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Run Source Now",
         "tags": [
           "sources"
         ]

@@ -5,14 +5,14 @@ import { kindKey, sourceStatusKey } from "@/shared/i18n";
 
 const STATUS: Record<Source["status"], string> = { ok: "bg-status-active-bg text-status-active", failing: "bg-status-inactive-bg text-status-inactive", login_required: "bg-warn-bg text-warn", paused: "bg-warn-bg text-warn", misconfigured: "bg-status-inactive-bg text-status-inactive" };
 
-export function SourcesTable({ sources, renderToggle }: { sources: Source[]; renderToggle: (s: Source) => React.ReactNode }) {
+export function SourcesTable({ sources, renderToggle, renderRun }: { sources: Source[]; renderToggle: (s: Source) => React.ReactNode; renderRun: (s: Source) => React.ReactNode }) {
   const { t, i18n } = useTranslation();
   const th = "whitespace-nowrap bg-surface-soft px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground";
   const td = "border-b border-line-soft px-3 py-2.5 align-middle";
   return (
     <div className="overflow-x-auto rounded-card border border-line bg-surface">
       <table className="w-full border-collapse text-[13px]">
-        <thead><tr>{(["name", "kind", "enabled", "status", "lastRun", "nextRun", "failures", "error"] as const).map((c) => <th key={c} className={th}>{t(`sources.columns.${c}`)}</th>)}</tr></thead>
+        <thead><tr>{(["name", "kind", "enabled", "status", "lastRun", "nextRun", "failures", "error", "action"] as const).map((c) => <th key={c} className={th}>{t(`sources.columns.${c}`)}</th>)}</tr></thead>
         <tbody>
           {sources.map((s) => (
             <tr key={s.id}>
@@ -24,6 +24,7 @@ export function SourcesTable({ sources, renderToggle }: { sources: Source[]; ren
               <td className={`${td} num`}>{formatDate(s.next_run_at, i18n.language, "datetime")}</td>
               <td className={`${td} num`}>{s.consecutive_failures}</td>
               <td className={`${td} max-w-64 truncate text-xs text-status-inactive`} title={s.last_run?.error ?? ""}>{s.last_run?.error ?? ""}</td>
+              <td className={td}>{renderRun(s)}</td>
             </tr>
           ))}
         </tbody>

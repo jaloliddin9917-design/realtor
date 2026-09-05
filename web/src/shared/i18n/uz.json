@@ -28,8 +28,8 @@
   "actor": { "crawler": "Tizim", "agent": "Agent", "admin": "Admin", "bot": "Bot" },
   "district": { "bektemir": "Bektemir", "chilonzor": "Chilonzor", "mirobod": "Mirobod", "mirzo_ulugbek": "Mirzo Ulug'bek", "olmazor": "Olmazor", "sergeli": "Sergeli", "shayxontohur": "Shayxontohur", "uchtepa": "Uchtepa", "yakkasaroy": "Yakkasaroy", "yangihayot": "Yangihayot", "yashnobod": "Yashnobod", "yunusobod": "Yunusobod" },
   "sources": {
-    "title": "Manbalar", "add": "Kanal qo'shish", "peer": "Kanal (@username yoki t.me havola)", "name": "Nom (ixtiyoriy)", "interval": "Tekshirish oralig'i, soniya", "added": "Kanal qo'shildi", "runs": "Yurishlar", "never": "hali yo'q", "enabled": "yoqilgan", "disabled": "o'chirilgan",
-    "columns": { "name": "Nom", "kind": "Tur", "enabled": "Yoqilgan", "status": "Holat", "lastRun": "So'nggi yurish", "nextRun": "Keyingi", "failures": "Xatolar", "error": "So'nggi xato", "found": "Topildi", "new": "Yangi" },
+    "title": "Manbalar", "add": "Kanal qo'shish", "runNow": "Ishga tushirish", "runQueued": "Yurish navbatga qo'yildi", "peer": "Kanal (@username yoki t.me havola)", "name": "Nom (ixtiyoriy)", "interval": "Tekshirish oralig'i, soniya", "added": "Kanal qo'shildi", "runs": "Yurishlar", "never": "hali yo'q", "enabled": "yoqilgan", "disabled": "o'chirilgan",
+    "columns": { "name": "Nom", "kind": "Tur", "enabled": "Yoqilgan", "status": "Holat", "lastRun": "So'nggi yurish", "nextRun": "Keyingi", "failures": "Xatolar", "error": "So'nggi xato", "found": "Topildi", "new": "Yangi", "action": "Amal" },
     "status": { "ok": "OK", "failing": "Xato", "login_required": "Login kerak", "paused": "To'xtatilgan", "misconfigured": "Sozlanmagan" },
     "fxStale": "Valyuta kursi {{days}} kundan eski — so'mdagi narxlar noaniq bo'lishi mumkin", "fxMissing": "Valyuta kursi hali yuklanmagan"
   },
@@ -39,7 +39,7 @@
     "queue": { "locked": "Bu uyni boshqa agent band qilgan" },
     "auth": { "missing_token": "Tizimga kiring", "token_expired": "Sessiya muddati tugadi — qayta kiring", "token_invalid": "Sessiya yaroqsiz — qayta kiring", "user_inactive": "Foydalanuvchi faol emas", "invalid_credentials": "Telefon yoki parol noto'g'ri", "forbidden": "Bu amal uchun admin huquqi kerak" },
     "listing": { "unsupported_url": "Faqat olx.uz va t.me havolalari qo'llab-quvvatlanadi", "invalid_url": "Havola noto'g'ri", "gone": "E'lon manbada o'chirilgan" },
-    "source": { "misconfigured": "Manba sozlanmagan (Telegram kalitlari yo'q)", "unavailable": "Manba javob bermadi — keyinroq urinib ko'ring", "login_required": "Telegram akkauntiga kirish kerak (telegram-login)", "peer_unresolved": "Kanal topilmadi", "exists": "Bunday nomli manba allaqachon bor" },
+    "source": { "misconfigured": "Manba sozlanmagan (Telegram kalitlari yo'q)", "unavailable": "Manba javob bermadi — keyinroq urinib ko'ring", "login_required": "Telegram akkauntiga kirish kerak (telegram-login)", "peer_unresolved": "Kanal topilmadi", "exists": "Bunday nomli manba allaqachon bor", "disabled": "Manbani avval yoqing" },
     "user": { "exists": "Bunday raqamli foydalanuvchi allaqachon bor" }
   }
 }

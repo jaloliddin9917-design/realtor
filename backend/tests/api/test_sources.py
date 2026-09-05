@@ -241,3 +241,39 @@ async def test_list_breaks_started_at_ties_by_highest_run_id(
     assert r.status_code == 200, r.text
     (row,) = r.json()["items"]
     assert row["last_run"]["found"] == 42
+
+
+async def test_run_now_queues_the_source_for_the_worker(
+    client: httpx.AsyncClient, settings: Settings, admin: User, agent: User, db: AsyncSession
+) -> None:
+    h = auth_headers(settings, admin)
+    src = Source(
+        kind="olx",
+        name="olx-run-now",
+        config={"url": "https://www.olx.uz/x/"},
+        enabled=True,
+        next_run_at=NOW + timedelta(hours=1),
+        paused_until=NOW + timedelta(hours=1),
+    )
+    db.add(src)
+    await db.flush()
+
+    # marks it due now and clears any backoff pause (the worker picks it up next tick)
+    r = await client.post(f"/api/v1/sources/{src.id}/run", headers=h)
+    assert r.status_code == 200
+    body = r.json()
+    assert body["paused_until"] is None
+    assert datetime.fromisoformat(body["next_run_at"]) <= datetime.now(UTC) + timedelta(seconds=5)
+
+    # a disabled source can't be run
+    src.enabled = False
+    await db.flush()
+    r = await client.post(f"/api/v1/sources/{src.id}/run", headers=h)
+    assert r.status_code == 409 and r.json()["code"] == "source.disabled"
+
+    # unknown -> 404, agent -> 403
+    assert (await client.post(f"/api/v1/sources/{uuid.uuid4()}/run", headers=h)).status_code == 404
+    forbidden = await client.post(
+        f"/api/v1/sources/{src.id}/run", headers=auth_headers(settings, agent)
+    )
+    assert forbidden.status_code == 403
