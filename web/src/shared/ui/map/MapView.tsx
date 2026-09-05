@@ -127,51 +127,57 @@ export function MapView({ points = [], center, zoom, radiusMeters = null, onPinC
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
-    const first = latest.current.points[0];
-    const initialCenter = center ?? (single && first ? ([first.lon, first.lat] as [number, number]) : TASHKENT_CENTER);
-    const map = new MapLibreMap({ container, style: MAP_STYLE_URL, center: initialCenter, zoom: zoom ?? (single ? 15 : 12) });
-    mapRef.current = map;
-    map.addControl(new NavigationControl(), "top-right");
-    // surface tile/style/WebGL failures instead of silently rendering a blank canvas
-    map.on("error", (e) => console.error("[MapView] map error:", (e as { error?: { message?: string } }).error?.message ?? e));
-    // The map is usually created while its container is still settling — lazy-mounted behind a
-    // Suspense fallback and revealed by the List/Map toggle. If MapLibre measured the box before
-    // it reached its final size, the WebGL drawing buffer stays wrong and the canvas renders
-    // blank even though the element is full-size. Resize on load and on every container resize so
-    // the buffer always matches the box.
-    const resizeObserver = new ResizeObserver(() => map.resize());
-    resizeObserver.observe(container);
+    let map: MapLibreMap | null = null;
+    let resizeObserver: ResizeObserver | null = null;
+    // React StrictMode (dev) runs effects mount → cleanup → mount synchronously, and MapLibre does
+    // not survive being torn down mid-initialisation — the recreated map renders a blank canvas
+    // and never requests tiles. Deferring creation one frame lets the throwaway first mount's
+    // cleanup cancel it (cancelAnimationFrame), so exactly one map is ever built.
+    const raf = requestAnimationFrame(() => {
+      const first = latest.current.points[0];
+      const initialCenter = center ?? (single && first ? ([first.lon, first.lat] as [number, number]) : TASHKENT_CENTER);
+      const m = new MapLibreMap({ container, style: MAP_STYLE_URL, center: initialCenter, zoom: zoom ?? (single ? 15 : 12) });
+      map = m;
+      mapRef.current = m;
+      m.addControl(new NavigationControl(), "top-right");
+      // surface tile/style/WebGL failures instead of silently rendering a blank canvas
+      m.on("error", (e) => console.error("[MapView] map error:", (e as { error?: { message?: string } }).error?.message ?? e));
+      // keep the WebGL drawing buffer matched to the container as it settles / resizes
+      resizeObserver = new ResizeObserver(() => m.resize());
+      resizeObserver.observe(container);
 
-    map.on("load", () => {
-      loadedRef.current = true;
-      map.resize();
-      if (!single) addClusterLayers(map);
-      syncData(map, single, true, latest.current.points, latest.current.radiusMeters, markerRef);
-    });
-    map.on("moveend", () => {
-      const b = map.getBounds();
-      latest.current.onBoundsChange?.({ minLat: b.getSouth(), minLon: b.getWest(), maxLat: b.getNorth(), maxLon: b.getEast() });
-    });
-    map.on("click", CLUSTER_LAYER, (e) => {
-      const feature = e.features?.[0];
-      const clusterId = feature?.properties?.["cluster_id"];
-      const geometry = feature?.geometry;
-      const source = map.getSource<GeoJSONSource>(SOURCE_ID);
-      if (source && typeof clusterId === "number" && geometry?.type === "Point") {
-        const [lon, lat] = geometry.coordinates;
-        source.getClusterExpansionZoom(clusterId).then((z) => map.easeTo({ center: [lon, lat], zoom: z }));
-      }
-    });
-    map.on("click", POINT_LAYER, (e) => {
-      const id = e.features?.[0]?.properties?.["pointId"];
-      if (typeof id === "string") latest.current.onPinClick?.(id);
+      m.on("load", () => {
+        loadedRef.current = true;
+        m.resize();
+        if (!single) addClusterLayers(m);
+        syncData(m, single, true, latest.current.points, latest.current.radiusMeters, markerRef);
+      });
+      m.on("moveend", () => {
+        const b = m.getBounds();
+        latest.current.onBoundsChange?.({ minLat: b.getSouth(), minLon: b.getWest(), maxLat: b.getNorth(), maxLon: b.getEast() });
+      });
+      m.on("click", CLUSTER_LAYER, (e) => {
+        const feature = e.features?.[0];
+        const clusterId = feature?.properties?.["cluster_id"];
+        const geometry = feature?.geometry;
+        const source = m.getSource<GeoJSONSource>(SOURCE_ID);
+        if (source && typeof clusterId === "number" && geometry?.type === "Point") {
+          const [lon, lat] = geometry.coordinates;
+          source.getClusterExpansionZoom(clusterId).then((z) => m.easeTo({ center: [lon, lat], zoom: z }));
+        }
+      });
+      m.on("click", POINT_LAYER, (e) => {
+        const id = e.features?.[0]?.properties?.["pointId"];
+        if (typeof id === "string") latest.current.onPinClick?.(id);
+      });
     });
 
     return () => {
-      resizeObserver.disconnect();
+      cancelAnimationFrame(raf);
+      resizeObserver?.disconnect();
       markerRef.current?.remove();
       markerRef.current = null;
-      map.remove();
+      map?.remove();
       mapRef.current = null;
       loadedRef.current = false;
     };
