@@ -1,7 +1,8 @@
 """FastAPI application factory. Everything request-scoped hangs off `app.state`."""
 
+import asyncio
 from collections.abc import AsyncIterator, Callable
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -30,6 +31,7 @@ from app.modules import (
     models as _models,  # noqa: F401  (registers every ORM model — complete metadata)
 )
 from app.modules.dedupe.config import load_config
+from app.worker.loop import run_ticks
 
 INSECURE_JWT_SECRET = (
     "JWT_SECRET is insecure: set a random secret of at least 32 bytes "
@@ -50,6 +52,8 @@ def create_app(
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         engine = None
         active_registry: AdapterRegistry | None = None
+        worker_stop: asyncio.Event | None = None
+        worker_task: asyncio.Task[None] | None = None
         try:
             # Checked at startup, not in `create_app`: building the app to print the
             # OpenAPI schema (`python -m app.api openapi`, `tests/api/test_openapi.py`)
@@ -65,8 +69,28 @@ def create_app(
             app.state.registry = active_registry
             app.state.dedupe_config = load_config(cfg.dedupe_config_path)
             cfg.photo_dir.mkdir(parents=True, exist_ok=True)
+            # On single-container free hosts the crawler rides inside the API as a background
+            # task rather than a separate `python -m app.worker` process (which such hosts don't
+            # keep supervised). docker-compose leaves this off and runs the worker service.
+            if cfg.run_worker_in_process:
+                worker_stop = asyncio.Event()
+                worker_task = asyncio.create_task(
+                    run_ticks(
+                        app.state.session_factory,
+                        active_registry,
+                        settings=cfg,
+                        cfg=app.state.dedupe_config,
+                        stop=worker_stop,
+                    )
+                )
             yield
         finally:
+            if worker_stop is not None:
+                worker_stop.set()
+            if worker_task is not None:
+                worker_task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await worker_task
             if active_registry is not None:
                 await active_registry.aclose()
             if engine is not None:

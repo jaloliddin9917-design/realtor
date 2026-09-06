@@ -222,6 +222,42 @@ async def tick(
             log.info("daily_jobs", **result)
 
 
+async def run_ticks(
+    session_factory: Callable[[], AsyncSession],
+    registry: AdapterRegistry,
+    *,
+    settings: Settings,
+    cfg: DedupeConfig,
+    stop: asyncio.Event,
+) -> None:
+    """Tick every `worker_tick_seconds` until `stop` is set.
+
+    Shared by the standalone worker (`python -m app.worker`) and the in-process worker the
+    API starts in its lifespan (RUN_WORKER_IN_PROCESS=true). On a free host where a separate
+    background process isn't reliably supervised, the worker rides inside the web process.
+    Caller owns the engine/registry lifecycle; this only drives the loop.
+    """
+    log.info("worker_start", tick_seconds=settings.worker_tick_seconds, adapters=registry.kinds)
+    async with httpx.AsyncClient(timeout=30) as http:
+        while not stop.is_set():
+            try:
+                await tick(
+                    session_factory,
+                    registry,
+                    settings=settings,
+                    cfg=cfg,
+                    http=http,
+                    now=datetime.now(UTC),
+                    should_stop=stop.is_set,
+                )
+            except Exception as exc:  # noqa: BLE001 — a tick must never kill the worker
+                log.error("tick_failed", error=str(exc))
+            try:
+                await asyncio.wait_for(stop.wait(), timeout=settings.worker_tick_seconds)
+            except TimeoutError:
+                continue
+
+
 async def main() -> None:
     """Entry point for `python -m app.worker`: tick forever until SIGINT/SIGTERM."""
     settings = get_settings()
@@ -234,30 +270,11 @@ async def main() -> None:
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGINT, signal.SIGTERM):
         loop.add_signal_handler(sig, stop.set)
-    log.info("worker_start", tick_seconds=settings.worker_tick_seconds, adapters=registry.kinds)
     try:
-        async with httpx.AsyncClient(timeout=30) as http:
-            while not stop.is_set():
-                try:
-                    await tick(
-                        factory,
-                        registry,
-                        settings=settings,
-                        cfg=cfg,
-                        http=http,
-                        now=datetime.now(UTC),
-                        should_stop=stop.is_set,
-                    )
-                except Exception as exc:  # noqa: BLE001 — a tick must never kill the worker
-                    log.error("tick_failed", error=str(exc))
-                try:
-                    await asyncio.wait_for(stop.wait(), timeout=settings.worker_tick_seconds)
-                except TimeoutError:
-                    continue
+        await run_ticks(factory, registry, settings=settings, cfg=cfg, stop=stop)
     finally:
         # release the adapters (the OLX HTTP client, the Telegram connection) and
-        # dispose the engine — and drop the signal handlers — even if the httpx client
-        # block above raised, not only on a clean stop.
+        # dispose the engine — and drop the signal handlers — even if the loop raised.
         for sig in (signal.SIGINT, signal.SIGTERM):
             loop.remove_signal_handler(sig)
         await registry.aclose()

@@ -38,3 +38,7 @@ services:
         value: /data/photos      # NOTE: ephemeral on Render free — see the photos caveat in DEPLOY.md
       - key: PYTHONUNBUFFERED
         value: "1"
+      # Run the crawler inside the API process — a separate worker process isn't supervised on
+      # Render free (it dies/suspends and never restarts). Needs the keep-warm pinger to run 24/7.
+      - key: RUN_WORKER_IN_PROCESS
+        value: "true"

@@ -97,6 +97,11 @@ class Settings(BaseSettings):
     telegram_rescan_limit: int = 200
     worker_tick_seconds: int = 60
     daily_job_hour: int = 3
+    # Run the crawler loop inside the API process (lifespan task) instead of a separate
+    # `python -m app.worker` process. For single-container free hosts (e.g. Render free) where
+    # a standalone background process isn't reliably supervised. docker-compose leaves this off
+    # and runs the dedicated worker service instead.
+    run_worker_in_process: bool = False
 
 
 @lru_cache
