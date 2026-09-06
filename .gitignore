@@ -28,3 +28,4 @@ deploy/data/
 # parallel task worktrees
 .worktrees/
 .dev-logs/
+backend/resp.json
