@@ -1,0 +1,34 @@
+# render.yaml — Render Blueprint (https://render.com/docs/blueprint-spec)
+#
+# One FREE web service that runs BOTH the FastAPI API and the crawler worker in a single
+# container. Render's free tier only includes a web service (no free background workers or
+# cron jobs), so the worker is started in the background alongside the API.
+#
+# Deploy: Render Dashboard → New → Blueprint → connect the GitHub repo. When prompted, fill
+# in DATABASE_URL and CORS_ORIGINS (see DEPLOY.md). The Postgres DB itself lives on Neon
+# (free), not on Render — Render's free Postgres expires after 30 days.
+services:
+  - type: web
+    name: realtor-api
+    runtime: docker
+    plan: free
+    region: frankfurt            # closest free region to Uzbekistan; change if you prefer
+    dockerfilePath: backend/Dockerfile
+    dockerContext: backend
+    # Run migrations, launch the crawler in the background, then bind the API to Render's $PORT.
+    # ($PORT is injected by Render at runtime; API_PORT is what the app reads — see app/core/settings.py.)
+    dockerCommand: sh -c "alembic upgrade head && (python -m app.worker &) && API_PORT=$PORT python -m app.api"
+    healthCheckPath: /api/v1/healthz
+    envVars:
+      # Neon connection string, rewritten for asyncpg — see DEPLOY.md:
+      #   postgresql+asyncpg://USER:PASSWORD@HOST/DB?ssl=require
+      - key: DATABASE_URL
+        sync: false
+      # Comma-separated list of allowed browser origins = your Cloudflare Pages URL(s), e.g.
+      #   https://realtor.pages.dev,https://your-custom-domain
+      - key: CORS_ORIGINS
+        sync: false
+      - key: PHOTO_DIR
+        value: /data/photos      # NOTE: ephemeral on Render free — see the photos caveat in DEPLOY.md
+      - key: PYTHONUNBUFFERED
+        value: "1"
