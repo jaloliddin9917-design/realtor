@@ -30,6 +30,10 @@ services:
       #   https://realtor.pages.dev,https://your-custom-domain
       - key: CORS_ORIGINS
         sync: false
+      # Render generates a secure random value (>=32 bytes); the API refuses to start on the
+      # default "change-me" secret. Generated once and kept stable across deploys.
+      - key: JWT_SECRET
+        generateValue: true
       - key: PHOTO_DIR
         value: /data/photos      # NOTE: ephemeral on Render free — see the photos caveat in DEPLOY.md
       - key: PYTHONUNBUFFERED
