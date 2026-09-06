@@ -79,12 +79,16 @@ export function PhotoGallery({ photos, alt }: { photos: { url: string }[]; alt: 
       )}
 
       <Dialog open={open} onOpenChange={(o) => { if (!o) setOpen(false); }}>
-        <DialogContent className="max-w-[92vw] gap-2 p-4">
+        {/* base DialogContent sets `sm:max-w-lg`, so widening it needs the `sm:` prefix too —
+            an unprefixed max-w is silently overridden on ≥sm screens (why the modal stayed narrow). */}
+        <DialogContent className="max-w-[95vw] gap-3 p-4 sm:max-w-[95vw]">
           <DialogTitle className="sr-only">{alt}</DialogTitle>
           {open && (
             <div className="flex flex-col gap-3">
-              <div className="relative flex items-center justify-center">
-                <img src={photos[index]?.url} alt="" className="max-h-[78vh] w-full rounded-lg object-contain" />
+              {/* a fixed-height stage: the image fills it with object-contain (never cropped) and
+                  can't collapse to a blank box the way a width-driven `w-full` image could. */}
+              <div className="relative flex h-[76vh] items-center justify-center">
+                <img src={photos[index]?.url} alt="" className="max-h-full max-w-full rounded-lg object-contain" />
                 {count > 1 && (
                   <>
                     <button type="button" aria-label={t("property.prevPhoto")} onClick={() => step(-1)} className="absolute left-2 rounded-full bg-black/50 p-2 text-white hover:bg-black/70">
