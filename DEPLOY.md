@@ -71,8 +71,10 @@ in this repo configures that (deploys `./dist` with SPA fallback). Dashboard →
 
 Deploy, then enable the `*.workers.dev` URL (Settings → Domains & Routes) for a public link.
 
-> Prefer classic **Pages**? Same build settings (root `web`, build `pnpm install && pnpm build`,
-> output `dist`); `web/public/_redirects` provides the SPA fallback there instead of wrangler.
+> SPA fallback (serving index.html for client routes like /properties/:id) comes from
+> `not_found_handling: "single-page-application"` in `web/wrangler.jsonc`. Don't add a
+> `_redirects` with `/* /index.html 200` for the Workers deploy — its asset parser rejects that
+> rule as an infinite loop. (Classic **Pages** would use such a `_redirects` instead.)
 
 ## Step 5 — Close the loop (CORS)
 

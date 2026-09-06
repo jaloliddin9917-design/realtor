@@ -1,4 +1,0 @@
-# Cloudflare Pages SPA fallback: every non-asset path serves index.html so the
-# client-side router (atomic-router) can handle deep links like /properties/:id.
-# The API is NOT proxied here — the SPA calls it directly via VITE_API_BASE (see DEPLOY.md).
-/*    /index.html   200
