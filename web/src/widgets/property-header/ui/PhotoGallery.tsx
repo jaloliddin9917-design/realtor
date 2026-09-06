@@ -79,12 +79,12 @@ export function PhotoGallery({ photos, alt }: { photos: { url: string }[]; alt: 
       )}
 
       <Dialog open={open} onOpenChange={(o) => { if (!o) setOpen(false); }}>
-        <DialogContent className="max-w-4xl gap-2">
+        <DialogContent className="max-w-[92vw] gap-2 p-4">
           <DialogTitle className="sr-only">{alt}</DialogTitle>
           {open && (
             <div className="flex flex-col gap-3">
               <div className="relative flex items-center justify-center">
-                <img src={photos[index]?.url} alt="" className="max-h-[70vh] w-full rounded-lg object-contain" />
+                <img src={photos[index]?.url} alt="" className="max-h-[78vh] w-full rounded-lg object-contain" />
                 {count > 1 && (
                   <>
                     <button type="button" aria-label={t("property.prevPhoto")} onClick={() => step(-1)} className="absolute left-2 rounded-full bg-black/50 p-2 text-white hover:bg-black/70">
