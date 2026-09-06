@@ -41,7 +41,7 @@ export function PhotoGallery({ photos, alt }: { photos: { url: string }[]; alt: 
     <div className="overflow-hidden rounded-card border border-line bg-surface">
       <div className="relative">
         <button type="button" onClick={() => setOpen(true)} aria-label={t("property.openGallery")} className="block w-full">
-          <img src={current.url} alt={alt} className="aspect-[16/10] w-full object-cover" />
+          <img src={current.url} alt={alt} className="aspect-[4/3] max-h-[85vh] w-full cursor-zoom-in object-cover" />
         </button>
         <div aria-hidden="true" className="absolute right-3 top-3 flex size-9 items-center justify-center rounded-full bg-surface/90 shadow-sm">
           <Heart className="size-[18px] text-ink" />
@@ -76,12 +76,12 @@ export function PhotoGallery({ photos, alt }: { photos: { url: string }[]; alt: 
       )}
 
       <Dialog open={open} onOpenChange={(o) => { if (!o) setOpen(false); }}>
-        <DialogContent className="max-w-4xl gap-2">
+        <DialogContent className="max-w-6xl gap-2">
           <DialogTitle className="sr-only">{alt}</DialogTitle>
           {open && (
             <div className="flex flex-col gap-3">
               <div className="relative flex items-center justify-center">
-                <img src={photos[index]?.url} alt="" className="max-h-[70vh] w-full rounded-lg object-contain" />
+                <img src={photos[index]?.url} alt="" className="max-h-[86vh] w-full rounded-lg object-contain" />
                 {count > 1 && (
                   <>
                     <button type="button" aria-label={t("property.prevPhoto")} onClick={() => step(-1)} className="absolute left-2 rounded-full bg-black/50 p-2 text-white hover:bg-black/70">
