@@ -39,6 +39,21 @@ API_PREFIX = "/api/v1"
 PHOTO_URL_PREFIX = f"{API_PREFIX}/photos"
 
 
+def photo_display_url(source_url: str | None, storage_key: str | None) -> str | None:
+    """The URL a browser loads for a photo.
+
+    Prefer the source CDN URL (hotlinked) — it's absolute, so it works from a split deploy
+    where the SPA and API sit on different origins, and needs no local photo files. Fall back
+    to the app's own re-hosted copy (a root-relative path under PHOTO_URL_PREFIX) when there's
+    no source URL (e.g. manually added listings). Returns None when the photo has neither.
+    """
+    if source_url:
+        return source_url
+    if storage_key:
+        return f"{PHOTO_URL_PREFIX}/{storage_key}"
+    return None
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=str(BACKEND_DIR / ".env"),

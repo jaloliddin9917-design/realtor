@@ -154,14 +154,20 @@ async def process_raw(
             )
         if needs_photos:
             for position, ref in enumerate(payload.photo_refs[:max_photos]):
+                # For URL-based sources (OLX) the ref IS the CDN URL — keep it for hotlinking;
+                # opaque refs (Telegram's chat/message dict, manual/test keys) are not URLs.
+                src = ref if isinstance(ref, str) and ref.startswith("http") else None
                 try:
                     data = await adapter.download_photo(ref)
                 except Exception as exc:  # noqa: BLE001 — a photo must never block the listing (§10)
                     await save_listing_photo(
-                        session, photo_dir, listing, position, None, error=str(exc)[:500]
+                        session, photo_dir, listing, position, None, error=str(exc)[:500],
+                        source_url=src,
                     )
                     continue
-                await save_listing_photo(session, photo_dir, listing, position, data)
+                await save_listing_photo(
+                    session, photo_dir, listing, position, data, source_url=src
+                )
         if changed:
             await prune_photos(
                 session, photo_dir, listing, keep=len(payload.photo_refs[:max_photos])

@@ -11,11 +11,11 @@ from dataclasses import dataclass, field
 from datetime import timedelta
 from typing import Any, cast
 
-from sqlalchemy import Select, func, select
+from sqlalchemy import Select, func, literal_column, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased, defer, selectinload
 
-from app.core.settings import PHOTO_URL_PREFIX
+from app.core.settings import PHOTO_URL_PREFIX, photo_display_url
 from app.modules.contacts.models import Contact
 from app.modules.contacts.service import contacts_for_listing
 from app.modules.dedupe.models import DedupeReview
@@ -79,11 +79,24 @@ _SORTS: dict[str, tuple[Any, ...]] = {
 }
 
 
+# The property's first photo as a ready-to-load URL: the source CDN URL when known (hotlinked),
+# else the re-hosted path under PHOTO_URL_PREFIX — the SQL twin of settings.photo_display_url.
 def _first_photo() -> Any:
     return (
-        select(ListingPhoto.storage_key)
+        select(
+            # literal_column, not literal(): a bound param here collides with the subquery's
+            # LIMIT 1 param inside the correlated subquery (returns "1"). PHOTO_URL_PREFIX is a
+            # fixed constant with no quotes, so inlining it is safe.
+            func.coalesce(
+                ListingPhoto.source_url,
+                literal_column(f"'{PHOTO_URL_PREFIX}/'").concat(ListingPhoto.storage_key),
+            )
+        )
         .join(Listing, Listing.id == ListingPhoto.listing_id)
-        .where(Listing.property_id == Property.id, ListingPhoto.storage_key.is_not(None))
+        .where(
+            Listing.property_id == Property.id,
+            or_(ListingPhoto.source_url.is_not(None), ListingPhoto.storage_key.is_not(None)),
+        )
         .order_by(Listing.first_seen_at, Listing.id, ListingPhoto.position)
         .limit(1)
         .correlate(Property)
@@ -250,7 +263,7 @@ def row_from(
     source_kinds: list[str],
     owner: Contact | None,
     event: PropertyStatusEvent | None,
-    photo_key: str | None,
+    first_photo_url: str | None,
 ) -> PropertyRow:
     return PropertyRow(
         id=prop.id,
@@ -276,7 +289,7 @@ def row_from(
         listing_count=listing_count,
         source_kinds=sorted(source_kinds),
         probable_owner=_owner_out(owner, prop.owner_confidence),
-        photo_url=f"{PHOTO_URL_PREFIX}/{photo_key}" if photo_key else None,
+        photo_url=first_photo_url,
         last_status_event=event_out(event),
     )
 
@@ -316,10 +329,10 @@ async def list_pins(session: AsyncSession, f: PropertyFilters, *, cap: int = 200
             area_sqm=prop.area_sqm,
             floor=prop.floor,
             total_floors=prop.total_floors,
-            photo_url=f"{PHOTO_URL_PREFIX}/{photo_key}" if photo_key else None,
+            photo_url=first_photo_url,
             location_label=prop.location_label,
         )
-        for (prop, _listing_count, _source_kinds, _owner, _event, photo_key) in rows
+        for (prop, _listing_count, _source_kinds, _owner, _event, first_photo_url) in rows
     ]
 
 
@@ -369,12 +382,12 @@ async def _listing_out(session: AsyncSession, listing: Listing) -> ListingOut:
         photos=[
             PhotoOut(
                 position=p.position,
-                url=f"{PHOTO_URL_PREFIX}/{p.storage_key}",
+                url=url,
                 width=p.width,
                 height=p.height,
             )
             for p in listing.photos
-            if p.storage_key
+            if (url := photo_display_url(p.source_url, p.storage_key)) is not None
         ],
         contacts=[
             ContactOut(

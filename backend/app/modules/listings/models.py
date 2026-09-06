@@ -171,6 +171,10 @@ class ListingPhoto(IdMixin, Base):
     )
     position: Mapped[int] = mapped_column(Integer, nullable=False)
     storage_key: Mapped[str | None] = mapped_column(Text)
+    # The photo's URL at the source (e.g. OLX CDN). Served to clients directly (hotlinked) so
+    # images work on a split deploy without shipping the re-hosted files. None for sources that
+    # have no stable public URL (e.g. Telegram, manual uploads).
+    source_url: Mapped[str | None] = mapped_column(Text)
     sha256: Mapped[str | None] = mapped_column(String(64))
     phash: Mapped[int | None] = mapped_column(BigInteger, index=True)
     width: Mapped[int | None] = mapped_column(Integer)

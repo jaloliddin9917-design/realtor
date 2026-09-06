@@ -79,6 +79,7 @@ async def save_listing_photo(
     position: int,
     data: bytes | None,
     error: str | None = None,
+    source_url: str | None = None,
 ) -> ListingPhoto:
     stmt = select(ListingPhoto).where(
         ListingPhoto.listing_id == listing.id, ListingPhoto.position == position
@@ -87,6 +88,10 @@ async def save_listing_photo(
     if photo is None:
         photo = ListingPhoto(listing_id=listing.id, position=position)
         session.add(photo)
+    # The source URL is known even when the download fails — keep it so the image can still be
+    # hotlinked (a failed re-host doesn't mean the CDN URL is unusable).
+    if source_url is not None:
+        photo.source_url = source_url
     if data is None:
         _mark_failed(photo, error or "download failed")
     else:

@@ -21,7 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.api.problems import ApiError
-from app.core.settings import PHOTO_URL_PREFIX
+from app.core.settings import photo_display_url
 from app.modules.contacts.models import Contact
 from app.modules.contacts.scoring import rescore_property_contacts
 from app.modules.dedupe.config import DedupeConfig
@@ -118,7 +118,11 @@ def _side_out(
         posted_at=listing.posted_at,
         first_seen_at=listing.first_seen_at,
         owner=_owner_out(owner),
-        photos=[f"{PHOTO_URL_PREFIX}/{p.storage_key}" for p in listing.photos if p.storage_key],
+        photos=[
+            url
+            for p in listing.photos
+            if (url := photo_display_url(p.source_url, p.storage_key)) is not None
+        ],
     )
 
 
