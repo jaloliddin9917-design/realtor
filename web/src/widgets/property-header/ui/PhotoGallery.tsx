@@ -39,9 +39,11 @@ export function PhotoGallery({ photos, alt }: { photos: { url: string }[]; alt: 
 
   return (
     <div className="overflow-hidden rounded-card border border-line bg-surface">
-      <div className="relative">
+      <div className="relative bg-surface-soft">
         <button type="button" onClick={() => setOpen(true)} aria-label={t("property.openGallery")} className="block w-full">
-          <img src={current.url} alt={alt} className="aspect-[16/10] max-h-[46vh] w-full cursor-zoom-in object-cover" />
+          {/* object-contain (not cover) shows the whole photo — no zoom/crop — at a consistent
+              height, centered, with the surface-soft backdrop filling any letterbox space. */}
+          <img src={current.url} alt={alt} className="mx-auto block h-[46vh] w-auto max-w-full cursor-zoom-in object-contain" />
         </button>
         <div aria-hidden="true" className="absolute right-3 top-3 flex size-9 items-center justify-center rounded-full bg-surface/90 shadow-sm">
           <Heart className="size-[18px] text-ink" />
