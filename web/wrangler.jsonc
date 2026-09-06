@@ -1,0 +1,13 @@
+{
+  // Static-assets-only Worker that serves the built Vite SPA (no server code).
+  // Used by the Cloudflare "Workers" Git deploy: build command `pnpm install && pnpm build`
+  // produces ./dist, then `npx wrangler deploy` uploads it. Set the project's Root directory
+  // to `web` so this file and ./dist resolve. See DEPLOY.md.
+  "name": "realtor-web",
+  "compatibility_date": "2025-09-01",
+  "assets": {
+    "directory": "./dist",
+    // serve index.html for unmatched routes so client-side routes (e.g. /properties/:id) work
+    "not_found_handling": "single-page-application"
+  }
+}

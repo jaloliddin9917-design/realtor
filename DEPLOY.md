@@ -55,15 +55,22 @@ DATABASE_URL='postgresql+asyncpg://...neon...?ssl=require' \
 # prompts for a password
 ```
 
-## Step 4 — Frontend (Cloudflare Pages)
+## Step 4 — Frontend (Cloudflare)
 
-1. Sign up at **pages.cloudflare.com** (GitHub login) → **Create → Pages → connect** the repo.
-2. Build settings:
-   - **Root directory:** `web`
+Cloudflare now imports Git repos as a **Worker** serving static assets — the `web/wrangler.jsonc`
+in this repo configures that (deploys `./dist` with SPA fallback). Dashboard → **Compute (Workers)
+→ Create → Import a repository →** select `jaloliddin9917-design/realtor`, then:
+   - **Project name:** `realtor-web`
+   - **Root directory** (expand *Advanced settings*): **`web`** ← required, or build/deploy fail
    - **Build command:** `pnpm install && pnpm build`
-   - **Build output directory:** `dist`
-   - **Environment variable:** `VITE_API_BASE = https://realtor-api.onrender.com` (your Render URL)
-3. Deploy. You get `https://realtor.pages.dev` (or your project name).
+   - **Deploy command:** `npx wrangler deploy`
+   - **Build variable** (Advanced settings): `VITE_API_BASE = https://realtor-api.onrender.com`
+     (your Render URL). Baked in at build time — set before deploying, or re-deploy after adding it.
+
+Deploy, then enable the `*.workers.dev` URL (Settings → Domains & Routes) for a public link.
+
+> Prefer classic **Pages**? Same build settings (root `web`, build `pnpm install && pnpm build`,
+> output `dist`); `web/public/_redirects` provides the SPA fallback there instead of wrangler.
 
 ## Step 5 — Close the loop (CORS)
 
