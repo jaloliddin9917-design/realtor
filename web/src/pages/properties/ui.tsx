@@ -35,7 +35,11 @@ export function PropertiesPage() {
             // unpaged, so there's no pagination in this mode.
             ? <div className="h-[calc(100vh-11rem)] min-h-[440px]"><PropertyMap /></div>
             : pending && rows.length === 0
-              ? <Skeleton className="h-40 w-full" />
+              ? (
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                  {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-72 rounded-card" />)}
+                </div>
+              )
               : rows.length === 0
                 ? emptyNote
                 : <PropertyCardList rows={rows} />}

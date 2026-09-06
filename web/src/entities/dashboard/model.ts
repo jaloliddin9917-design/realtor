@@ -21,6 +21,11 @@ export const fetchDashboardFx = createEffect(fetchDashboard);
 export const $dashboardStats = createStore<DashboardStats>(EMPTY_DASHBOARD_STATS)
   .on(fetchDashboardFx.doneData, (_, d) => d.stats);
 
+export const $dashboardPending = fetchDashboardFx.pending;
+/** True once the first successful load lands — lets the page show a skeleton on the initial
+ * (cold-start) fetch without re-flashing it on every later refetch. */
+export const $dashboardLoaded = createStore(false).on(fetchDashboardFx.doneData, () => true);
+
 const toastErrorFx = createEffect((e: unknown) => {
   toast.error(i18n.t(isApiProblem(e) ? problemKey(e.code) : "errors.network"));
 });

@@ -6,6 +6,7 @@ import { i18n, problemKey } from "@/shared/i18n";
 
 /** Load the open queue — wired to run on `queue.opened` in app/router.ts. */
 export const fetchQueueFx = createEffect(() => fetchQueue("all"));
+export const $queuePending = fetchQueueFx.pending;
 /** Claim an item (POST take); the effect rejects with a 409 `queue.locked` problem if another
  * agent already holds it. */
 export const takeFx = createEffect(takeItem);

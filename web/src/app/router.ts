@@ -57,7 +57,7 @@ redirect({ clock: router.routeNotFound, route: routes.properties, replace: true 
 sample({ clock: authorized.adminSources.opened, target: fetchSourcesFx });
 
 // load the agent queue whenever /queue opens
-sample({ clock: authorized.queue.opened, target: fetchQueueFx });
+sample({ clock: [authorized.queue.opened, authorized.call.opened], target: fetchQueueFx });
 
 // load the duplicates review queue whenever /duplicates opens
 sample({ clock: authorized.duplicates.opened, target: fetchDuplicatesFx });

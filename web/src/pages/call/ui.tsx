@@ -3,12 +3,13 @@ import { Link } from "atomic-router-react";
 import { useUnit } from "effector-react";
 import { ArrowLeft } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { $items, type OwnerClassification } from "@/entities/queue";
+import { $items, $queuePending, type OwnerClassification } from "@/entities/queue";
 import { formReset, LogResultForm } from "@/features/call/log-result";
 import { LanguageSwitch } from "@/features/i18n/switch-language";
 import { classificationKey, districtKey } from "@/shared/i18n";
 import { cn, formatPhone } from "@/shared/lib";
 import { routes } from "@/shared/router";
+import { Skeleton } from "@/shared/ui/skeleton";
 import { AppLayout } from "@/widgets/app-layout";
 import { CallHeader } from "./ui/CallHeader";
 
@@ -20,7 +21,7 @@ const CLASSIFICATION_STYLES: Record<OwnerClassification, string> = {
 
 export function CallPage() {
   const { t } = useTranslation();
-  const [items, params, reset] = useUnit([$items, routes.call.$params, formReset]);
+  const [items, params, reset, pending] = useUnit([$items, routes.call.$params, formReset, $queuePending]);
   const item = items.find((i) => i.id === params.id) ?? null;
 
   // These are plain global stores (features/call/log-result/model.ts), so a draft typed for
@@ -33,7 +34,12 @@ export function CallPage() {
   return (
     <AppLayout title={title} actions={<LanguageSwitch />}>
       <Link to={routes.queue} className="inline-flex items-center gap-1 text-sm text-primary"><ArrowLeft className="size-4" />{t("call.back")}</Link>
-      {!item ? (
+      {pending && !item ? (
+        <div className="grid gap-3 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+          <Skeleton className="h-96 rounded-card" />
+          <Skeleton className="h-64 rounded-card" />
+        </div>
+      ) : !item ? (
         <p className="text-muted-foreground">{t("call.notFound")}</p>
       ) : (
         <div className="grid gap-3 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">

@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { useUnit } from "effector-react";
 import { useTranslation } from "react-i18next";
-import { $items, type QueueItem } from "@/entities/queue";
+import { $items, $queuePending, type QueueItem } from "@/entities/queue";
 import { $user } from "@/entities/session";
 import { LanguageSwitch } from "@/features/i18n/switch-language";
 import { cn } from "@/shared/lib";
+import { Skeleton } from "@/shared/ui/skeleton";
 import { AppLayout } from "@/widgets/app-layout";
 import { QueueCard } from "./ui/QueueCard";
 
@@ -27,7 +28,7 @@ function visibleFor(tab: Tab, items: QueueItem[]): QueueItem[] {
 
 export function QueuePage() {
   const { t, i18n } = useTranslation();
-  const [items, user] = useUnit([$items, $user]);
+  const [items, user, pending] = useUnit([$items, $user, $queuePending]);
   const [tab, setTab] = useState<Tab>("today");
 
   const counts: Record<Tab, number> = {
@@ -62,7 +63,11 @@ export function QueuePage() {
         ))}
       </div>
 
-      {visible.length === 0 ? (
+      {pending && items.length === 0 ? (
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-40 rounded-card" />)}
+        </div>
+      ) : visible.length === 0 ? (
         <p className="p-6 text-center text-muted-foreground">{t("app.empty")}</p>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">

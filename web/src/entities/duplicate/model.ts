@@ -11,6 +11,7 @@ const EMPTY_DECIDED_RECENT: DecidedRecent = { days: 0, count: 0, mergedPct: 0 };
  * a 409 `dedupe.already_decided` (see features/duplicate/decide) to resync with whoever else
  * just decided the pair. */
 export const fetchDuplicatesFx = createEffect(fetchDuplicates);
+export const $duplicatesPending = fetchDuplicatesFx.pending;
 
 /** Which pair is open in the compare panel — set by clicking a queue row or the pager. */
 export const pairSelected = createEvent<number>();

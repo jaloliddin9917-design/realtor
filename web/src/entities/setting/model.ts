@@ -7,6 +7,7 @@ import { i18n, problemKey } from "@/shared/i18n";
 /** Load the users list — wired to run on `settings.opened` in app/router.ts, and again after a
  * successful add-user (features/settings/add-user) so the new row appears. */
 export const fetchUsersFx = createEffect(fetchUsers);
+export const $usersPending = fetchUsersFx.pending;
 
 export const $users = createStore<SettingUser[]>([])
   .on(fetchUsersFx.doneData, (_, users) => users);
