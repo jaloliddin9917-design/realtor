@@ -18,7 +18,9 @@ services:
     # Run migrations, launch the crawler in the background, then bind the API to Render's $PORT.
     # Uses backend/start.sh — an inline "&&" chain in dockerCommand isn't parsed by Render (exits 127).
     dockerCommand: sh start.sh
-    healthCheckPath: /api/v1/healthz
+    # NOT /healthz — that returns 503 unless the worker heartbeat is fresh (<5 min), which races
+    # on startup and would fail the deploy. openapi.json is public and 200 whenever the API is up.
+    healthCheckPath: /api/v1/openapi.json
     envVars:
       # Neon connection string, rewritten for asyncpg — see DEPLOY.md:
       #   postgresql+asyncpg://USER:PASSWORD@HOST/DB?ssl=require

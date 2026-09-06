@@ -41,7 +41,9 @@ GitHub/Google/email — **no international credit card required**:
      (fill the exact value after Step 4; you can edit it later).
 4. Deploy. The container runs `alembic upgrade head` (creating all tables), starts the worker
    in the background, and serves the API. Note the URL, e.g. `https://realtor-api.onrender.com`.
-5. Verify: open `https://realtor-api.onrender.com/api/v1/healthz` → JSON status.
+5. Verify: `https://realtor-api.onrender.com/api/v1/openapi.json` → 200 (API up).
+   `/api/v1/healthz` gives a deeper status (db + worker) but returns 503 until the worker's first
+   heartbeat, so it's for monitoring, not the deploy health check.
 
 ## Step 3 — Create the first admin
 
@@ -85,7 +87,8 @@ Open the Pages URL, log in with the admin from Step 3. Done.
 
 Render free sleeps after ~15 min idle — which also pauses the background worker. Add a free
 monitor at **uptimerobot.com** (or cron-job.org) hitting
-`https://realtor-api.onrender.com/api/v1/healthz` every 5 min. One always-on service ≈ 730 of
+`https://realtor-api.onrender.com/api/v1/openapi.json` every 5 min (use openapi.json, not
+healthz, so a stale-worker 503 doesn't trigger false "down" alerts). One always-on service ≈ 730 of
 the 750 free instance-hours/month — within budget.
 
 ---
