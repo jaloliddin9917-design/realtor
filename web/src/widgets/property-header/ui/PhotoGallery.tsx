@@ -79,16 +79,17 @@ export function PhotoGallery({ photos, alt }: { photos: { url: string }[]; alt: 
       )}
 
       <Dialog open={open} onOpenChange={(o) => { if (!o) setOpen(false); }}>
-        {/* base DialogContent sets `sm:max-w-lg`, so widening it needs the `sm:` prefix too —
-            an unprefixed max-w is silently overridden on ≥sm screens (why the modal stayed narrow). */}
-        <DialogContent className="max-w-[95vw] gap-3 p-4 sm:max-w-[95vw]">
+        {/* Override the base grid→flex (its single auto-column mis-sized the content and shoved the
+            photo to one side) and widen it: the base sets `sm:max-w-lg`, so the width needs the
+            `sm:` prefix too, or it's silently clamped to 512px on ≥sm screens. */}
+        <DialogContent className="flex w-full max-w-[95vw] flex-col gap-3 p-4 sm:max-w-[95vw]">
           <DialogTitle className="sr-only">{alt}</DialogTitle>
           {open && (
-            <div className="flex flex-col gap-3">
-              {/* a fixed-height stage: the image fills it with object-contain (never cropped) and
-                  can't collapse to a blank box the way a width-driven `w-full` image could. */}
-              <div className="relative flex h-[76vh] items-center justify-center">
-                <img src={photos[index]?.url} alt="" className="max-h-full max-w-full rounded-lg object-contain" />
+            <div className="flex w-full flex-col gap-3">
+              {/* a full-width, fixed-height stage: the image fills it with object-contain (never
+                  cropped), stays centered, and can't collapse to a blank box like a `w-full` image. */}
+              <div className="relative flex h-[76vh] w-full items-center justify-center">
+                <img src={photos[index]?.url} alt="" className="mx-auto max-h-full max-w-full rounded-lg object-contain" />
                 {count > 1 && (
                   <>
                     <button type="button" aria-label={t("property.prevPhoto")} onClick={() => step(-1)} className="absolute left-2 rounded-full bg-black/50 p-2 text-white hover:bg-black/70">
@@ -100,7 +101,7 @@ export function PhotoGallery({ photos, alt }: { photos: { url: string }[]; alt: 
                   </>
                 )}
               </div>
-              <div className="num text-center text-sm text-muted-foreground">{index + 1} / {count}</div>
+              <div className="num w-full text-center text-sm text-muted-foreground">{index + 1} / {count}</div>
               {count > 1 && (
                 <div className="flex gap-1.5 overflow-x-auto pb-1">
                   {photos.map((p, i) => (
