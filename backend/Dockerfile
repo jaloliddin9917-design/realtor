@@ -8,6 +8,7 @@ COPY alembic.ini ./
 COPY alembic ./alembic
 COPY config ./config
 RUN pip install --upgrade pip && pip install .
+COPY start.sh ./
 RUN useradd --create-home --uid 1000 realtor && mkdir -p /data/photos /data/telegram && chown -R realtor:realtor /data /app
 USER realtor
 # Settings.dedupe_config_path defaults to BACKEND_DIR / "config" / "dedupe.yaml", where

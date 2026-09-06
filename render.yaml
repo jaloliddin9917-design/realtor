@@ -16,8 +16,8 @@ services:
     dockerfilePath: backend/Dockerfile
     dockerContext: backend
     # Run migrations, launch the crawler in the background, then bind the API to Render's $PORT.
-    # ($PORT is injected by Render at runtime; API_PORT is what the app reads — see app/core/settings.py.)
-    dockerCommand: sh -c "alembic upgrade head && (python -m app.worker &) && API_PORT=$PORT python -m app.api"
+    # Uses backend/start.sh — an inline "&&" chain in dockerCommand isn't parsed by Render (exits 127).
+    dockerCommand: sh start.sh
     healthCheckPath: /api/v1/healthz
     envVars:
       # Neon connection string, rewritten for asyncpg — see DEPLOY.md:
