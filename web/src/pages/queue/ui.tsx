@@ -41,7 +41,7 @@ export function QueuePage() {
   return (
     <AppLayout title={t("nav.queue")} actions={<LanguageSwitch />}>
       <div className="flex flex-col gap-0.5">
-        <h2 className="text-lg font-bold">{t("queue.heading")}</h2>
+        <h2 className="text-xl font-extrabold tracking-tight">{t("queue.heading")}</h2>
         <p className="text-sm text-muted-foreground">{t("queue.dateAgent", { date: headerDate(i18n.language), agent: user?.name ?? "" })}</p>
       </div>
 
@@ -52,13 +52,15 @@ export function QueuePage() {
             type="button"
             role="tab"
             aria-selected={tab === key}
+            aria-label={`${t(TAB_KEYS[key])} · ${counts[key]}`}
             onClick={() => setTab(key)}
             className={cn(
-              "inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-full border px-3 text-sm font-semibold transition-colors",
+              "inline-flex h-9 items-center gap-2 whitespace-nowrap rounded-full border px-4 text-sm font-semibold transition-colors",
               tab === key ? "border-primary bg-primary text-primary-foreground" : "border-line bg-surface text-muted-foreground hover:bg-surface-soft",
             )}
           >
-            {t(TAB_KEYS[key])} · {counts[key]}
+            {t(TAB_KEYS[key])}
+            <span className={cn("num rounded-full px-2 py-0.5 text-[11px]", tab === key ? "bg-primary-foreground/20 text-primary-foreground" : "bg-surface-soft text-muted-foreground")}>{counts[key]}</span>
           </button>
         ))}
       </div>

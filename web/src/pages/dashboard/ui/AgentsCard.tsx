@@ -2,19 +2,41 @@ import { Link } from "atomic-router-react";
 import { ChevronRight } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { AgentRow } from "@/entities/agent";
+import { cn } from "@/shared/lib";
 import { routes } from "@/shared/router";
 import { buttonVariants } from "@/shared/ui/button";
 
-const th = "whitespace-nowrap bg-surface-soft px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground";
-const td = "border-b border-line-soft px-3 py-2.5 align-middle";
+function Metric({ value, label, hi }: { value: number; label: string; hi?: boolean }) {
+  return (
+    <div className="text-right">
+      <div className={cn("num text-base font-bold leading-none tracking-tight", hi && "text-status-active")}>{value}</div>
+      <div className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</div>
+    </div>
+  );
+}
 
-/** `workingOn` is a raw string straight off the API (or null when idle) — there is no `kind`
- * telling us whether this is an active call or a scheduled callback, so unlike the old mock
- * this renders the text verbatim rather than composing a translated "active until"/"next
- * callback" sentence (and drops the lock icon that implied a call in progress specifically). */
-function ActivityCell({ workingOn }: { workingOn: string | null }) {
-  if (!workingOn) return <span className="text-muted-foreground">—</span>;
-  return <span className="inline-flex items-center whitespace-nowrap rounded-full bg-accent px-2.5 py-1 text-xs font-semibold text-primary">{workingOn}</span>;
+function AgentRowView({ row }: { row: AgentRow }) {
+  const { t } = useTranslation();
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-line-soft px-4 py-3">
+      <div className="flex min-w-0 items-center gap-3">
+        <span className="grid size-9 flex-none place-items-center rounded-[10px] bg-primary text-sm font-bold text-primary-foreground">{row.name.charAt(0)}</span>
+        <div className="min-w-0">
+          <div className="truncate text-sm font-semibold">{row.name}</div>
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            {row.workingOn
+              ? <><span className="size-1.5 flex-none rounded-full bg-status-active ring-2 ring-status-active-bg" />{row.workingOn}</>
+              : "—"}
+          </div>
+        </div>
+      </div>
+      <div className="flex gap-5">
+        <Metric value={row.inQueue} label={t("dashboard.agents.short.queued")} />
+        <Metric value={row.calls} label={t("dashboard.agents.short.calls")} />
+        <Metric value={row.foundVacant} label={t("dashboard.agents.short.found")} hi />
+      </div>
+    </div>
+  );
 }
 
 export function AgentsCard({ rows, callsTotal, vacantFoundTotal, duplicateCallsAvoided, unassignedCount }: {
@@ -26,40 +48,19 @@ export function AgentsCard({ rows, callsTotal, vacantFoundTotal, duplicateCallsA
 }) {
   const { t } = useTranslation();
   return (
-    <div className="flex flex-col gap-3 rounded-card border border-line bg-surface p-3.5">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-sm font-semibold">{t("dashboard.agents.title")}</h2>
-        <span className="text-xs text-muted-foreground">
+    <div className="overflow-hidden rounded-card border border-line bg-surface shadow-sm">
+      <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3.5">
+        <h2 className="text-sm font-bold">{t("dashboard.agents.title")}</h2>
+        <span className="text-[11px] text-muted-foreground">
           {t("dashboard.agents.summary", { calls: callsTotal, vacantFound: vacantFoundTotal, avoided: duplicateCallsAvoided })}
         </span>
       </div>
-      <div className="overflow-x-auto">
-        <table className="w-full border-collapse text-[13px]">
-          <thead>
-            <tr>
-              <th className={th}>{t("dashboard.agents.columns.agent")}</th>
-              <th className={th}>{t("dashboard.agents.columns.queued")}</th>
-              <th className={th}>{t("dashboard.agents.columns.calls")}</th>
-              <th className={th}>{t("dashboard.agents.columns.vacantFound")}</th>
-              <th className={th}>{t("dashboard.agents.columns.current")}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => (
-              <tr key={row.id}>
-                <td className={`${td} font-medium`}>{row.name}</td>
-                <td className={`${td} num`}>{row.inQueue}</td>
-                <td className={`${td} num`}>{row.calls}</td>
-                <td className={`${td} num`}>{row.foundVacant}</td>
-                <td className={td}><ActivityCell workingOn={row.workingOn} /></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line-soft pt-3">
-        <span className="text-sm">{t("dashboard.unassigned", { count: unassignedCount })}</span>
-        <Link to={routes.queue} className={buttonVariants({ variant: "outline", size: "sm" })}>
+      {rows.map((row) => <AgentRowView key={row.id} row={row} />)}
+      <div className="flex flex-wrap items-center gap-2 border-t border-line bg-surface-soft px-4 py-3">
+        <span className="flex items-center gap-2 text-[13px]">
+          <span className="size-[7px] flex-none rounded-full bg-warn" />{t("dashboard.unassigned", { count: unassignedCount })}
+        </span>
+        <Link to={routes.queue} className={cn(buttonVariants({ variant: "outline", size: "sm" }), "ml-auto")}>
           {t("dashboard.openQueue")}<ChevronRight className="size-4" />
         </Link>
       </div>
