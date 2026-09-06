@@ -1,9 +1,36 @@
 from functools import lru_cache
 from pathlib import Path
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BACKEND_DIR = Path(__file__).resolve().parents[2]
+
+
+def normalize_db_url(url: str) -> str:
+    """Coerce a Postgres URL to the asyncpg driver and drop libpq-only query params.
+
+    Lets a raw provider connection string be used verbatim — e.g. Neon's
+    ``postgresql://…?sslmode=require&channel_binding=require`` becomes
+    ``postgresql+asyncpg://…?ssl=require``. SQLAlchemy's async engine needs the asyncpg
+    driver (a bare ``postgresql://`` selects psycopg2, which isn't installed), and asyncpg
+    rejects the libpq-only ``sslmode``/``channel_binding`` params. Non-Postgres URLs
+    (e.g. sqlite in tests) pass through unchanged.
+    """
+    for prefix in ("postgresql+asyncpg://", "postgresql://", "postgres://"):
+        if url.startswith(prefix):
+            url = "postgresql+asyncpg://" + url[len(prefix) :]
+            break
+    else:
+        return url
+    parts = urlsplit(url)
+    params = dict(parse_qsl(parts.query, keep_blank_values=True))
+    sslmode = params.pop("sslmode", None)
+    params.pop("channel_binding", None)  # libpq-only; asyncpg has no such connect arg
+    if sslmode and sslmode != "disable" and "ssl" not in params:
+        params["ssl"] = "require"
+    return urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(params), parts.fragment))
 
 # Everything the browser talks to sits under one prefix — photos included — so a
 # deployment needs a single reverse-proxy route for `/api`. Here rather than in
@@ -42,6 +69,11 @@ class Settings(BaseSettings):
     # POST /listings/manual is the one request that touches the network (spec §2): a
     # pasted link is fetched synchronously, so it needs a hard ceiling of its own.
     manual_fetch_timeout_seconds: int = 20
+
+    @field_validator("database_url", "test_database_url")
+    @classmethod
+    def _asyncpg_db_url(cls, v: str) -> str:
+        return normalize_db_url(v)
 
     @property
     def cors_origin_list(self) -> list[str]:

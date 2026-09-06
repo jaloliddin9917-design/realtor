@@ -9,7 +9,7 @@ from alembic import context
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from app.core.db import Base
-from app.core.settings import get_settings
+from app.core.settings import get_settings, normalize_db_url
 
 # import every model module so Base.metadata is complete
 import app.modules.identity.models  # noqa: F401,E402
@@ -26,7 +26,7 @@ if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 target_metadata = Base.metadata
-DATABASE_URL = os.environ.get("DATABASE_URL") or get_settings().database_url
+DATABASE_URL = normalize_db_url(os.environ.get("DATABASE_URL") or get_settings().database_url)
 
 
 def run_migrations_offline() -> None:
