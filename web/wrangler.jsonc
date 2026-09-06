@@ -3,7 +3,7 @@
   // Used by the Cloudflare "Workers" Git deploy: build command `pnpm install && pnpm build`
   // produces ./dist, then `npx wrangler deploy` uploads it. Set the project's Root directory
   // to `web` so this file and ./dist resolve. See DEPLOY.md.
-  "name": "realtor-web",
+  "name": "realtor",
   "compatibility_date": "2025-09-01",
   "assets": {
     "directory": "./dist",
