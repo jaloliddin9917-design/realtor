@@ -24,16 +24,19 @@ export function ListingCard({ label, listing }: { label: "A" | "B"; listing: Dup
         <span className="text-xs text-muted-foreground">{formatDate(listing.postedAt, i18n.language)}</span>
       </div>
       {shown.length > 0 ? (
+        // Photos stay in a single row; the extra count overlays the last thumbnail as a "+N"
+        // badge rather than a separate tile that would wrap and push the decision buttons off-screen.
         <div className="grid grid-cols-3 gap-2">
           {shown.map((url, i) => (
-            <img key={url} src={url} alt={t("duplicates.photo.label", { n: i + 1 })} className="aspect-square w-full rounded-lg bg-surface-soft object-cover" />
-          ))}
-          {overflow > 0 && (
-            <div className="flex aspect-square flex-col items-center justify-center gap-1 rounded-lg bg-surface-soft text-center">
-              <ImageIcon className="size-5 text-muted-foreground" aria-hidden />
-              <span className="text-[11px] text-muted-foreground">{t("duplicates.photo.more", { count: overflow })}</span>
+            <div key={url} className="relative aspect-square overflow-hidden rounded-lg bg-surface-soft">
+              <img src={url} alt={t("duplicates.photo.label", { n: i + 1 })} className="size-full object-cover" />
+              {overflow > 0 && i === shown.length - 1 && (
+                <div className="absolute inset-0 flex items-center justify-center bg-ink/55 text-sm font-semibold text-white">
+                  {t("duplicates.photo.more", { count: overflow })}
+                </div>
+              )}
             </div>
-          )}
+          ))}
         </div>
       ) : (
         <div className="flex h-16 items-center justify-center rounded-lg bg-surface-soft">
