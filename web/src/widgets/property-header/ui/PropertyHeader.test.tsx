@@ -1,4 +1,5 @@
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import type { PropertyDetail } from "@/entities/property";
 import { i18nReady } from "@/shared/i18n";
 import { PropertyHeader } from "./PropertyHeader";
@@ -60,6 +61,18 @@ describe("PropertyHeader", () => {
     expect(screen.getByText("Chilonzor, 19-kvartal")).toBeInTheDocument();
     // the lazy-loaded MapView resolves asynchronously behind a Suspense fallback
     expect(await screen.findByText("Mock Map")).toBeInTheDocument();
+  });
+
+  it("opens the photo lightbox from the corner expand button", async () => {
+    render(<PropertyHeader detail={richDetail} />);
+    // two controls open the gallery — the photo itself and the corner expand (fullscreen) button;
+    // the expand button is the last one. Clicking it opens the lightbox, whose own counter shows.
+    const openButtons = screen.getAllByRole("button", { name: "Rasmlarni ochish" });
+    expect(openButtons.length).toBeGreaterThanOrEqual(2);
+    const expandButton = openButtons.at(-1);
+    if (!expandButton) throw new Error("expand button not rendered");
+    await userEvent.click(expandButton);
+    expect(await screen.findByText("1 / 1")).toBeInTheDocument();
   });
 
   it("hides the spec grid and location card when every new field is empty", () => {

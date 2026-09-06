@@ -77,8 +77,9 @@ describe("PropertyPage", () => {
     mount(four);
     // picking the third thumbnail makes it the main photo...
     await userEvent.click(screen.getByRole("button", { name: "Uy rasmi 3" }));
-    // ...and clicking the main photo opens the lightbox at that same position
-    await userEvent.click(screen.getByRole("button", { name: "Rasmlarni ochish" }));
+    // ...and clicking the main photo opens the lightbox at that same position. (The corner
+    // expand button shares the "open gallery" label, so target the main image by its alt text.)
+    await userEvent.click(screen.getByAltText("Uy rasmi"));
     const dialog = within(screen.getByRole("dialog"));
     expect(dialog.getByText("3 / 4")).toBeInTheDocument();
     await userEvent.click(dialog.getByRole("button", { name: "Keyingi rasm" }));

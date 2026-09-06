@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ChevronLeft, ChevronRight, Heart } from "lucide-react";
+import { ChevronLeft, ChevronRight, Heart, Maximize2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Dialog, DialogContent, DialogTitle } from "@/shared/ui/dialog";
 import { cn } from "@/shared/lib";
@@ -46,6 +46,9 @@ export function PhotoGallery({ photos, alt }: { photos: { url: string }[]; alt: 
         <div aria-hidden="true" className="absolute right-3 top-3 flex size-9 items-center justify-center rounded-full bg-surface/90 shadow-sm">
           <Heart className="size-[18px] text-ink" />
         </div>
+        <button type="button" aria-label={t("property.openGallery")} onClick={() => setOpen(true)} className="absolute bottom-3 right-3 flex size-9 items-center justify-center rounded-lg bg-surface/95 text-ink shadow-sm hover:bg-surface">
+          <Maximize2 className="size-[18px]" />
+        </button>
         {count > 1 && (
           <>
             <button type="button" aria-label={t("property.prevPhoto")} onClick={() => step(-1)} className="absolute left-3 top-1/2 flex size-9 -translate-y-1/2 items-center justify-center rounded-full bg-surface/90 shadow-sm hover:bg-surface">
@@ -54,7 +57,7 @@ export function PhotoGallery({ photos, alt }: { photos: { url: string }[]; alt: 
             <button type="button" aria-label={t("property.nextPhoto")} onClick={() => step(1)} className="absolute right-3 top-1/2 flex size-9 -translate-y-1/2 items-center justify-center rounded-full bg-surface/90 shadow-sm hover:bg-surface">
               <ChevronRight className="size-5" />
             </button>
-            <span className="num absolute bottom-3 right-3 rounded-full bg-ink/70 px-3 py-1 text-xs font-semibold text-white">{index + 1} / {count}</span>
+            <span className="num absolute bottom-3 left-3 rounded-full bg-ink/70 px-3 py-1 text-xs font-semibold text-white">{index + 1} / {count}</span>
           </>
         )}
       </div>
