@@ -117,6 +117,14 @@ class Settings(BaseSettings):
     # a standalone background process isn't reliably supervised. docker-compose leaves this off
     # and runs the dedicated worker service instead.
     run_worker_in_process: bool = False
+    # The crawl normally downloads each photo's bytes to re-host and perceptual-hash them. On a
+    # split deploy the app hotlinks the source CDN (see photo_display_url) and never serves those
+    # files, so the download — thousands of throttled requests, the bulk of crawl time — is wasted.
+    # Set false to store just the CDN URL for hotlinking and skip the byte download: much faster,
+    # at the cost of no phash photo-dedup on new listings (text / price / contact dedup is
+    # unaffected). Default true so the worker and manual-add keep re-hosting; the off-box GitHub
+    # Actions OLX crawl sets CRAWL_DOWNLOAD_PHOTOS=false.
+    crawl_download_photos: bool = True
 
 
 @lru_cache

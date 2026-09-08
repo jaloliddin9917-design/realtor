@@ -94,6 +94,27 @@ async def test_failed_retry_clears_previous_success_fields(
     ) == (None, None, None, None, None)
 
 
+async def test_hotlink_only_stores_url_without_download_or_error(
+    db: AsyncSession, tmp_path: Path
+) -> None:
+    listing = await _listing(db)
+    photo = await save_listing_photo(
+        db, tmp_path, listing, 0, None, source_url="https://cdn.example/x.jpg", hotlink_only=True
+    )
+    # Displayed by hotlinking the CDN URL: no re-hosted file, no hashes/dimensions — and, unlike
+    # a failed download, download_error stays None, so a re-crawl won't retry it and dedupe simply
+    # omits the null phash.
+    assert photo.source_url == "https://cdn.example/x.jpg"
+    assert photo.download_error is None
+    assert (photo.storage_key, photo.sha256, photo.phash, photo.width, photo.height) == (
+        None,
+        None,
+        None,
+        None,
+        None,
+    )
+
+
 async def test_undecodable_bytes_are_recorded_not_raised(db: AsyncSession, tmp_path: Path) -> None:
     listing = await _listing(db)
     photo = await save_listing_photo(db, tmp_path, listing, 0, b"definitely not an image")

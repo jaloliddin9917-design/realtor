@@ -214,7 +214,9 @@ def select_rows(f: PropertyFilters, *, count: bool) -> Select[Any]:
         has_photo = (
             select(Listing.property_id)
             .join(ListingPhoto, ListingPhoto.listing_id == Listing.id)
-            .where(ListingPhoto.storage_key.is_not(None))
+            # a photo counts if it can be displayed at all — re-hosted (storage_key) OR
+            # hotlinked from the source CDN (source_url); mirrors _first_photo's WHERE.
+            .where(or_(ListingPhoto.storage_key.is_not(None), ListingPhoto.source_url.is_not(None)))
         )
         stmt = stmt.where(Property.id.in_(has_photo))
     if f.bbox is not None:

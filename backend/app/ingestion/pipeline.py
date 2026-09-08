@@ -114,6 +114,7 @@ async def process_raw(
     now: datetime,
     max_photos: int = 10,
     seen: bool = True,
+    download_photos: bool = True,
 ) -> IngestResult:
     """Parse → persist → photos → dedupe one already-stored raw payload.
 
@@ -157,6 +158,16 @@ async def process_raw(
                 # For URL-based sources (OLX) the ref IS the CDN URL — keep it for hotlinking;
                 # opaque refs (Telegram's chat/message dict, manual/test keys) are not URLs.
                 src = ref if isinstance(ref, str) and ref.startswith("http") else None
+                if not download_photos:
+                    # Hotlink mode (settings.crawl_download_photos=false): record the CDN URL and
+                    # skip the byte download — thousands of throttled requests that a split deploy
+                    # never serves anyway. A URL-less ref can't be hotlinked, so skip it entirely.
+                    if src is not None:
+                        await save_listing_photo(
+                            session, photo_dir, listing, position, None,
+                            source_url=src, hotlink_only=True,
+                        )
+                    continue
                 try:
                     data = await adapter.download_photo(ref)
                 except Exception as exc:  # noqa: BLE001 — a photo must never block the listing (§10)
@@ -206,6 +217,7 @@ async def ingest_payload(
     now: datetime,
     max_photos: int = 10,
     ingested_via: str = "crawl",
+    download_photos: bool = True,
 ) -> IngestResult:
     raw, created, changed = await store_raw(session, source, payload, now, ingested_via)
     return await process_raw(
@@ -220,6 +232,7 @@ async def ingest_payload(
         photo_dir=photo_dir,
         now=now,
         max_photos=max_photos,
+        download_photos=download_photos,
     )
 
 
@@ -231,6 +244,7 @@ async def run_source(
     cfg: DedupeConfig,
     photo_dir: Path,
     now: datetime,
+    download_photos: bool = True,
 ) -> CrawlRun:
     run = CrawlRun(source_id=source.id, started_at=now)
     session.add(run)
@@ -287,6 +301,7 @@ async def run_source(
                         cfg=cfg,
                         photo_dir=photo_dir,
                         now=now,
+                        download_photos=download_photos,
                     )
                 if existing_raw is not None and result.changed:
                     run.changed += 1

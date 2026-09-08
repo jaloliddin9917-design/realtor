@@ -201,6 +201,7 @@ def run_source_cmd(name: str) -> None:
                     cfg=load_config(settings.dedupe_config_path),
                     photo_dir=settings.photo_dir,
                     now=datetime.now(UTC),
+                    download_photos=settings.crawl_download_photos,
                 )
             finally:
                 await session.commit()  # bookkeeping survives even when run_source raised

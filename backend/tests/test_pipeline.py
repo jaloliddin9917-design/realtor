@@ -67,6 +67,42 @@ async def test_ingest_payload_creates_listing_property_photos_and_owner(
     )
 
 
+async def test_download_photos_false_hotlinks_without_downloading(
+    db: AsyncSession, tmp_path: Path
+) -> None:
+    s = await _source(db)
+    adapter = FakeAdapter([], None)
+    urls = ["https://cdn.example/a.jpg", "https://cdn.example/b.jpg"]
+    result = await ingest_payload(
+        db,
+        s,
+        _payload("1", OWNER, photos=urls),
+        adapter=adapter,
+        cfg=CFG,
+        photo_dir=tmp_path,
+        now=NOW,
+        download_photos=False,
+    )
+    photos = (
+        (
+            await db.execute(
+                select(ListingPhoto)
+                .where(ListingPhoto.listing_id == result.listing.id)
+                .order_by(ListingPhoto.position)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    # Not a single byte fetched, yet every photo is stored as a clean hotlink row: CDN url kept,
+    # no re-hosted file/hash, and no error (so re-crawls don't retry and dedupe omits null phash).
+    assert adapter.downloads == 0
+    assert [p.source_url for p in photos] == urls
+    assert all(
+        p.storage_key is None and p.phash is None and p.download_error is None for p in photos
+    )
+
+
 async def test_run_source_end_to_end_with_dedupe(db: AsyncSession, tmp_path: Path) -> None:
     s = await _source(db)
     adapter = FakeAdapter(

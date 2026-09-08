@@ -80,6 +80,7 @@ async def save_listing_photo(
     data: bytes | None,
     error: str | None = None,
     source_url: str | None = None,
+    hotlink_only: bool = False,
 ) -> ListingPhoto:
     stmt = select(ListingPhoto).where(
         ListingPhoto.listing_id == listing.id, ListingPhoto.position == position
@@ -92,7 +93,15 @@ async def save_listing_photo(
     # hotlinked (a failed re-host doesn't mean the CDN URL is unusable).
     if source_url is not None:
         photo.source_url = source_url
-    if data is None:
+    if hotlink_only:
+        # Displayed by hotlinking `source_url`; the bytes were deliberately not fetched
+        # (settings.crawl_download_photos=false), so there is no re-hosted file, no sha256/phash,
+        # and no dimensions — but it is NOT a failure. Clearing download_error (unlike the
+        # data=None path) keeps a re-crawl from treating it as a photo that needs retrying, and
+        # leaves the phash null so dedupe simply omits it (photos.py callers already tolerate that).
+        photo.storage_key = photo.sha256 = photo.phash = photo.width = photo.height = None
+        photo.download_error = None
+    elif data is None:
         _mark_failed(photo, error or "download failed")
     else:
         try:

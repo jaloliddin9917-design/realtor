@@ -56,6 +56,7 @@ async def run_due_sources(
     photo_dir: Path,
     now: datetime,
     should_stop: Callable[[], bool] | None = None,
+    download_photos: bool = True,
 ) -> list[uuid.UUID]:
     """Run every due source, one session per source, and return the `CrawlRun` ids.
 
@@ -100,7 +101,13 @@ async def run_due_sources(
             run_id: uuid.UUID | None = None
             try:
                 run = await run_source(
-                    session, adapter, source, cfg=cfg, photo_dir=photo_dir, now=now
+                    session,
+                    adapter,
+                    source,
+                    cfg=cfg,
+                    photo_dir=photo_dir,
+                    now=now,
+                    download_photos=download_photos,
                 )
                 run_id = run.id
                 log.info(
@@ -205,6 +212,7 @@ async def tick(
         photo_dir=settings.photo_dir,
         now=now,
         should_stop=should_stop,
+        download_photos=settings.crawl_download_photos,
     )
     if should_stop is not None and should_stop():
         # A SIGTERM mid-batch must not be followed by the daily jobs: the worker

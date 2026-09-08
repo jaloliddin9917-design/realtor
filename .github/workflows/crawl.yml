@@ -40,4 +40,8 @@ jobs:
           # Value = the Neon connection string (the app normalizes it to asyncpg automatically).
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           PYTHONUNBUFFERED: "1"   # flush logs live so the step shows progress, not a silent block
+          # Don't download ~1.8k photo files (throttled on GitHub's IP, and this deploy hotlinks
+          # the OLX CDN so they'd be discarded anyway) — store the CDN URL only. Cuts the crawl
+          # from 90+ min (timed out) to minutes. Trade-off: no phash photo-dedup on new listings.
+          CRAWL_DOWNLOAD_PHOTOS: "false"
         run: python -m app.cli run-source olx-rent
