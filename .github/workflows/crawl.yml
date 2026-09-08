@@ -1,0 +1,37 @@
+name: Crawl OLX
+
+# OLX blocks Render's datacenter IP, so the crawl can't run on the API host. This runs it on
+# GitHub's runners (a different IP) straight into the Neon database on a schedule. The app just
+# reads the data; nothing crawls on Render. `run-source` crawls the source directly even though
+# it's marked disabled (the disabled flag only stops the on-Render worker from touching it).
+on:
+  schedule:
+    - cron: "17 */3 * * *"   # every 3 hours
+  workflow_dispatch: {}       # lets you run it by hand from the Actions tab
+
+concurrency:
+  group: crawl-olx
+  cancel-in-progress: false
+
+jobs:
+  crawl:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25       # a hung crawl (e.g. if this IP is also blocked) can't run forever
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+      - name: Install backend
+        run: pip install .
+      - name: Crawl olx-rent into Neon
+        env:
+          # add this in the repo: Settings → Secrets and variables → Actions → New repository secret.
+          # Value = the Neon connection string (the app normalizes it to asyncpg automatically).
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: python -m app.cli run-source olx-rent
