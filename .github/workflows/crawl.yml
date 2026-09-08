@@ -16,7 +16,12 @@ concurrency:
 jobs:
   crawl:
     runs-on: ubuntu-latest
-    timeout-minutes: 25       # a hung crawl (e.g. if this IP is also blocked) can't run forever
+    # OLX throttles GitHub's datacenter IP, so the crawl runs ~10x slower here than on an
+    # unthrottled IP and needs well over 25 min. The whole crawl commits in ONE transaction at
+    # the very end (see pipeline.py "Transaction contract"), so a mid-run timeout SIGKILLs the
+    # process and rolls back everything — zero data saved. Give it real headroom to finish
+    # (minutes are free on a public repo; runs are 3h apart so a long one never overlaps the next).
+    timeout-minutes: 90
     defaults:
       run:
         working-directory: backend
@@ -34,4 +39,5 @@ jobs:
           # add this in the repo: Settings → Secrets and variables → Actions → New repository secret.
           # Value = the Neon connection string (the app normalizes it to asyncpg automatically).
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          PYTHONUNBUFFERED: "1"   # flush logs live so the step shows progress, not a silent block
         run: python -m app.cli run-source olx-rent
