@@ -37,12 +37,16 @@ if ! flock -n 9; then
 fi
 
 cd "$BACKEND"
-echo "=== crawl start $(date '+%F %T %Z') ===" >>"$LOG"
+echo "── OLX crawl started $(date '+%F %T %Z') — takes ~30–40 min; it stays quiet, that's normal. You can leave it and come back. ──" | tee -a "$LOG"
 set +e
-"$BACKEND/.venv/bin/python" -m app.cli run-source olx-rent >>"$LOG" 2>&1
-rc=$?
+"$BACKEND/.venv/bin/python" -m app.cli run-source olx-rent 2>&1 | tee -a "$LOG"
+rc=${PIPESTATUS[0]}
 set -e
-echo "=== crawl end $(date '+%F %T %Z') rc=$rc ===" >>"$LOG"
+if [[ "$rc" -eq 0 ]]; then
+  echo "── ✅ crawl finished OK $(date '+%F %T %Z') — refresh the app to see the fresh listings. ──" | tee -a "$LOG"
+else
+  echo "── ⚠️ crawl exited with error (rc=$rc) $(date '+%F %T %Z') — details in: $LOG ──" | tee -a "$LOG"
+fi
 
 # Keep only the 20 most recent logs.
 ls -1t "$LOG_DIR"/crawl-*.log 2>/dev/null | tail -n +21 | xargs -r rm -f
