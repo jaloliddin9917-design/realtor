@@ -4,13 +4,12 @@ name: Crawl OLX
 # GitHub's runners (a different IP) straight into the Neon database on a schedule. The app just
 # reads the data; nothing crawls on Render. `run-source` crawls the source directly even though
 # it's marked disabled (the disabled flag only stops the on-Render worker from touching it).
+# DORMANT (2026-09-09): OLX blocks GitHub's datacenter IP outright — every run hangs on the first
+# request → 90-min timeout → no data. The crawl now runs via cron on a residential machine instead
+# (scripts/crawl-olx.sh). The schedule is disabled so it stops firing failed runs; the manual
+# trigger is kept only in case a residential proxy is ever wired via OLX_PROXY_URL later.
 on:
-  schedule:
-    # Once a day (06:17 UTC ≈ 11:17 Tashkent). The crawl routes through a residential proxy
-    # (OLX blocks GitHub's IP), and free proxy tiers are small (~a handful of full crawls/month),
-    # so daily keeps us inside the free quota. Bump this once we've measured real credit usage.
-    - cron: "17 6 * * *"
-  workflow_dispatch: {}       # lets you run it by hand from the Actions tab (for testing)
+  workflow_dispatch: {}
 
 concurrency:
   group: crawl-olx
@@ -48,10 +47,4 @@ jobs:
           # from 90+ min (timed out) to minutes. Trade-off: no phash photo-dedup on new listings.
           # It also keeps the proxy request count to ~180/run (index+detail) instead of ~2k.
           CRAWL_DOWNLOAD_PHOTOS: "false"
-          # OLX blocks GitHub's datacenter IP outright (2026-09-09: every run hangs on the first
-          # request → 90-min timeout → zero data). Route OLX requests through a residential proxy
-          # so they exit from a normal IP OLX serves. Add a repo secret OLX_PROXY_URL = the
-          # proxy-mode URL of a residential/scraper-proxy provider (e.g. ScraperAPI/ZenRows free
-          # tier). Empty/unset is ignored (env_ignore_empty) → no proxy, same as before.
-          OLX_PROXY_URL: ${{ secrets.OLX_PROXY_URL }}
         run: python -m app.cli run-source olx-rent

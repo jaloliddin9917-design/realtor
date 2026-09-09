@@ -29,3 +29,7 @@ deploy/data/
 .worktrees/
 .dev-logs/
 backend/resp.json
+
+# local cron-crawl secret (Neon URL) + its logs — scripts/crawl-olx.sh
+.crawl.env
+crawl-logs/
